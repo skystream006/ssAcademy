@@ -356,7 +356,6 @@ class MathViewModel(
         val value = parseAnswer(answerText) ?: return
         val next = current.answer(value, generator)
         game = next
-        progressIcon = ProgressIcon.entries.filter { it != progressIcon }.random(progressIconRandom)
         answerText = ""
         if (next.finished) finish(next)
     }

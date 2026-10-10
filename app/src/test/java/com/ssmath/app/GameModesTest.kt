@@ -69,51 +69,44 @@ class GameModesTest {
         shadowOf(Looper.getMainLooper()).idle()
     }
 
-    @Test fun bothModesChangeIconsOnEveryAnswerWithoutRepeatsOrChangesBetweenJumps() {
+    @Test fun bothModesKeepTheSameIconForEveryJumpAndSelectOnlyWhenStartingANewGame() {
         var starts = 0
-        var jumps = 0
         val random = object : Random() {
             override fun nextBits(bitCount: Int): Int = error("Expected a bounded icon selection")
-            override fun nextInt(until: Int): Int = when (until) {
-                10 -> starts++ % until
-                9 -> jumps++ % until
-                else -> error("Expected all icons at start or all other icons on a jump")
+            override fun nextInt(until: Int): Int {
+                assertEquals(ProgressIcon.entries.size, until)
+                return starts++ % until
             }
         }
         val model = model(random)
         model.start()
         model.submitAnswer()
         assertEquals(0, starts)
-        assertEquals(0, jumps)
 
         fun answerAndCheckIcon(correct: Boolean = true) {
-            val previous = model.progressIcon
-            val candidates = ProgressIcon.entries.filter { it != previous }
-            val expected = candidates[jumps % candidates.size]
-            val before = jumps
+            val expected = model.progressIcon
+            val before = starts
             answer(model, correct)
-            assertEquals(before + 1, jumps)
-            assertNotEquals(previous, model.progressIcon)
+            assertEquals(before, starts)
             assertEquals(expected, model.progressIcon)
             model.submitAnswer()
-            assertEquals(before + 1, jumps)
+            assertEquals(before, starts)
             assertEquals(expected, model.progressIcon)
         }
 
         GameMode.entries.forEach { mode ->
             ProgressIcon.entries.forEach { expected ->
                 val beforeStart = starts
-                val beforeJump = jumps
+                val previous = model.progressIcon
                 if (mode == GameMode.PRACTICE) readyPractice(model, 3) else readyRewards(model, 3)
                 assertEquals(beforeStart, starts)
+                assertEquals(previous, model.progressIcon)
                 model.start()
                 assertEquals(beforeStart + 1, starts)
-                assertEquals(beforeJump, jumps)
                 assertEquals(expected, model.progressIcon)
                 model.start()
                 answerAndCheckIcon()
                 answerAndCheckIcon(correct = false)
-                val restingIcon = model.progressIcon
                 model.updateAnswer("invalid")
                 model.submitAnswer()
                 model.updateAnswer(model.game!!.problem.answer.toString())
@@ -125,8 +118,8 @@ class GameModesTest {
                 model.submitAnswer()
                 model.setForeground(true)
                 assertEquals(2, model.game!!.attempts.size)
-                assertEquals(beforeJump + 2, jumps)
-                assertEquals(restingIcon, model.progressIcon)
+                assertEquals(beforeStart + 1, starts)
+                assertEquals(expected, model.progressIcon)
                 if (expected.ordinal % 2 == 0) {
                     answerAndCheckIcon()
                     assertEquals(Screen.RESULTS, model.screen)
@@ -136,11 +129,10 @@ class GameModesTest {
                 assertEquals(Screen.SETUP, model.screen)
                 model.submitAnswer()
                 assertEquals(beforeStart + 1, starts)
-                assertEquals(beforeJump + if (expected.ordinal % 2 == 0) 3 else 2, jumps)
+                assertEquals(expected, model.progressIcon)
             }
         }
         assertEquals(20, starts)
-        assertEquals(50, jumps)
     }
 
     @Test fun dialogsAndReadyBackNavigationAreModeSpecificAndOnlyOpenFromHome() {

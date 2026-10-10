@@ -40,8 +40,8 @@ A native Kotlin / Jetpack Compose Android app for practicing math. Android 8.0
    same type follows, with your question progress shown above it. A progress bar fills
    after each answered question, correct or wrong, as an icon jumps to the next point.
    Each game randomly picks one of 10 colorful offline icons: rocket, star, balloon,
-   ball, butterfly, fish, frog, bunny, cat, or robot. Each jump randomly switches to
-   a different icon, with no consecutive repeats.
+   ball, butterfly, fish, frog, bunny, cat, or robot. The same icon stays for every
+   jump throughout the test; a new random selection happens only when the next test starts.
    Tap **Quit game** in the upper-right corner (or use Android Back) to leave an unfinished test.
    Confirm **Quit** to return home without saving that game's progress, or choose
    **Keep practicing** to continue.
