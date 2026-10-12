@@ -323,7 +323,6 @@ private fun RewardsCriteria(model: MathViewModel) {
             if (available.isEmpty()) {
                 Text("Unavailable: no rewards enabled in this tier.")
             }
-            })
         }
     }
 }
