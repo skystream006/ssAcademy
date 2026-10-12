@@ -56,10 +56,7 @@ class GameModesTest {
 
     private fun readyRewards(model: MathViewModel, count: Int = 25, operation: Operation = Operation.ADDITION) {
         model.openRewardsGame()
-        model.openRewardsSetup()
-        model.updateRewardsParameters(operation,
-            model.rewardsDefaults.getValue(operation).copy(questionCountText = count.toString()))
-        model.saveRewardsSetup()
+        model.updateRewardsQuestionCount(count.toString())
         model.selectRewardsGame(operation)
     }
 
@@ -143,6 +140,7 @@ class GameModesTest {
         model.openRewardsSetup()
         model.start()
         assertEquals(Screen.SETUP, model.screen)
+        assertNull(model.overlay)
         assertNull(model.game)
         model.openSettings()
         model.openPracticeGame()
@@ -171,6 +169,7 @@ class GameModesTest {
         assertEquals(GameMode.REWARDS, model.gameMode)
         model.backToSetup()
         assertEquals(SetupDialog.REWARDS, model.setupDialog)
+        assertEquals("25", model.rewardsQuestionCountText)
         model.selectRewardsGame(Operation.ADDITION)
         model.start()
         model.openPracticeGame()
@@ -196,7 +195,7 @@ class GameModesTest {
         val model = model()
         assertEquals(Operation.entries.toSet(), model.rewardsDefaults.keys)
         Operation.entries.forEach { operation ->
-            assertEquals(GameParameters.defaults(operation), model.rewardsDefaults[operation])
+            assertEquals(RewardsGameDefaults.defaults(operation), model.rewardsDefaults[operation])
             assertTrue(model.rewardsDefaults.getValue(operation).isValid(operation))
         }
         assertEquals("1", model.minimumText)
@@ -211,8 +210,8 @@ class GameModesTest {
         val model = model()
         val original = model.rewardsDefaults
         Operation.entries.forEach { operation ->
-            assertEquals(if (operation == Operation.DIVISION) GameParameters("81", "9", "50")
-                else GameParameters("3", "18", "50"), original[operation])
+            assertEquals(if (operation == Operation.DIVISION) RewardsGameDefaults("81", "9")
+                else RewardsGameDefaults("3", "18"), original[operation])
         }
         model.updateMinimum("2")
         model.updateMaximum("7")
@@ -236,48 +235,102 @@ class GameModesTest {
             .putInt("question_count", 1001).commit()
         val model = model()
         Operation.entries.forEach { operation ->
-            assertEquals(GameParameters.defaults(operation), model.rewardsDefaults[operation])
+            assertEquals(RewardsGameDefaults.defaults(operation), model.rewardsDefaults[operation])
         }
-        model.openRewardsGame()
+        model.openSettings()
         model.openRewardsSetup()
         assertTrue(model.canSaveRewardsSetup)
     }
 
     @Test fun divisionMigrationUsesLegacyMaximumWhenItsSeparateLimitsAreAbsent() {
         settings.edit().putInt("minimum", 4).putInt("maximum", 27).putInt("question_count", 30).commit()
-        assertEquals(GameParameters("27", "27", "30"), model().rewardsDefaults[Operation.DIVISION])
+        assertEquals(RewardsGameDefaults("27", "27"), model().rewardsDefaults[Operation.DIVISION])
+    }
+
+    @Test fun invalidLegacyQuestionCountsDoNotDiscardValidNumberDefaults() {
+        listOf(0, -1, 1001).forEach { count ->
+            settings.edit().clear().putInt("minimum", 3).putInt("maximum", 18)
+                .putInt("division_maximum_first", 81).putInt("division_maximum_second", 9)
+                .putInt("question_count", count).commit()
+            val model = model()
+            Operation.entries.forEach { operation ->
+                assertEquals(if (operation == Operation.DIVISION) RewardsGameDefaults("81", "9")
+                    else RewardsGameDefaults("3", "18"), model.rewardsDefaults[operation])
+            }
+            assertEquals(count.toString(), model.questionCountText)
+            assertEquals(count, settings.getInt("question_count", -2))
+            assertEquals("", model.rewardsQuestionCountText)
+            readyRewards(model, count = 25)
+            assertEquals(Screen.READY, model.screen)
+            assertEquals(GameParameters("3", "18", "25"), model.readyParameters)
+        }
+    }
+
+    @Test fun obsoletePerOperationCountsAreIgnoredAndRemovedWithoutChangingPracticeCount() {
+        settings.edit().putInt("question_count", 37).apply()
+        val expected = Operation.entries.associateWith { operation ->
+            val first = if (operation == Operation.DIVISION) 81 else operation.ordinal + 2
+            val second = if (operation == Operation.DIVISION) 9 else operation.ordinal + 12
+            settings.edit().putInt("rewards_${operation.name}_first", first)
+                .putInt("rewards_${operation.name}_second", second)
+                .putInt("rewards_${operation.name}_question_count", listOf(50, 0, -1, 1001)[operation.ordinal])
+                .commit()
+            RewardsGameDefaults(first.toString(), second.toString())
+        }
+        val model = model()
+        assertEquals(expected, model.rewardsDefaults)
+        assertEquals("37", model.questionCountText)
+        Operation.entries.forEach { operation ->
+            val key = "rewards_${operation.name}_question_count"
+            assertFalse(settings.contains(key))
+            settings.edit().putInt(key, 9999).commit()
+        }
+        model.openSettings()
+        model.openRewardsSetup()
+        model.saveRewardsSetup()
+        assertEquals(Overlay.SETTINGS, model.overlay)
+        Operation.entries.forEach { assertFalse(settings.contains("rewards_${it.name}_question_count")) }
+        assertEquals(expected, model().rewardsDefaults)
+        assertEquals(37, settings.getInt("question_count", -1))
+        assertEquals("", model().rewardsQuestionCountText)
     }
 
     @Test fun independentDefaultsForEveryOperationSurviveRestartAndDriveTheirGames() {
         val defaults = mapOf(
-            Operation.ADDITION to GameParameters("3", "11", "25"),
-            Operation.SUBTRACTION to GameParameters("4", "21", "26"),
-            Operation.MULTIPLICATION to GameParameters("6", "13", "50"),
-            Operation.DIVISION to GameParameters("70", "7", "51")
+            Operation.ADDITION to RewardsGameDefaults("3", "11"),
+            Operation.SUBTRACTION to RewardsGameDefaults("4", "21"),
+            Operation.MULTIPLICATION to RewardsGameDefaults("6", "13"),
+            Operation.DIVISION to RewardsGameDefaults("70", "7")
         )
         val first = model()
-        first.openRewardsGame()
+        first.openSettings()
         first.openRewardsSetup()
-        assertEquals(Screen.REWARDS_SETUP, first.screen)
+        assertEquals(Screen.SETUP, first.screen)
+        assertEquals(Overlay.REWARDS_SETUP, first.overlay)
         assertNull(first.setupDialog)
         defaults.forEach { (operation, parameters) -> first.updateRewardsParameters(operation, parameters) }
         first.saveRewardsSetup()
         assertEquals(Screen.SETUP, first.screen)
-        assertEquals(SetupDialog.REWARDS, first.setupDialog)
+        assertEquals(Overlay.SETTINGS, first.overlay)
+        assertNull(first.setupDialog)
         assertEquals(defaults, first.rewardsDefaults)
         val restored = model()
         assertEquals(defaults, restored.rewardsDefaults)
-        defaults.forEach { (operation, parameters) ->
+        defaults.entries.forEachIndexed { index, (operation, parameters) ->
+            val count = 25 + index
             restored.openRewardsGame()
+            assertEquals("", restored.rewardsQuestionCountText)
+            restored.updateRewardsQuestionCount(count.toString())
             restored.selectRewardsGame(operation)
             assertEquals(Screen.READY, restored.screen)
             assertEquals(GameMode.REWARDS, restored.gameMode)
             assertEquals(operation, restored.readyOperation)
-            assertEquals(parameters, restored.readyParameters)
+            assertEquals(GameParameters(parameters.firstText, parameters.secondText, count.toString()),
+                restored.readyParameters)
             restored.start()
             val game = requireNotNull(restored.game)
             assertEquals(operation, game.operation)
-            assertEquals(parameters.questionCount, game.questionCount)
+            assertEquals(count, game.questionCount)
             assertEquals(if (operation == Operation.DIVISION) 1 else parameters.first, game.minimum)
             assertEquals(if (operation == Operation.DIVISION) parameters.first else parameters.second, game.maximum)
             assertEquals(parameters.second, game.maximumSecond)
@@ -304,53 +357,135 @@ class GameModesTest {
         }
     }
 
-    @Test fun savedDefaultsNormalizeWhitespaceAndLeadingZerosBeforeReload() {
+    @Test fun rewardsDefaultsValidateOnlyNumberBoundsAndIndependentDivisionMaxima() {
+        Operation.entries.forEach { operation ->
+            val valid = RewardsGameDefaults.defaults(operation)
+            assertTrue(valid.isValid(operation))
+            listOf("", "0", "-1", "10001", "1.5", "abc", "1234567").forEach { invalid ->
+                assertFalse(valid.copy(firstText = invalid).isValid(operation))
+                assertFalse(valid.copy(secondText = invalid).isValid(operation))
+            }
+            assertTrue(RewardsGameDefaults("1", "10000").isValid(operation))
+            assertTrue(RewardsGameDefaults("10000", "10000").isValid(operation))
+            assertEquals(operation == Operation.DIVISION, RewardsGameDefaults("100", "3").isValid(operation))
+        }
+    }
+
+    @Test fun rewardsLaunchRequiresItsOwnValidCountAndSnapshotsBothBoundsWithoutSavingIt() {
+        settings.edit().putInt("question_count", 37).commit()
         val model = model()
         model.openRewardsGame()
+        val defaults = model.rewardsDefaults
+        listOf("", " ", "0", "-1", "1001", "1.5", "abc", "999999").forEach { invalid ->
+            model.updateRewardsQuestionCount(invalid)
+            assertNull(model.rewardsQuestionCount)
+            Operation.entries.forEach { model.selectRewardsGame(it) }
+            assertEquals(Screen.SETUP, model.screen)
+            assertEquals(SetupDialog.REWARDS, model.setupDialog)
+            assertNull(model.readyParameters)
+        }
+        model.updateRewardsQuestionCount("1234567")
+        assertEquals("123456", model.rewardsQuestionCountText)
+        assertNull(model.rewardsQuestionCount)
+        listOf(1, 1000).forEach { count ->
+            Operation.entries.forEach { operation ->
+                model.updateRewardsQuestionCount(count.toString())
+                assertEquals(count, model.rewardsQuestionCount)
+                model.selectRewardsGame(operation)
+                val parameters = defaults.getValue(operation)
+                assertEquals(GameParameters(parameters.firstText, parameters.secondText, count.toString()),
+                    model.readyParameters)
+                assertEquals(operation, model.readyOperation)
+                assertEquals(Screen.READY, model.screen)
+                model.backToSetup()
+                assertEquals(count.toString(), model.rewardsQuestionCountText)
+            }
+        }
+        assertEquals(defaults, model.rewardsDefaults)
+        assertEquals("37", model.questionCountText)
+        assertEquals(37, settings.getInt("question_count", -1))
+        assertEquals("", model().rewardsQuestionCountText)
+        Operation.entries.forEach { assertFalse(settings.contains("rewards_${it.name}_question_count")) }
+    }
+
+    @Test fun eachNewRewardsDialogRequiresAQuestionCountButReadyBackPreservesIt() {
+        val model = model()
+        readyRewards(model, count = 51)
+        model.backToSetup()
+        assertEquals(SetupDialog.REWARDS, model.setupDialog)
+        assertEquals("51", model.rewardsQuestionCountText)
+        model.selectRewardsGame(Operation.DIVISION)
+        assertEquals(51, model.readyParameters!!.questionCount)
+        model.backToSetup()
+        model.dismissSetupDialog()
+        model.openRewardsGame()
+        assertEquals("", model.rewardsQuestionCountText)
+        assertNull(model.rewardsQuestionCount)
+        model.selectRewardsGame(Operation.ADDITION)
+        assertEquals(Screen.SETUP, model.screen)
+        model.updateRewardsQuestionCount("1")
+        model.selectRewardsGame(Operation.ADDITION)
+        model.start()
+        answer(model)
+        model.done()
+        model.openRewardsGame()
+        assertEquals("", model.rewardsQuestionCountText)
+        assertNull(model.rewardsQuestionCount)
+    }
+
+    @Test fun savedDefaultsNormalizeWhitespaceAndLeadingZerosBeforeReload() {
+        val model = model()
+        model.openSettings()
         model.openRewardsSetup()
         Operation.entries.forEach { operation ->
             model.updateRewardsParameters(operation, if (operation == Operation.DIVISION)
-                GameParameters(" 0100 ", " 0007 ", "\t0050 ")
-            else GameParameters(" 0002 ", " 0010 ", "\t0025 "))
+                RewardsGameDefaults(" 0100 ", " 0007 ")
+            else RewardsGameDefaults(" 0002 ", " 0010 "))
         }
         assertTrue(model.canSaveRewardsSetup)
         model.saveRewardsSetup()
         val expected = Operation.entries.associateWith { operation ->
-            if (operation == Operation.DIVISION) GameParameters("100", "7", "50")
-            else GameParameters("2", "10", "25")
+            if (operation == Operation.DIVISION) RewardsGameDefaults("100", "7")
+            else RewardsGameDefaults("2", "10")
         }
         assertEquals(expected, model.rewardsDefaults)
         assertEquals(expected, model.rewardsSetupDraft)
         assertEquals(expected, model().rewardsDefaults)
+        model.closeOverlay()
+        model.openRewardsGame()
+        model.updateRewardsQuestionCount("\t0050 ")
         model.selectRewardsGame(Operation.DIVISION)
-        assertEquals(expected[Operation.DIVISION], model.readyParameters)
+        assertEquals(GameParameters("100", "7", "50"), model.readyParameters)
     }
 
     @Test fun invalidDraftNeverPartiallySavesAndCancelOrBackRestoresAllDefaults() {
         val model = model()
         val saved = model.rewardsDefaults
-        model.openRewardsGame()
+        model.openSettings()
         model.openRewardsSetup()
-        model.updateRewardsParameters(Operation.ADDITION, GameParameters("2", "12", "25"))
+        model.updateRewardsParameters(Operation.ADDITION, RewardsGameDefaults("2", "12"))
         Operation.entries.forEach { operation ->
             val original = model.rewardsSetupDraft.getValue(operation)
-            model.updateRewardsParameters(operation, original.copy(questionCountText = ""))
+            model.updateRewardsParameters(operation, original.copy(firstText = ""))
             assertFalse(model.canSaveRewardsSetup)
             model.saveRewardsSetup()
-            assertEquals(Screen.REWARDS_SETUP, model.screen)
+            assertEquals(Screen.SETUP, model.screen)
+            assertEquals(Overlay.REWARDS_SETUP, model.overlay)
             assertEquals(saved, model.rewardsDefaults)
             assertEquals(saved, model().rewardsDefaults)
             model.updateRewardsParameters(operation, original)
         }
         model.cancelRewardsSetup()
         assertEquals(Screen.SETUP, model.screen)
-        assertEquals(SetupDialog.REWARDS, model.setupDialog)
+        assertEquals(Overlay.SETTINGS, model.overlay)
+        assertNull(model.setupDialog)
         assertEquals(saved, model.rewardsDefaults)
         assertEquals(saved, model.rewardsSetupDraft)
         model.openRewardsSetup()
-        model.updateRewardsParameters(Operation.DIVISION, GameParameters("40", "3", "50"))
-        model.backToSetup()
-        assertEquals(SetupDialog.REWARDS, model.setupDialog)
+        model.updateRewardsParameters(Operation.DIVISION, RewardsGameDefaults("40", "3"))
+        model.closeOverlay()
+        assertEquals(Overlay.SETTINGS, model.overlay)
+        assertNull(model.setupDialog)
         model.openRewardsSetup()
         assertEquals(saved, model.rewardsSetupDraft)
         model.saveRewardsSetup()
@@ -382,7 +517,8 @@ class GameModesTest {
         model.updateDivisionMaximumFirst("")
         model.updateQuestionCount("1")
         model.selectOperation(Operation.SUBTRACTION)
-        model.updateRewardsParameters(Operation.MULTIPLICATION, GameParameters("", "", ""))
+        model.updateRewardsParameters(Operation.MULTIPLICATION, RewardsGameDefaults("", ""))
+        model.updateRewardsQuestionCount("1")
         assertEquals(GameParameters("1", "10", "50"), model.readyParameters)
         model.start()
         assertEquals(GameMode.REWARDS, model.gameMode)
@@ -394,6 +530,120 @@ class GameModesTest {
         assertEquals("4", model().minimumText)
         assertEquals("8", model().maximumText)
         assertEquals("3", model().questionCountText)
+    }
+
+    @Test fun rewardsDefaultsCanOnlyBeEditedFromSettingsNotFromTheLaunchDialogOrCollections() {
+        val model = model()
+        val saved = model.rewardsDefaults
+        model.openRewardsGame()
+        model.updateRewardsQuestionCount("25")
+        model.openRewardsSetup()
+        model.updateRewardsParameters(Operation.ADDITION, RewardsGameDefaults("3", "5"))
+        model.saveRewardsSetup()
+        model.cancelRewardsSetup()
+        assertNull(model.overlay)
+        assertEquals(SetupDialog.REWARDS, model.setupDialog)
+        assertEquals("25", model.rewardsQuestionCountText)
+        assertEquals(saved, model.rewardsDefaults)
+        model.dismissSetupDialog()
+        model.openRewards()
+        model.openRewardsSetup()
+        assertEquals(Overlay.REWARDS, model.overlay)
+        model.closeOverlay()
+        model.openPokemons()
+        model.openRewardsSetup()
+        assertEquals(Overlay.POKEMONS, model.overlay)
+        model.closeOverlay()
+        model.openSettings()
+        model.openRewardsSetup()
+        assertEquals(Overlay.REWARDS_SETUP, model.overlay)
+        assertEquals(Screen.SETUP, model.screen)
+        assertNull(model.setupDialog)
+    }
+
+    @Test fun savingRewardsDefaultsFromReadyDoesNotAlterTheCapturedGameInEitherMode() {
+        GameMode.entries.forEach { mode ->
+            val model = model()
+            if (mode == GameMode.PRACTICE) readyPractice(model, 3) else readyRewards(model, 50)
+            val captured = requireNotNull(model.readyParameters)
+            val operation = model.readyOperation
+            model.openSettings()
+            model.openRewardsSetup()
+            model.updateRewardsParameters(Operation.ADDITION,
+                RewardsGameDefaults((captured.first!! + 1).toString(), (captured.second!! + 2).toString()))
+            model.saveRewardsSetup()
+            assertEquals(Overlay.SETTINGS, model.overlay)
+            assertEquals(Screen.READY, model.screen)
+            assertEquals(mode, model.gameMode)
+            assertEquals(operation, model.readyOperation)
+            assertEquals(captured, model.readyParameters)
+            model.start()
+            assertNull(model.game)
+            model.closeOverlay()
+            model.start()
+            assertEquals(captured.questionCount, model.game!!.questionCount)
+            assertEquals(captured.first, model.game!!.minimum)
+            assertEquals(captured.second, model.game!!.maximum)
+            model.backToSetup()
+        }
+    }
+
+    @Test fun savingCancellingAndBackingOutOfRewardsSetupKeepEitherGamePausedUntilSettingsCloses() {
+        GameMode.entries.forEach { mode ->
+            listOf("save", "cancel", "back", "close").forEach { exit ->
+                val model = model()
+                model.chooseShowTimer(true)
+                model.chooseTimeLimitMinutes(5)
+                if (mode == GameMode.PRACTICE) readyPractice(model, 4) else readyRewards(model, 4)
+                model.start()
+                answer(model)
+                model.updateAnswer("42")
+                now += 5_000
+                val game = model.game
+                val ready = model.readyParameters
+                val timeLimit = model.activeTimeLimitMs
+                val original = model.rewardsDefaults
+                model.openSettings()
+                model.openRewardsSetup()
+                assertEquals(Overlay.REWARDS_SETUP, model.overlay)
+                val previous = original.getValue(Operation.ADDITION)
+                val changed = RewardsGameDefaults((previous.first!! + 1).toString(), (previous.second!! + 2).toString())
+                model.updateRewardsParameters(Operation.ADDITION, changed)
+                now += 600_000
+                assertEquals(5_000L, model.elapsedMs())
+                assertFalse(model.checkTimeLimit())
+                model.submitAnswer()
+                assertSame(game, model.game)
+                when (exit) {
+                    "save" -> model.saveRewardsSetup()
+                    "cancel" -> model.cancelRewardsSetup()
+                    "back" -> model.backToSetup()
+                    else -> model.closeOverlay()
+                }
+                assertEquals(Overlay.SETTINGS, model.overlay)
+                assertEquals(Screen.PLAYING, model.screen)
+                assertEquals(mode, model.gameMode)
+                assertNull(model.setupDialog)
+                assertSame(game, model.game)
+                assertEquals(ready, model.readyParameters)
+                assertEquals("42", model.answerText)
+                assertEquals(timeLimit, model.activeTimeLimitMs)
+                assertEquals(if (exit == "save") original + (Operation.ADDITION to changed) else original,
+                    model.rewardsDefaults)
+                assertEquals(model.rewardsDefaults, model.rewardsSetupDraft)
+                now += 600_000
+                assertEquals(5_000L, model.elapsedMs())
+                assertFalse(model.checkTimeLimit())
+                model.closeOverlay()
+                assertNull(model.overlay)
+                now += 1_000
+                assertEquals(6_000L, model.elapsedMs())
+                assertFalse(model.checkTimeLimit())
+                answer(model)
+                assertEquals(2, model.game!!.attempts.size)
+                model.backToSetup()
+            }
+        }
     }
 
     @Test fun practiceNeverAwardsPrizesOrPokemonAtAnyLengthEvenWhenSettingsChange() {

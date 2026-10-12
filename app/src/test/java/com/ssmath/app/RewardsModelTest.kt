@@ -59,10 +59,7 @@ class RewardsModelTest {
     private fun start(model: MathViewModel, count: Int = 26, rewards: Boolean = true, minutes: Int = 0) {
         if (model.screen != Screen.SETUP) model.done()
         model.openRewardsGame()
-        model.openRewardsSetup()
-        model.updateRewardsParameters(Operation.ADDITION,
-            model.rewardsDefaults.getValue(Operation.ADDITION).copy(questionCountText = count.toString()))
-        model.saveRewardsSetup()
+        model.updateRewardsQuestionCount(count.toString())
         model.chooseRewardsEnabled(rewards)
         model.chooseTimeLimitMinutes(minutes)
         model.selectRewardsGame(Operation.ADDITION)

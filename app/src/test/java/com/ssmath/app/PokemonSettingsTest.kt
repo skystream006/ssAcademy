@@ -117,10 +117,7 @@ class PokemonSettingsTest {
         val model = model(celebration, questionCount)
         model.chooseRewardsEnabled(false)
         model.openRewardsGame()
-        model.openRewardsSetup()
-        model.updateRewardsParameters(Operation.ADDITION,
-            model.rewardsDefaults.getValue(Operation.ADDITION).copy(questionCountText = questionCount.toString()))
-        model.saveRewardsSetup()
+        model.updateRewardsQuestionCount(questionCount.toString())
         model.selectRewardsGame(Operation.ADDITION)
         model.start()
         compose.mainClock.autoAdvance = false

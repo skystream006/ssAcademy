@@ -21,15 +21,14 @@ A native Kotlin / Jetpack Compose Android app for practicing math. Android 8.0
    Practice Game never awards prize fragments or Pokémon; completing its questions
    gives only **Other** animations. Once all five Other scenes have been collected,
    practice can repeat them.
-   **Rewards Game** opens a dialog with the four math types. Choose one to use its
-   saved parameters, or tap the **Setup** gear icon in the dialog's upper-right corner
-   to open a screen with number limits and question counts for all four types.
-   **Save defaults** saves all four together; **Back**
-   discards unsaved edits. Division's two maximums are independent. Defaults are
-   remembered on this device separately from Practice Game choices, and initially
-   use your previous setup (or 1–10 and 10 questions on a new install).
-   Rewards Game can award all available prizes and animation categories under the
-   eligibility rules below. **Cancel** or Android Back closes either game dialog.
+   **Rewards Game** asks **How many questions would you like?** each time you open
+   its dialog. Enter 1 to 1,000 questions, review the obtainable reward criteria,
+   then choose a math type to use its saved number limits. The list explains
+   Other animations, Pokémon eligibility, and both prize tiers with their enabled
+   reward types; unavailable prizes are indicated when rewards are disabled.
+   Question counts are chosen per game, not saved in Rewards Game defaults, and
+   do not change your Practice Game choices. Change the number limits in
+   **Settings > Rewards Game Setup**. **Cancel** or Android Back closes either game dialog.
 2. **Press Start when Ready** – press **Start** to begin. The timer starts now.
 3. **Play** – in either mode, addition, subtraction and multiplication use two random numbers
    between the minimum and maximum, inclusive. Subtraction never goes below zero.
@@ -113,6 +112,13 @@ The semi-transparent (50% opacity) settings button in the bottom-right corner op
   already used. The result's My Pokémons reward is also removed unless another saved
   result earned the same celebration. Older collection entries without a linked result
   are kept, as are unrelated celebrations added through Admin.
+- **Rewards Game Setup** – set default number limits for all four math types.
+  **Save defaults** saves all four together; **Back** discards unsaved edits.
+  Both return to Settings. Division's two maximums are independent. Limits are
+  remembered on this device separately from Practice Game choices, and initially
+  use your previous number limits (or 1–10 on a new install). Previously saved
+  Rewards Game question counts are no longer used. Editing defaults during a game
+  leaves its active questions unchanged and its timer paused until you leave Settings.
 - **Rewards system** – on by default. In **Rewards Game**, earn
   prizes for completing **25 or more questions** with **more than 90% correct**.
   This setting never enables prizes in Practice Game.

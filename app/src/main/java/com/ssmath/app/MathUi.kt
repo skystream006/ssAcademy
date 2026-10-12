@@ -138,14 +138,13 @@ internal fun MathAppContent(model: MathViewModel) {
                 Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).imePadding()) {
                     when (model.overlay) {
                         Overlay.SETTINGS -> SettingsScreen(model)
+                        Overlay.REWARDS_SETUP -> RewardsSetupScreen(model)
                         Overlay.HISTORY -> HistoryScreen(model)
                         Overlay.REWARDS -> RewardsScreen(model)
                         Overlay.POKEMONS -> PokemonsScreen(model)
                         null -> {
                             MainContent(model)
-                            if (model.screen != Screen.REWARDS_SETUP) {
-                                SettingsButton(model::openSettings, Modifier.align(Alignment.BottomEnd))
-                            }
+                            SettingsButton(model::openSettings, Modifier.align(Alignment.BottomEnd))
                         }
                     }
                     model.rewardResult?.let { result ->
@@ -173,13 +172,11 @@ private fun MainContent(model: MathViewModel) {
             Screen.READY -> model.backToSetup()
             Screen.PLAYING -> confirmQuit = true
             Screen.RESULTS -> model.done()
-            Screen.REWARDS_SETUP -> model.cancelRewardsSetup()
             Screen.SETUP -> Unit
         }
     }
     when (model.screen) {
         Screen.SETUP -> HomeScreen(model)
-        Screen.REWARDS_SETUP -> RewardsSetupScreen(model)
         Screen.READY -> ReadyDialog(model)
         Screen.PLAYING -> PlayingScreen(model, onQuit = { confirmQuit = true })
         Screen.RESULTS -> model.lastResult?.let { result ->
@@ -283,17 +280,20 @@ private fun HomeScreen(model: MathViewModel) {
             }
         }
         SetupDialog.REWARDS -> GameSetupDialog(model::dismissSetupDialog) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically) {
-                Text("Rewards Game", modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.headlineSmall)
-                IconButton(onClick = model::openRewardsSetup, modifier = Modifier.testTag("rewards-setup")) {
-                    Icon(Icons.Rounded.Settings, contentDescription = "Setup")
-                }
-            }
-            Text("Choose a math type to play with its saved parameters and earn rewards.")
+            Text("Rewards Game", style = MaterialTheme.typography.headlineSmall)
+            Text("How many questions would you like?", style = MaterialTheme.typography.titleLarge)
+            OutlinedTextField(model.rewardsQuestionCountText, model::updateRewardsQuestionCount,
+                label = { Text("Number of questions") },
+                supportingText = { Text("Whole number from $MIN_QUESTION_COUNT to ${"%,d".format(MAX_QUESTION_COUNT)}") },
+                isError = model.rewardsQuestionCountText.isNotEmpty() && model.rewardsQuestionCount == null,
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                modifier = Modifier.fillMaxWidth().testTag("rewards-question-count-input"))
+            RewardsCriteria(model)
+            Text("Choose a math type to play with its saved number limits.")
             Operation.entries.forEach { operation ->
                 Button(onClick = { model.selectRewardsGame(operation) },
+                    enabled = model.rewardsQuestionCount != null,
                     modifier = Modifier.fillMaxWidth().testTag("rewards-operation-${operation.name}")) {
                     Text("${operation.symbol}  ${operation.label}", textAlign = TextAlign.Center)
                 }
@@ -303,6 +303,32 @@ private fun HomeScreen(model: MathViewModel) {
             }
         }
         null -> Unit
+    }
+}
+
+@Composable
+private fun RewardsCriteria(model: MathViewModel) {
+    Column(Modifier.fillMaxWidth().testTag("rewards-criteria"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Obtainable rewards", style = MaterialTheme.typography.titleMedium)
+        Text("• Other animations: complete all questions at any game length.")
+        Text("• Pokémon: complete at least 15 questions.")
+        Text("One random eligible animation can play, even with mistakes. Only uncollected animations are chosen " +
+            "until the full collection is complete; if none qualify, no animation plays.",
+            style = MaterialTheme.typography.bodySmall)
+        Text("Prize fragments require completing all questions with over 90% correct, without running out of time.")
+        if (!model.rewardsEnabled) {
+            Text("Prize fragments are unavailable while the Rewards system is off in Settings.")
+        }
+        RewardTier.entries.forEach { tier ->
+            val available = RewardType.entries.filter { it.tier == tier && it !in model.disabledRewards }
+            Text("• ${tier.label}: ${tier.questionCountLabel}", style = MaterialTheme.typography.titleSmall)
+            Text(when {
+                !model.rewardsEnabled -> "Unavailable: Rewards system is off."
+                available.isEmpty() -> "Unavailable: no rewards enabled in this tier."
+                else -> "One random fragment: ${available.joinToString { it.fragmentLabel }}."
+            })
+        }
+        Text("Every 3 fragments of the same type make 1 whole reward.", style = MaterialTheme.typography.bodySmall)
     }
 }
 
@@ -319,11 +345,13 @@ private fun GameSetupDialog(onDismiss: () -> Unit, content: @Composable ColumnSc
 
 @Composable
 private fun RewardsSetupScreen(model: MathViewModel) {
+    BackHandler(onBack = model::cancelRewardsSetup)
     Column(Modifier.fillMaxSize().testTag("rewards-setup-screen").verticalScroll(rememberScrollState())
         .padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         TextButton(onClick = model::cancelRewardsSetup) { Text("Back") }
-        Text("Rewards Game setup", style = MaterialTheme.typography.headlineSmall)
-        Text("Save default parameters for each math type. Practice Game settings stay separate.")
+        Text("Rewards Game Setup", style = MaterialTheme.typography.headlineSmall)
+        Text("Save default number limits for each math type. Choose the number of questions when starting a Rewards Game. " +
+            "Practice Game settings stay separate.")
         Operation.entries.forEach { operation ->
             val parameters = model.rewardsSetupDraft.getValue(operation)
             val division = operation == Operation.DIVISION
@@ -346,16 +374,8 @@ private fun RewardsSetupScreen(model: MathViewModel) {
                         supportingText = { Text("Whole number from $MIN_MAXIMUM to ${"%,d".format(MAX_MAXIMUM)}") },
                         isError = parameters.secondText.isNotEmpty() && parameters.second == null,
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
-                        modifier = Modifier.fillMaxWidth().testTag("rewards-${operation.name}-second"))
-                    OutlinedTextField(parameters.questionCountText,
-                        { model.updateRewardsParameters(operation, parameters.copy(questionCountText = it)) },
-                        label = { Text("Number of questions") },
-                        supportingText = { Text("Whole number from $MIN_QUESTION_COUNT to ${"%,d".format(MAX_QUESTION_COUNT)}") },
-                        isError = parameters.questionCountText.isNotEmpty() && parameters.questionCount == null,
-                        singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
-                        modifier = Modifier.fillMaxWidth().testTag("rewards-${operation.name}-count"))
+                        modifier = Modifier.fillMaxWidth().testTag("rewards-${operation.name}-second"))
                 }
             }
         }
