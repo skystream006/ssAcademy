@@ -267,9 +267,7 @@ class RewardsSettingsTest {
         val model = MathViewModel(application, ioDispatcher = Dispatchers.Main.immediate)
         assertTrue(model.rewardsEnabled)
         model.openRewardsGame()
-        model.openRewardsSetup()
-        model.updateRewardsParameters(Operation.ADDITION, GameParameters(questionCountText = "50"))
-        model.saveRewardsSetup()
+        model.updateRewardsQuestionCount("50")
         model.selectRewardsGame(Operation.ADDITION)
         model.start()
         compose.mainClock.autoAdvance = false

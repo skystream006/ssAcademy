@@ -192,12 +192,8 @@ class MathAppTest {
         model.updateMaximum("5")
         model.updateQuestionCount("3")
         compose.setContent { MathAppContent(model) }
-        compose.onNodeWithTag("rewards-game").performClick()
-        compose.onNode(isDialog()).assertIsDisplayed()
-        assertRewardsSetupIconInHeader()
-        Operation.entries.forEach {
-            compose.onNodeWithTag("rewards-operation-${it.name}").performScrollTo().assertIsEnabled()
-        }
+        compose.onNodeWithContentDescription("Settings").performClick()
+        compose.onNodeWithTag("rewards-setup").performScrollTo().assert(hasText("Rewards Game Setup"))
         compose.onNodeWithTag("rewards-setup").performScrollTo().performClick()
         compose.onNode(isDialog()).assertDoesNotExist()
         compose.onNodeWithTag("rewards-setup-screen").assertIsDisplayed()
@@ -206,15 +202,26 @@ class MathAppTest {
                 .performTextReplacement((index + 1).toString())
             compose.onNodeWithTag("rewards-${operation.name}-second").performScrollTo()
                 .performTextReplacement((index + 10).toString())
-            compose.onNodeWithTag("rewards-${operation.name}-count").performScrollTo()
-                .performTextReplacement((index + 25).toString())
+            compose.onNodeWithTag("rewards-${operation.name}-count").assertDoesNotExist()
         }
+        compose.onNodeWithText("Number of questions").assertDoesNotExist()
         compose.onNodeWithTag("save-rewards-setup").performScrollTo().assertIsEnabled().performClick()
+        assertEquals(Overlay.SETTINGS, model.overlay)
+        compose.onNodeWithText("Settings").assertIsDisplayed()
+        compose.onNode(isDialog()).assertDoesNotExist()
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.onNodeWithTag("rewards-game").performClick()
         compose.onNode(isDialog()).assertIsDisplayed()
-        assertRewardsSetupIconInHeader()
+        assertRewardsLaunchHeader()
+        assertEquals("", model.rewardsQuestionCountText)
+        Operation.entries.forEach {
+            compose.onNodeWithTag("rewards-operation-${it.name}").performScrollTo().assertIsNotEnabled()
+        }
         assertEquals(model.rewardsDefaults, model().rewardsDefaults)
         Operation.entries.forEachIndexed { index, operation ->
-            compose.onNodeWithTag("rewards-operation-${operation.name}").performScrollTo().performClick()
+            compose.onNodeWithTag("rewards-question-count-input").performScrollTo()
+                .performTextReplacement((index + 25).toString())
+            compose.onNodeWithTag("rewards-operation-${operation.name}").performScrollTo().assertIsEnabled().performClick()
             compose.onNode(isDialog()).assertDoesNotExist()
             val numbers = if (operation == Operation.DIVISION) "first up to 4 · second up to 13"
                 else "numbers ${index + 1} to ${index + 10}"
@@ -222,6 +229,8 @@ class MathAppTest {
             assertEquals(GameMode.REWARDS, model.gameMode)
             compose.onNodeWithText("Back").performClick()
             compose.onNode(isDialog()).assertIsDisplayed()
+            compose.onNodeWithTag("rewards-question-count-input").performScrollTo()
+                .assertTextContains((index + 25).toString())
         }
         compose.onNodeWithTag("rewards-operation-DIVISION").performScrollTo().performClick()
         compose.onNodeWithTag("start-button").performClick()
@@ -241,20 +250,23 @@ class MathAppTest {
         val model = model()
         val defaults = model.rewardsDefaults
         compose.setContent { MathAppContent(model) }
-        compose.onNodeWithTag("rewards-game").performClick()
+        compose.onNodeWithContentDescription("Settings").performClick()
         compose.onNodeWithTag("rewards-setup").performScrollTo().performClick()
         compose.onNodeWithTag("rewards-ADDITION-first").performScrollTo().performTextReplacement("11")
         compose.onNodeWithTag("save-rewards-setup").performScrollTo().assertIsNotEnabled()
         compose.onNodeWithTag("rewards-ADDITION-second").performScrollTo().performTextReplacement("20")
-        compose.onNodeWithTag("rewards-DIVISION-count").performScrollTo().performTextReplacement("1001")
+        compose.onNodeWithTag("rewards-DIVISION-first").performScrollTo().performTextReplacement("10001")
         compose.onNodeWithTag("save-rewards-setup").performScrollTo().assertIsNotEnabled()
         compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }
-        compose.onNode(isDialog()).assertIsDisplayed()
+        compose.onNode(isDialog()).assertDoesNotExist()
+        compose.onNodeWithText("Settings").assertIsDisplayed()
+        assertEquals(Overlay.SETTINGS, model.overlay)
         assertEquals(defaults, model.rewardsDefaults)
         compose.onNodeWithTag("rewards-setup").performScrollTo().performClick()
         compose.onNodeWithTag("rewards-ADDITION-first").performScrollTo().assertTextContains("1")
         compose.onNodeWithText("Back").performScrollTo().performClick()
-        compose.onNodeWithText("Cancel").performScrollTo().performClick()
+        assertEquals(Overlay.SETTINGS, model.overlay)
+        compose.onNodeWithContentDescription("Back").performClick()
         compose.onNode(isDialog()).assertDoesNotExist()
         compose.onNodeWithTag("practice-game").assertIsDisplayed()
     }
@@ -267,24 +279,121 @@ class MathAppTest {
         model.chooseTextSize(200)
         compose.setContent { MathAppContent(model) }
         compose.onNodeWithTag("rewards-game").performScrollTo().performClick()
-        assertRewardsSetupIconInHeader()
+        assertRewardsLaunchHeader()
         val titleLayouts = mutableListOf<TextLayoutResult>()
         compose.onNode(hasText("Rewards Game") and hasAnyAncestor(isDialog()))
             .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(titleLayouts) }
         assertFalse(titleLayouts.single().didOverflowWidth)
         assertFalse(titleLayouts.single().didOverflowHeight)
-        Operation.entries.forEach {
-            compose.onNodeWithTag("rewards-operation-${it.name}").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("rewards-question-count-input").performScrollTo().performTextReplacement("25")
+        compose.onNodeWithText("Obtainable rewards").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("• Other animations: complete all questions at any game length.")
+            .performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("• Pokémon: complete at least 15 questions.").performScrollTo().assertIsDisplayed()
+        RewardTier.entries.forEach { tier ->
+            compose.onNodeWithText(tier.questionCountLabel, substring = true).performScrollTo().assertIsDisplayed()
+            RewardType.entries.filter { it.tier == tier }.forEach { type ->
+                compose.onNodeWithText(type.fragmentLabel, substring = true).performScrollTo().assertIsDisplayed()
+            }
         }
+        Operation.entries.forEach {
+            compose.onNodeWithTag("rewards-operation-${it.name}").performScrollTo().assertIsDisplayed().assertIsEnabled()
+        }
+        compose.onNodeWithText("Cancel").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Settings").performClick()
         compose.onNodeWithTag("rewards-setup").performScrollTo().performClick()
         Operation.entries.forEach {
             compose.onNodeWithTag("rewards-${it.name}-first").performScrollTo().assertIsDisplayed()
             compose.onNodeWithTag("rewards-${it.name}-second").performScrollTo().assertIsDisplayed()
-            compose.onNodeWithTag("rewards-${it.name}-count").performScrollTo().assertIsDisplayed()
+            compose.onNodeWithTag("rewards-${it.name}-count").assertDoesNotExist()
         }
         compose.onNodeWithTag("save-rewards-setup").performScrollTo().assertIsEnabled().performClick()
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.onNodeWithTag("rewards-game").performScrollTo().performClick()
+        assertEquals("", model.rewardsQuestionCountText)
+        compose.onNodeWithTag("rewards-question-count-input").performScrollTo().performTextReplacement("1000")
         compose.onNodeWithTag("rewards-operation-DIVISION").performScrollTo().performClick()
         compose.onNodeWithTag("start-button").performScrollTo().assertIsDisplayed()
+        assertEquals(1000, model.readyParameters!!.questionCount)
+    }
+
+    @Test fun rewardsLaunchDisablesEveryOperationUntilItsOwnQuestionCountIsValid() {
+        val model = model()
+        model.updateQuestionCount("37")
+        compose.setContent { MathAppContent(model) }
+        compose.onNodeWithTag("rewards-game").performClick()
+        assertRewardsLaunchHeader()
+        listOf("", "0", "-1", "1001", "1.5", "abc", "1234567").forEach { invalid ->
+            compose.onNodeWithTag("rewards-question-count-input").performScrollTo().performTextReplacement(invalid)
+            Operation.entries.forEach { operation ->
+                compose.onNodeWithTag("rewards-operation-${operation.name}").performScrollTo().assertIsNotEnabled()
+            }
+            assertEquals(Screen.SETUP, model.screen)
+        }
+        listOf("1", "1000").forEach { valid ->
+            compose.onNodeWithTag("rewards-question-count-input").performScrollTo().performTextReplacement(valid)
+            Operation.entries.forEach { operation ->
+                compose.onNodeWithTag("rewards-operation-${operation.name}").performScrollTo().assertIsEnabled()
+            }
+        }
+        compose.onNodeWithTag("rewards-operation-ADDITION").performScrollTo().performClick()
+        compose.onNodeWithText("Addition · numbers 1 to 10 · 1000 questions").assertIsDisplayed()
+        compose.onNodeWithText("Back").performClick()
+        compose.onNodeWithTag("rewards-question-count-input").performScrollTo().assertTextContains("1000")
+        compose.onNodeWithText("Cancel").performScrollTo().performClick()
+        compose.onNodeWithTag("rewards-game").performClick()
+        assertEquals("", model.rewardsQuestionCountText)
+        compose.onNodeWithTag("rewards-operation-ADDITION").performScrollTo().assertIsNotEnabled()
+        compose.runOnIdle {
+            (ShadowDialog.getLatestDialog() as ComponentDialog).onBackPressedDispatcher.onBackPressed()
+        }
+        compose.onNode(isDialog()).assertDoesNotExist()
+        compose.onNodeWithTag("practice-game").performClick()
+        compose.onNodeWithTag("question-count-input").performScrollTo().assertTextContains("37")
+    }
+
+    @Test fun rewardsLaunchExplainsCompletionThresholdsAndOnlyListsEnabledPrizeFragments() {
+        val model = model()
+        compose.setContent { MathAppContent(model) }
+        compose.onNodeWithTag("rewards-game").performClick()
+        compose.onNodeWithTag("rewards-criteria").assertExists()
+        compose.onNodeWithText("Obtainable rewards").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("• Other animations: complete all questions at any game length.")
+            .performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("• Pokémon: complete at least 15 questions.").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Prize fragments require completing all questions with over 90% correct, without running out of time.")
+            .performScrollTo().assertIsDisplayed()
+        RewardTier.entries.forEach { tier ->
+            compose.onNodeWithText(tier.questionCountLabel, substring = true)
+                .performScrollTo().assertIsDisplayed().assert(hasAnyAncestor(hasTestTag("rewards-criteria")))
+        }
+        RewardType.entries.forEach { type ->
+            compose.onNodeWithText(type.fragmentLabel, substring = true).performScrollTo().assertIsDisplayed()
+        }
+        compose.runOnIdle { model.chooseRewardEnabled(RewardType.LOLLIPOP, false) }
+        compose.onNodeWithText(RewardType.LOLLIPOP.fragmentLabel, substring = true).assertDoesNotExist()
+        RewardType.entries.filter { it != RewardType.LOLLIPOP }.forEach { type ->
+            compose.onNodeWithText(type.fragmentLabel, substring = true).performScrollTo().assertIsDisplayed()
+        }
+        compose.runOnIdle {
+            RewardType.entries.filter { it.tier == RewardTier.TIER_1 }.forEach { model.chooseRewardEnabled(it, false) }
+        }
+        compose.onNodeWithText("Unavailable: no rewards enabled in this tier.").performScrollTo().assertIsDisplayed()
+        RewardType.entries.filter { it.tier == RewardTier.TIER_1 }.forEach { type ->
+            compose.onNodeWithText(type.fragmentLabel, substring = true).assertDoesNotExist()
+        }
+        compose.runOnIdle { model.chooseRewardsEnabled(false) }
+        compose.onNodeWithText("Prize fragments are unavailable while the Rewards system is off in Settings.")
+            .performScrollTo().assertIsDisplayed()
+        compose.onAllNodesWithText("Unavailable: Rewards system is off.").assertCountEquals(RewardTier.entries.size)
+        RewardType.entries.forEach { type ->
+            compose.onNodeWithText(type.fragmentLabel, substring = true).assertDoesNotExist()
+        }
+        compose.onNodeWithText("• Other animations: complete all questions at any game length.")
+            .performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("• Pokémon: complete at least 15 questions.").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("rewards-question-count-input").performScrollTo().performTextReplacement("25")
+        compose.onNodeWithTag("rewards-operation-ADDITION").performScrollTo().assertIsEnabled()
     }
 
     @Test fun timerOnlyRunsWhileTheGameIsVisible() {
@@ -719,6 +828,7 @@ class MathAppTest {
                     model.submitSetup()
                 } else {
                     model.openRewardsGame()
+                    model.updateRewardsQuestionCount("10")
                     model.selectRewardsGame(Operation.ADDITION)
                 }
             }
@@ -782,6 +892,7 @@ class MathAppTest {
         model.chooseShowTimer(true)
         model.chooseTimeLimitMinutes(5)
         model.openRewardsGame()
+        model.updateRewardsQuestionCount("10")
         model.selectRewardsGame(Operation.ADDITION)
         model.start()
         compose.setContent { MathAppContent(model) }
@@ -798,7 +909,8 @@ class MathAppTest {
         compose.onNodeWithTag("view-results").performClick()
         compose.onNodeWithTag("done-button").performClick()
         compose.onNodeWithTag("rewards-game").performClick()
-        compose.onNodeWithTag("rewards-operation-ADDITION").performClick()
+        compose.onNodeWithTag("rewards-question-count-input").performScrollTo().performTextReplacement("10")
+        compose.onNodeWithTag("rewards-operation-ADDITION").performScrollTo().performClick()
         compose.onNodeWithTag("start-button").performClick()
         compose.onNode(isDialog()).assertDoesNotExist()
         compose.onNodeWithTag("quit-game").assertIsDisplayed().performClick()
@@ -899,11 +1011,11 @@ class MathAppTest {
         assertEquals(Feedback("Not quite!", false), model.feedback)
 
         compose.onNodeWithContentDescription("Settings").performClick()
-        compose.onNodeWithContentDescription("Show correct answers").assertIsOff().performClick().assertIsOn()
+        compose.onNodeWithContentDescription("Show correct answers").performScrollTo().assertIsOff().performClick().assertIsOn()
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithText(revealedFeedback).assertIsDisplayed()
         compose.onNodeWithContentDescription("Settings").performClick()
-        compose.onNodeWithContentDescription("Show correct answers").performClick().assertIsOff()
+        compose.onNodeWithContentDescription("Show correct answers").performScrollTo().performClick().assertIsOff()
         compose.onNodeWithContentDescription("Back").performClick()
 
         val second = model.game!!.problem
@@ -957,11 +1069,11 @@ class MathAppTest {
         assertEquals(1, saved.wrong)
 
         compose.onNodeWithContentDescription("Settings").performClick()
-        compose.onNodeWithContentDescription("Show correct answers").performClick()
+        compose.onNodeWithContentDescription("Show correct answers").performScrollTo().performClick()
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithText("Correct answer: ${problem.answer}").assertIsDisplayed()
         compose.onNodeWithContentDescription("Settings").performClick()
-        compose.onNodeWithContentDescription("Show correct answers").performClick()
+        compose.onNodeWithContentDescription("Show correct answers").performScrollTo().performClick()
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithText("Correct answer:", substring = true).assertDoesNotExist()
         compose.onNodeWithTag("done-button").performClick()
@@ -974,7 +1086,7 @@ class MathAppTest {
         compose.onNodeWithText("Correct answer:", substring = true).assertDoesNotExist()
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithContentDescription("Back").performClick()
-        compose.onNodeWithContentDescription("Show correct answers").performClick()
+        compose.onNodeWithContentDescription("Show correct answers").performScrollTo().performClick()
         compose.onNodeWithTag("practice-history").performClick()
         compose.onNodeWithText("Addition · 1 to 10").performClick()
         compose.onNodeWithText("Correct answer: ${problem.answer}").assertIsDisplayed()
@@ -1334,22 +1446,12 @@ class MathAppTest {
         compose.onNode(isDialog()).assertDoesNotExist()
     }
 
-    private fun assertRewardsSetupIconInHeader() {
-        val setup = compose.onNodeWithTag("rewards-setup")
-            .assertIsDisplayed().assertIsEnabled().assertHasClickAction()
-            .assertContentDescriptionEquals("Setup")
-            .assertTouchWidthIsEqualTo(48.dp).assertTouchHeightIsEqualTo(48.dp)
-            .fetchSemanticsNode().boundsInRoot
-        val title = compose.onNode(hasText("Rewards Game") and hasAnyAncestor(isDialog()))
-            .assertIsDisplayed().fetchSemanticsNode().boundsInRoot
-        val description = compose.onNodeWithText("Choose a math type to play with its saved parameters and earn rewards.")
-            .fetchSemanticsNode().boundsInRoot
-        val dialog = compose.onNode(isDialog()).fetchSemanticsNode().boundsInRoot
-        assertTrue(title.right <= setup.left)
-        assertEquals(title.center.y, setup.center.y, 1f)
-        assertTrue(setup.bottom <= description.top)
-        assertTrue(setup.left >= dialog.center.x)
-        assertTrue(setup.right <= dialog.right)
+    private fun assertRewardsLaunchHeader() {
+        compose.onNode(hasText("Rewards Game") and hasAnyAncestor(isDialog())).assertIsDisplayed()
+        compose.onNodeWithText("How many questions would you like?").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("rewards-question-count-input").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("rewards-setup").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Setup").assertDoesNotExist()
         compose.onNodeWithText("Setup").assertDoesNotExist()
     }
 

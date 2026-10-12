@@ -14,6 +14,26 @@ private const val MAX_ANSWER_DIGITS = 9
 @Serializable
 enum class GameMode { PRACTICE, REWARDS }
 
+data class RewardsGameDefaults(
+    val firstText: String = "1",
+    val secondText: String = "10"
+) {
+    val first: Int? get() = parseMaximum(firstText)
+    val second: Int? get() = parseMaximum(secondText)
+
+    fun isValid(operation: Operation): Boolean {
+        val first = first ?: return false
+        val second = second ?: return false
+        return operation == Operation.DIVISION || first <= second
+    }
+
+    companion object {
+        fun defaults(operation: Operation) = RewardsGameDefaults(
+            firstText = if (operation == Operation.DIVISION) "10" else "1"
+        )
+    }
+}
+
 data class GameParameters(
     val firstText: String = "1",
     val secondText: String = "10",
@@ -23,11 +43,8 @@ data class GameParameters(
     val second: Int? get() = parseMaximum(secondText)
     val questionCount: Int? get() = parseQuestionCount(questionCountText)
 
-    fun isValid(operation: Operation): Boolean {
-        val first = first ?: return false
-        val second = second ?: return false
-        return questionCount != null && (operation == Operation.DIVISION || first <= second)
-    }
+    fun isValid(operation: Operation): Boolean =
+        questionCount != null && RewardsGameDefaults(firstText, secondText).isValid(operation)
 
     companion object {
         fun defaults(operation: Operation) = GameParameters(

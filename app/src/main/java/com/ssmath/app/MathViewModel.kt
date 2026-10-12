@@ -19,11 +19,11 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-enum class Screen { SETUP, REWARDS_SETUP, READY, PLAYING, RESULTS }
+enum class Screen { SETUP, READY, PLAYING, RESULTS }
 
 enum class SetupDialog { PRACTICE, REWARDS }
 
-enum class Overlay { SETTINGS, HISTORY, REWARDS, POKEMONS }
+enum class Overlay { SETTINGS, REWARDS_SETUP, HISTORY, REWARDS, POKEMONS }
 
 data class Feedback(val text: String, val correct: Boolean)
 
@@ -67,6 +67,8 @@ class MathViewModel(
     var divisionMaximumSecondText by mutableStateOf(settings.getInt("division_maximum_second", settings.getInt("maximum", 10)).toString())
         private set
     var questionCountText by mutableStateOf(settings.getInt("question_count", DEFAULT_QUESTION_COUNT).toString())
+        private set
+    var rewardsQuestionCountText by mutableStateOf("")
         private set
     var rewardsDefaults by mutableStateOf(loadRewardsDefaults())
         private set
@@ -160,6 +162,7 @@ class MathViewModel(
     val divisionMaximumFirst: Int? get() = parseMaximum(divisionMaximumFirstText)
     val divisionMaximumSecond: Int? get() = parseMaximum(divisionMaximumSecondText)
     val questionCount: Int? get() = parseQuestionCount(questionCountText)
+    val rewardsQuestionCount: Int? get() = parseQuestionCount(rewardsQuestionCountText)
     val canSubmitSetup: Boolean get() = selectedOperation != null && questionCount != null &&
         if (selectedOperation == Operation.DIVISION) divisionMaximumFirst != null && divisionMaximumSecond != null
         else minimum != null && maximum != null
@@ -177,17 +180,16 @@ class MathViewModel(
         viewModelScope.launch { reloadHistory() }
     }
 
-    private fun loadRewardsDefaults(): Map<Operation, GameParameters> {
+    private fun loadRewardsDefaults(): Map<Operation, RewardsGameDefaults> {
         val defaults = Operation.entries.associateWith { operation ->
             val legacy = if (operation == Operation.DIVISION)
-                GameParameters(divisionMaximumFirstText, divisionMaximumSecondText, questionCountText)
-            else GameParameters(minimumText, maximumText, questionCountText)
-            val fallback = legacy.takeIf { it.isValid(operation) } ?: GameParameters.defaults(operation)
+                RewardsGameDefaults(divisionMaximumFirstText, divisionMaximumSecondText)
+            else RewardsGameDefaults(minimumText, maximumText)
+            val fallback = legacy.takeIf { it.isValid(operation) } ?: RewardsGameDefaults.defaults(operation)
             val prefix = "rewards_${operation.name}_"
-            GameParameters(
+            RewardsGameDefaults(
                 settings.getInt("${prefix}first", requireNotNull(fallback.first)).toString(),
-                settings.getInt("${prefix}second", requireNotNull(fallback.second)).toString(),
-                settings.getInt("${prefix}question_count", requireNotNull(fallback.questionCount)).toString()
+                settings.getInt("${prefix}second", requireNotNull(fallback.second)).toString()
             ).takeIf { it.isValid(operation) } ?: fallback
         }
         // Freeze the migration now so future practice edits cannot change unsaved rewards defaults.
@@ -195,13 +197,13 @@ class MathViewModel(
         return defaults
     }
 
-    private fun persistRewardsDefaults(defaults: Map<Operation, GameParameters>) {
+    private fun persistRewardsDefaults(defaults: Map<Operation, RewardsGameDefaults>) {
         val edit = settings.edit()
         defaults.forEach { (operation, parameters) ->
             val prefix = "rewards_${operation.name}_"
             edit.putInt("${prefix}first", requireNotNull(parameters.first))
                 .putInt("${prefix}second", requireNotNull(parameters.second))
-                .putInt("${prefix}question_count", requireNotNull(parameters.questionCount))
+                .remove("${prefix}question_count")
         }
         edit.apply()
     }
@@ -211,47 +213,46 @@ class MathViewModel(
     }
 
     fun openRewardsGame() {
-        if (screen == Screen.SETUP && overlay == null) setupDialog = SetupDialog.REWARDS
+        if (screen != Screen.SETUP || overlay != null) return
+        rewardsQuestionCountText = ""
+        setupDialog = SetupDialog.REWARDS
     }
 
     fun dismissSetupDialog() { setupDialog = null }
 
     fun openRewardsSetup() {
-        if (screen != Screen.SETUP || overlay != null || setupDialog != SetupDialog.REWARDS) return
+        if (overlay != Overlay.SETTINGS) return
         rewardsSetupDraft = rewardsDefaults
-        setupDialog = null
-        screen = Screen.REWARDS_SETUP
+        overlay = Overlay.REWARDS_SETUP
     }
 
-    fun updateRewardsParameters(operation: Operation, parameters: GameParameters) {
-        if (screen != Screen.REWARDS_SETUP || overlay != null) return
+    fun updateRewardsParameters(operation: Operation, parameters: RewardsGameDefaults) {
+        if (overlay != Overlay.REWARDS_SETUP) return
         rewardsSetupDraft = rewardsSetupDraft + (operation to parameters)
     }
 
     fun saveRewardsSetup() {
-        if (screen != Screen.REWARDS_SETUP || overlay != null || !canSaveRewardsSetup) return
+        if (overlay != Overlay.REWARDS_SETUP || !canSaveRewardsSetup) return
         val defaults = rewardsSetupDraft.mapValues { (_, parameters) ->
-            GameParameters(requireNotNull(parameters.first).toString(), requireNotNull(parameters.second).toString(),
-                requireNotNull(parameters.questionCount).toString())
+            RewardsGameDefaults(requireNotNull(parameters.first).toString(), requireNotNull(parameters.second).toString())
         }
         persistRewardsDefaults(defaults)
         rewardsDefaults = defaults
         rewardsSetupDraft = defaults
-        screen = Screen.SETUP
-        setupDialog = SetupDialog.REWARDS
+        overlay = Overlay.SETTINGS
     }
 
     fun cancelRewardsSetup() {
-        if (screen != Screen.REWARDS_SETUP || overlay != null) return
+        if (overlay != Overlay.REWARDS_SETUP) return
         rewardsSetupDraft = rewardsDefaults
-        screen = Screen.SETUP
-        setupDialog = SetupDialog.REWARDS
+        overlay = Overlay.SETTINGS
     }
 
     fun selectRewardsGame(operation: Operation) {
         if (screen != Screen.SETUP || overlay != null || setupDialog != SetupDialog.REWARDS) return
         val parameters = rewardsDefaults[operation]?.takeIf { it.isValid(operation) } ?: return
-        ready(GameMode.REWARDS, operation, parameters)
+        val count = rewardsQuestionCount ?: return
+        ready(GameMode.REWARDS, operation, GameParameters(parameters.firstText, parameters.secondText, count.toString()))
     }
 
     private fun ready(mode: GameMode, operation: Operation, parameters: GameParameters) {
@@ -273,6 +274,8 @@ class MathViewModel(
 
     fun updateQuestionCount(text: String) { questionCountText = text.take(6) }
 
+    fun updateRewardsQuestionCount(text: String) { rewardsQuestionCountText = text.take(6) }
+
     fun submitSetup() {
         if (screen != Screen.SETUP || overlay != null || setupDialog == SetupDialog.REWARDS || !canSubmitSetup) return
         val operation = selectedOperation ?: return
@@ -292,7 +295,7 @@ class MathViewModel(
     }
 
     fun backToSetup() {
-        if (screen == Screen.REWARDS_SETUP) {
+        if (overlay == Overlay.REWARDS_SETUP) {
             cancelRewardsSetup()
             return
         }
@@ -547,6 +550,10 @@ class MathViewModel(
     }
 
     fun closeOverlay() {
+        if (overlay == Overlay.REWARDS_SETUP) {
+            cancelRewardsSetup()
+            return
+        }
         dismissOverlayReward()
         if (overlay == Overlay.HISTORY && historyDetail != null) {
             historyDetail = null
