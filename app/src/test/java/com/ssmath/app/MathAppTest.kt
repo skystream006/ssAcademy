@@ -223,25 +223,24 @@ class MathAppTest {
         }
         assertEquals(model.rewardsDefaults, model().rewardsDefaults)
         Operation.entries.forEachIndexed { index, operation ->
-            compose.onNodeWithTag("rewards-question-count-input").performScrollTo()
-                .performTextReplacement((index + 25).toString())
+            val count = listOf(15, 25, 50, 50)[index]
+            compose.onNodeWithTag("rewards-question-count-$count").performScrollTo().performClick()
             compose.onNodeWithTag("rewards-operation-${operation.name}").performScrollTo().assertIsEnabled().performClick()
             compose.onNode(isDialog()).assertDoesNotExist()
             val numbers = if (operation == Operation.DIVISION) "first up to 4 · second up to 13"
                 else "numbers ${index + 1} to ${index + 10}"
-            compose.onNodeWithText("${operation.label} · $numbers · ${index + 25} questions").assertIsDisplayed()
+            compose.onNodeWithText("${operation.label} · $numbers · $count questions").assertIsDisplayed()
             assertEquals(GameMode.REWARDS, model.gameMode)
             compose.onNodeWithText("Back").performClick()
             compose.onNode(isDialog()).assertIsDisplayed()
-            compose.onNodeWithTag("rewards-question-count-input").performScrollTo()
-                .assertTextContains((index + 25).toString())
+            compose.onNodeWithTag("rewards-question-count-$count").performScrollTo().assertIsSelected()
         }
         compose.onNodeWithTag("rewards-operation-DIVISION").performScrollTo().performClick()
         compose.onNodeWithTag("start-button").performClick()
         assertEquals(Operation.DIVISION, model.game!!.operation)
         assertEquals(4, model.game!!.maximum)
         assertEquals(13, model.game!!.maximumSecond)
-        assertEquals(28, model.game!!.questionCount)
+        assertEquals(50, model.game!!.questionCount)
         compose.runOnIdle { model.backToSetup() }
         compose.onNodeWithTag("practice-game").performClick()
         compose.onNodeWithTag("operation-MULTIPLICATION").performScrollTo().assertIsSelected()
@@ -289,7 +288,18 @@ class MathAppTest {
             .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(titleLayouts) }
         assertFalse(titleLayouts.single().didOverflowWidth)
         assertFalse(titleLayouts.single().didOverflowHeight)
-        compose.onNodeWithTag("rewards-question-count-input").performScrollTo().performTextReplacement("25")
+        listOf(15, 25, 50).forEach { count ->
+            val button = compose.onNodeWithTag("rewards-question-count-$count")
+                .performScrollTo().assertIsDisplayed().performClick().assertIsSelected()
+                .fetchSemanticsNode().boundsInRoot
+            val label = compose.onNodeWithText(count.toString(), useUnmergedTree = true)
+                .assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+            assertTrue(label.left >= button.left && label.right <= button.right)
+            val layout = textLayout(count.toString())
+            assertFalse("$count overflows horizontally", layout.didOverflowWidth)
+            assertFalse("$count overflows vertically", layout.didOverflowHeight)
+            assertEquals(1, layout.lineCount)
+        }
         compose.onNodeWithText("Obtainable rewards", substring = true).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("• Pokémon: 15 or more questions.").performScrollTo().assertIsDisplayed()
         RewardTier.entries.forEach { tier ->
@@ -310,39 +320,65 @@ class MathAppTest {
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithTag("rewards-game").performScrollTo().performClick()
         assertEquals("", model.rewardsQuestionCountText)
-        compose.onNodeWithTag("rewards-question-count-input").performScrollTo().performTextReplacement("1000")
+        compose.onNodeWithTag("rewards-question-count-50").performScrollTo().performClick()
         compose.onNodeWithTag("rewards-operation-DIVISION").performScrollTo().performClick()
         compose.onNodeWithTag("start-button").performScrollTo().assertIsDisplayed()
-        assertEquals(1000, model.readyParameters!!.questionCount)
+        assertEquals(50, model.readyParameters!!.questionCount)
     }
 
-    @Test fun rewardsLaunchDisablesEveryOperationUntilItsOwnQuestionCountIsValid() {
+    @Test fun rewardsLaunchRequiresOneOfThreeImageChoicesAndUsesTheSelectedCount() {
         val model = model()
         model.updateQuestionCount("37")
         compose.setContent { MathAppContent(model) }
         compose.onNodeWithTag("rewards-game").performClick()
         assertRewardsLaunchHeader()
-        listOf("", "0", "-1", "1001", "1.5", "abc", "1234567").forEach { invalid ->
-            compose.onNodeWithTag("rewards-question-count-input").performScrollTo().performTextReplacement(invalid)
-            Operation.entries.forEach { operation ->
-                compose.onNodeWithTag("rewards-operation-${operation.name}").performScrollTo().assertIsNotEnabled()
-            }
-            assertEquals(Screen.SETUP, model.screen)
+        compose.onNodeWithTag("rewards-question-count-input").assertDoesNotExist()
+        compose.onNodeWithText("Number of questions").assertDoesNotExist()
+        val choices = listOf(15 to "Poké Ball", 25 to "Blue gift box", 50 to "Royal purple gift box")
+        compose.onAllNodes(hasAnyAncestor(hasTestTag("rewards-question-count-choices")) and hasClickAction())
+            .assertCountEquals(3)
+        choices.forEach { (count, image) ->
+            compose.onNodeWithTag("rewards-question-count-$count").performScrollTo().assertIsNotSelected()
+                .assertTextEquals(count.toString()).assertContentDescriptionEquals("$count questions", image)
+            compose.onNodeWithContentDescription(image, useUnmergedTree = true)
+                .assertIsDisplayed().assert(hasAnyAncestor(hasTestTag("rewards-question-count-$count")))
         }
-        listOf("1", "1000").forEach { valid ->
-            compose.onNodeWithTag("rewards-question-count-input").performScrollTo().performTextReplacement(valid)
+        Operation.entries.forEach { operation ->
+            compose.onNodeWithTag("rewards-operation-${operation.name}").performScrollTo().assertIsNotEnabled()
+        }
+        choices.forEach { (count, _) ->
+            compose.onNodeWithTag("rewards-question-count-$count").performScrollTo().performClick()
+            assertEquals(count, model.rewardsQuestionCount)
+            choices.forEach { (option, _) ->
+                val button = compose.onNodeWithTag("rewards-question-count-$option")
+                if (option == count) button.assertIsSelected() else button.assertIsNotSelected()
+            }
             Operation.entries.forEach { operation ->
                 compose.onNodeWithTag("rewards-operation-${operation.name}").performScrollTo().assertIsEnabled()
             }
+            compose.onNodeWithTag("rewards-operation-ADDITION").performScrollTo().performClick()
+            compose.onNodeWithText("Addition · numbers 1 to 10 · $count questions").assertIsDisplayed()
+            compose.onNodeWithText("Back").performClick()
+            compose.onNodeWithTag("rewards-question-count-$count").performScrollTo().assertIsSelected()
         }
         compose.onNodeWithTag("rewards-operation-ADDITION").performScrollTo().performClick()
-        compose.onNodeWithText("Addition · numbers 1 to 10 · 1000 questions").assertIsDisplayed()
-        compose.onNodeWithText("Back").performClick()
-        compose.onNodeWithTag("rewards-question-count-input").performScrollTo().assertTextContains("1000")
+        compose.onNodeWithTag("start-button").performClick()
+        assertEquals(50, model.game!!.questionCount)
+        compose.runOnIdle { model.backToSetup() }
+        compose.onNodeWithTag("rewards-game").performClick()
+        choices.forEach { (count, _) ->
+            compose.onNodeWithTag("rewards-question-count-$count").performScrollTo().assertIsNotSelected()
+        }
+        compose.onNodeWithTag("rewards-question-count-25").performScrollTo().performClick()
         compose.onNodeWithText("Cancel").performScrollTo().performClick()
         compose.onNodeWithTag("rewards-game").performClick()
         assertEquals("", model.rewardsQuestionCountText)
-        compose.onNodeWithTag("rewards-operation-ADDITION").performScrollTo().assertIsNotEnabled()
+        choices.forEach { (count, _) ->
+            compose.onNodeWithTag("rewards-question-count-$count").performScrollTo().assertIsNotSelected()
+        }
+        Operation.entries.forEach { operation ->
+            compose.onNodeWithTag("rewards-operation-${operation.name}").performScrollTo().assertIsNotEnabled()
+        }
         compose.runOnIdle {
             (ShadowDialog.getLatestDialog() as ComponentDialog).onBackPressedDispatcher.onBackPressed()
         }
@@ -388,7 +424,7 @@ class MathAppTest {
         compose.onNodeWithText("Unavailable: no rewards enabled in this tier.").assertDoesNotExist()
         compose.onAllNodesWithText("Unavailable: Rewards system is OFF.").assertCountEquals(RewardTier.entries.size)
         compose.onNodeWithText("• Pokémon: 15 or more questions.").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithTag("rewards-question-count-input").performScrollTo().performTextReplacement("25")
+        compose.onNodeWithTag("rewards-question-count-25").performScrollTo().performClick()
         compose.onNodeWithTag("rewards-operation-ADDITION").performScrollTo().assertIsEnabled()
     }
 
@@ -905,7 +941,7 @@ class MathAppTest {
         compose.onNodeWithTag("view-results").performClick()
         compose.onNodeWithTag("done-button").performClick()
         compose.onNodeWithTag("rewards-game").performClick()
-        compose.onNodeWithTag("rewards-question-count-input").performScrollTo().performTextReplacement("10")
+        compose.onNodeWithTag("rewards-question-count-15").performScrollTo().performClick()
         compose.onNodeWithTag("rewards-operation-ADDITION").performScrollTo().performClick()
         compose.onNodeWithTag("start-button").performClick()
         compose.onNode(isDialog()).assertDoesNotExist()
@@ -1445,7 +1481,9 @@ class MathAppTest {
     private fun assertRewardsLaunchHeader() {
         compose.onNode(hasText("Rewards Game") and hasAnyAncestor(isDialog())).assertIsDisplayed()
         compose.onNodeWithText("How many questions would you like?").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithTag("rewards-question-count-input").performScrollTo().assertIsDisplayed()
+        listOf(15, 25, 50).forEach { count ->
+            compose.onNodeWithTag("rewards-question-count-$count").performScrollTo().assertIsDisplayed()
+        }
         compose.onNodeWithTag("rewards-setup").assertDoesNotExist()
         compose.onNodeWithContentDescription("Setup").assertDoesNotExist()
         compose.onNodeWithText("Setup").assertDoesNotExist()
