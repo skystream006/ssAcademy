@@ -33,6 +33,8 @@ import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import java.io.File
 import kotlin.random.Random
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Rule
@@ -56,7 +58,9 @@ class MathAppTest {
         DebugLog.initialize(application)
     }
 
-    private fun model() = MathViewModel(application, ProblemGenerator(Random(7)), clock = { now }, wallClock = { 1_700_000_000_000 })
+    private fun model(ioDispatcher: CoroutineDispatcher = Dispatchers.IO) =
+        MathViewModel(application, ProblemGenerator(Random(7)), clock = { now },
+            wallClock = { 1_700_000_000_000 }, ioDispatcher = ioDispatcher)
 
     @Test
     @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -1306,7 +1310,7 @@ class MathAppTest {
     }
 
     @Test fun perfectPracticeCelebratesSavesOnceAndShowsResults() {
-        val model = model()
+        val model = model(Dispatchers.Unconfined)
         model.selectOperation(Operation.ADDITION)
         model.updateQuestionCount("2")
         model.submitSetup()
@@ -1352,7 +1356,7 @@ class MathAppTest {
     }
 
     @Test fun reachingQuestionCountWithMistakesCelebratesAndShowsResults() {
-        val model = model()
+        val model = model(Dispatchers.Unconfined)
         model.selectOperation(Operation.DIVISION)
         model.updateQuestionCount("2")
         model.submitSetup()
@@ -1382,7 +1386,7 @@ class MathAppTest {
     }
 
     @Test fun fifthWrongAnswerOnTheLastQuestionCelebratesInsteadOfStoppingEarly() {
-        val model = model()
+        val model = model(Dispatchers.Unconfined)
         model.selectOperation(Operation.ADDITION)
         model.updateQuestionCount("6")
         model.submitSetup()
