@@ -317,9 +317,12 @@ private fun RewardsCriteria(model: MathViewModel) {
         RewardTier.entries.forEach { tier ->
             val available = RewardType.entries.filter { it.tier == tier && it !in model.disabledRewards }
             Text("• ${tier.label}: ${tier.questionCountLabel}", style = MaterialTheme.typography.titleSmall)
-            Text(when {
-                !model.rewardsEnabled -> "Unavailable: Rewards system is OFF."
-                available.isEmpty() -> "Unavailable: no rewards enabled in this tier."
+            if (!model.rewardsEnabled) {
+                Text("Unavailable: Rewards system is OFF.")
+            }
+            if (available.isEmpty()) {
+                Text("Unavailable: no rewards enabled in this tier.")
+            }
             })
         }
     }
