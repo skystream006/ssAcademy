@@ -309,26 +309,19 @@ private fun HomeScreen(model: MathViewModel) {
 @Composable
 private fun RewardsCriteria(model: MathViewModel) {
     Column(Modifier.fillMaxWidth().testTag("rewards-criteria"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Obtainable rewards", style = MaterialTheme.typography.titleMedium)
-        Text("• Other animations: complete all questions at any game length.")
-        Text("• Pokémon: complete at least 15 questions.")
-        Text("One random eligible animation can play, even with mistakes. Only uncollected animations are chosen " +
-            "until the full collection is complete; if none qualify, no animation plays.",
-            style = MaterialTheme.typography.bodySmall)
-        Text("Prize fragments require completing all questions with over 90% correct, without running out of time.")
+        Text("Obtainable rewards (reqeuires 90% c orrect)", style = MaterialTheme.typography.titleMedium)
+        Text("• Pokémon: 15 or more questions.")
         if (!model.rewardsEnabled) {
-            Text("Prize fragments are unavailable while the Rewards system is off in Settings.")
+            Text("Prize fragments are unavailable while the Rewards system is OFF.")
         }
         RewardTier.entries.forEach { tier ->
             val available = RewardType.entries.filter { it.tier == tier && it !in model.disabledRewards }
             Text("• ${tier.label}: ${tier.questionCountLabel}", style = MaterialTheme.typography.titleSmall)
             Text(when {
-                !model.rewardsEnabled -> "Unavailable: Rewards system is off."
+                !model.rewardsEnabled -> "Unavailable: Rewards system is OFF."
                 available.isEmpty() -> "Unavailable: no rewards enabled in this tier."
-                else -> "One random fragment: ${available.joinToString { it.fragmentLabel }}."
             })
         }
-        Text("Every 3 fragments of the same type make 1 whole reward.", style = MaterialTheme.typography.bodySmall)
     }
 }
 
