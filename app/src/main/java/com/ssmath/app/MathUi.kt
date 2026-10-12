@@ -309,7 +309,7 @@ private fun HomeScreen(model: MathViewModel) {
 @Composable
 private fun RewardsCriteria(model: MathViewModel) {
     Column(Modifier.fillMaxWidth().testTag("rewards-criteria"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Obtainable rewards (reqeuires 90% c orrect)", style = MaterialTheme.typography.titleMedium)
+        Text("Obtainable rewards (requires 90% correct)", style = MaterialTheme.typography.titleMedium)
         Text("• Pokémon: 15 or more questions.")
         if (!model.rewardsEnabled) {
             Text("Prize fragments are unavailable while the Rewards system is OFF.")
