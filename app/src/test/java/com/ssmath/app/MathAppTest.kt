@@ -286,15 +286,10 @@ class MathAppTest {
         assertFalse(titleLayouts.single().didOverflowWidth)
         assertFalse(titleLayouts.single().didOverflowHeight)
         compose.onNodeWithTag("rewards-question-count-input").performScrollTo().performTextReplacement("25")
-        compose.onNodeWithText("Obtainable rewards").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("• Other animations: complete all questions at any game length.")
-            .performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("• Pokémon: complete at least 15 questions.").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Obtainable rewards", substring = true).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("• Pokémon: 15 or more questions.").performScrollTo().assertIsDisplayed()
         RewardTier.entries.forEach { tier ->
             compose.onNodeWithText(tier.questionCountLabel, substring = true).performScrollTo().assertIsDisplayed()
-            RewardType.entries.filter { it.tier == tier }.forEach { type ->
-                compose.onNodeWithText(type.fragmentLabel, substring = true).performScrollTo().assertIsDisplayed()
-            }
         }
         Operation.entries.forEach {
             compose.onNodeWithTag("rewards-operation-${it.name}").performScrollTo().assertIsDisplayed().assertIsEnabled()
@@ -352,29 +347,24 @@ class MathAppTest {
         compose.onNodeWithTag("question-count-input").performScrollTo().assertTextContains("37")
     }
 
-    @Test fun rewardsLaunchExplainsCompletionThresholdsAndOnlyListsEnabledPrizeFragments() {
+    @Test fun rewardsLaunchExplainsThresholdsAndShowsIndependentAvailabilityWarnings() {
         val model = model()
         compose.setContent { MathAppContent(model) }
         compose.onNodeWithTag("rewards-game").performClick()
         compose.onNodeWithTag("rewards-criteria").assertExists()
-        compose.onNodeWithText("Obtainable rewards").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("• Other animations: complete all questions at any game length.")
-            .performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("• Pokémon: complete at least 15 questions.").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Prize fragments require completing all questions with over 90% correct, without running out of time.")
-            .performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Obtainable rewards", substring = true).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("• Pokémon: 15 or more questions.").performScrollTo().assertIsDisplayed()
         RewardTier.entries.forEach { tier ->
             compose.onNodeWithText(tier.questionCountLabel, substring = true)
                 .performScrollTo().assertIsDisplayed().assert(hasAnyAncestor(hasTestTag("rewards-criteria")))
         }
         RewardType.entries.forEach { type ->
-            compose.onNodeWithText(type.fragmentLabel, substring = true).performScrollTo().assertIsDisplayed()
+            compose.onNodeWithText(type.fragmentLabel, substring = true).assertDoesNotExist()
         }
+        compose.onNodeWithText("Unavailable: no rewards enabled in this tier.").assertDoesNotExist()
+        compose.onNodeWithText("Unavailable: Rewards system is OFF.").assertDoesNotExist()
         compose.runOnIdle { model.chooseRewardEnabled(RewardType.LOLLIPOP, false) }
-        compose.onNodeWithText(RewardType.LOLLIPOP.fragmentLabel, substring = true).assertDoesNotExist()
-        RewardType.entries.filter { it != RewardType.LOLLIPOP }.forEach { type ->
-            compose.onNodeWithText(type.fragmentLabel, substring = true).performScrollTo().assertIsDisplayed()
-        }
+        compose.onNodeWithText("Unavailable: no rewards enabled in this tier.").assertDoesNotExist()
         compose.runOnIdle {
             RewardType.entries.filter { it.tier == RewardTier.TIER_1 }.forEach { model.chooseRewardEnabled(it, false) }
         }
@@ -383,15 +373,17 @@ class MathAppTest {
             compose.onNodeWithText(type.fragmentLabel, substring = true).assertDoesNotExist()
         }
         compose.runOnIdle { model.chooseRewardsEnabled(false) }
-        compose.onNodeWithText("Prize fragments are unavailable while the Rewards system is off in Settings.")
+        compose.onNodeWithText("Prize fragments are unavailable while the Rewards system is OFF.")
             .performScrollTo().assertIsDisplayed()
-        compose.onAllNodesWithText("Unavailable: Rewards system is off.").assertCountEquals(RewardTier.entries.size)
+        compose.onAllNodesWithText("Unavailable: Rewards system is OFF.").assertCountEquals(RewardTier.entries.size)
+        compose.onNodeWithText("Unavailable: no rewards enabled in this tier.").performScrollTo().assertIsDisplayed()
         RewardType.entries.forEach { type ->
             compose.onNodeWithText(type.fragmentLabel, substring = true).assertDoesNotExist()
         }
-        compose.onNodeWithText("• Other animations: complete all questions at any game length.")
-            .performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("• Pokémon: complete at least 15 questions.").performScrollTo().assertIsDisplayed()
+        compose.runOnIdle { model.chooseRewardEnabled(RewardType.LOLLIPOP, true) }
+        compose.onNodeWithText("Unavailable: no rewards enabled in this tier.").assertDoesNotExist()
+        compose.onAllNodesWithText("Unavailable: Rewards system is OFF.").assertCountEquals(RewardTier.entries.size)
+        compose.onNodeWithText("• Pokémon: 15 or more questions.").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("rewards-question-count-input").performScrollTo().performTextReplacement("25")
         compose.onNodeWithTag("rewards-operation-ADDITION").performScrollTo().assertIsEnabled()
     }
