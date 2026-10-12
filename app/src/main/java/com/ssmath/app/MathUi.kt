@@ -5,6 +5,7 @@ package com.ssmath.app
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
@@ -31,6 +32,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -41,6 +43,7 @@ import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -75,9 +78,11 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -282,13 +287,7 @@ private fun HomeScreen(model: MathViewModel) {
         SetupDialog.REWARDS -> GameSetupDialog(model::dismissSetupDialog) {
             Text("Rewards Game", style = MaterialTheme.typography.headlineSmall)
             Text("How many questions would you like?", style = MaterialTheme.typography.titleLarge)
-            OutlinedTextField(model.rewardsQuestionCountText, model::updateRewardsQuestionCount,
-                label = { Text("Number of questions") },
-                supportingText = { Text("Whole number from $MIN_QUESTION_COUNT to ${"%,d".format(MAX_QUESTION_COUNT)}") },
-                isError = model.rewardsQuestionCountText.isNotEmpty() && model.rewardsQuestionCount == null,
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
-                modifier = Modifier.fillMaxWidth().testTag("rewards-question-count-input"))
+            RewardsQuestionCountChoices(model)
             RewardsCriteria(model)
             Text("Choose a math type to play with its saved number limits.")
             Operation.entries.forEach { operation ->
@@ -303,6 +302,45 @@ private fun HomeScreen(model: MathViewModel) {
             }
         }
         null -> Unit
+    }
+}
+
+@Composable
+private fun RewardsQuestionCountChoices(model: MathViewModel) {
+    val choices = listOf(
+        Triple(15, R.drawable.ic_pokeball, "Poké Ball"),
+        Triple(25, R.drawable.ic_gift_box_blue, "Blue gift box"),
+        Triple(50, R.drawable.ic_gift_box_royal_purple, "Royal purple gift box")
+    )
+    val textMeasurer = rememberTextMeasurer()
+    val labelWidth = choices.maxOf { (count, _, _) ->
+        textMeasurer.measure(count.toString(), MaterialTheme.typography.labelLarge, softWrap = false).size.width
+    }
+    val minimumButtonWidth = maxOf(64.dp, with(LocalDensity.current) { labelWidth.toDp() } + 16.dp)
+    FlowRow(Modifier.fillMaxWidth().selectableGroup().testTag("rewards-question-count-choices"),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp), maxItemsInEachRow = 3) {
+        choices.forEach { (count, image, description) ->
+            val selected = model.rewardsQuestionCount == count
+            OutlinedButton(onClick = { model.updateRewardsQuestionCount(count.toString()) },
+                modifier = Modifier.weight(1f).widthIn(min = minimumButtonWidth)
+                    .testTag("rewards-question-count-$count").semantics {
+                        this.selected = selected
+                        role = Role.RadioButton
+                        contentDescription = "$count questions"
+                    },
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                    contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface),
+                border = BorderStroke(if (selected) 2.dp else 1.dp,
+                    if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline),
+                contentPadding = PaddingValues(8.dp)) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Image(painterResource(image), contentDescription = description, modifier = Modifier.size(40.dp))
+                    Text(count.toString(), Modifier.width(IntrinsicSize.Max), textAlign = TextAlign.Center)
+                }
+            }
+        }
     }
 }
 

@@ -22,7 +22,8 @@ A native Kotlin / Jetpack Compose Android app for practicing math. Android 8.0
    gives only **Other** animations. Once all five Other scenes have been collected,
    practice can repeat them.
    **Rewards Game** asks **How many questions would you like?** each time you open
-   its dialog. Enter 1 to 1,000 questions, review the obtainable reward criteria,
+   its dialog. Select **15** (Poké Ball), **25** (blue gift box), or **50**
+   (royal purple gift box) questions, review the obtainable reward criteria,
    then choose a math type to use its saved number limits. The list explains
    Other animations, Pokémon eligibility, and both prize tiers with their enabled
    reward types; unavailable prizes are indicated when rewards are disabled.
