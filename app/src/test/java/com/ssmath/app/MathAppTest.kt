@@ -1011,11 +1011,11 @@ class MathAppTest {
         assertEquals(Feedback("Not quite!", false), model.feedback)
 
         compose.onNodeWithContentDescription("Settings").performClick()
-        compose.onNodeWithContentDescription("Show correct answers").assertIsOff().performClick().assertIsOn()
+        compose.onNodeWithContentDescription("Show correct answers").performScrollTo().assertIsOff().performClick().assertIsOn()
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithText(revealedFeedback).assertIsDisplayed()
         compose.onNodeWithContentDescription("Settings").performClick()
-        compose.onNodeWithContentDescription("Show correct answers").performClick().assertIsOff()
+        compose.onNodeWithContentDescription("Show correct answers").performScrollTo().performClick().assertIsOff()
         compose.onNodeWithContentDescription("Back").performClick()
 
         val second = model.game!!.problem
@@ -1069,11 +1069,11 @@ class MathAppTest {
         assertEquals(1, saved.wrong)
 
         compose.onNodeWithContentDescription("Settings").performClick()
-        compose.onNodeWithContentDescription("Show correct answers").performClick()
+        compose.onNodeWithContentDescription("Show correct answers").performScrollTo().performClick()
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithText("Correct answer: ${problem.answer}").assertIsDisplayed()
         compose.onNodeWithContentDescription("Settings").performClick()
-        compose.onNodeWithContentDescription("Show correct answers").performClick()
+        compose.onNodeWithContentDescription("Show correct answers").performScrollTo().performClick()
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithText("Correct answer:", substring = true).assertDoesNotExist()
         compose.onNodeWithTag("done-button").performClick()
@@ -1086,7 +1086,7 @@ class MathAppTest {
         compose.onNodeWithText("Correct answer:", substring = true).assertDoesNotExist()
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithContentDescription("Back").performClick()
-        compose.onNodeWithContentDescription("Show correct answers").performClick()
+        compose.onNodeWithContentDescription("Show correct answers").performScrollTo().performClick()
         compose.onNodeWithTag("practice-history").performClick()
         compose.onNodeWithText("Addition · 1 to 10").performClick()
         compose.onNodeWithText("Correct answer: ${problem.answer}").assertIsDisplayed()
