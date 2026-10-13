@@ -76,19 +76,29 @@ class SubjectNavigationTest {
         assertNull(model.setupDialog)
     }
 
-    @Test fun homeOpensTheActivityScopedReadingModuleAndReturnsToMathChoices() {
+    @Test fun readingSubjectReturnsToSubjectsBeforeOpeningMathChoices() {
         val model = model()
         compose.setContent { MathAppContent(model) }
-        compose.onNodeWithTag("reading-games").performScrollTo().performClick()
-        compose.waitUntil(5_000) {
-            compose.onAllNodesWithTag("reading-menu").fetchSemanticsNodes().isNotEmpty()
+        repeat(2) { returnMethod ->
+            compose.onNodeWithTag("subject-Reading").performScrollTo().performClick()
+            compose.waitUntil(5_000) {
+                compose.onAllNodesWithTag("reading-menu").fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.onNodeWithTag("reading-menu").assertIsDisplayed()
+            compose.onNodeWithTag("subject-grid").assertDoesNotExist()
+            compose.onNodeWithTag("settings-button").assertDoesNotExist()
+            if (returnMethod == 0) compose.onNodeWithTag("reading-exit").performScrollTo().performClick()
+            else compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }
+            compose.onNodeWithTag("home-screen").assertIsDisplayed()
+            compose.onNodeWithTag("subject-grid").assertIsDisplayed()
+            compose.onNodeWithTag("practice-game").assertDoesNotExist()
+            assertFalse(model.mathGamesOpen)
+            assertNull(model.overlay)
         }
-        compose.onNodeWithTag("reading-menu").assertIsDisplayed()
-        compose.onNodeWithTag("settings-button").assertDoesNotExist()
-        compose.onNodeWithTag("reading-exit").performScrollTo().performClick()
-        compose.onNodeWithTag("home-screen").assertIsDisplayed()
+        compose.onNodeWithTag("subject-Math").performScrollTo().performClick()
         compose.onNodeWithTag("practice-game").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("rewards-game").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("subject-Reading").assertDoesNotExist()
         assertNull(model.overlay)
     }
 }

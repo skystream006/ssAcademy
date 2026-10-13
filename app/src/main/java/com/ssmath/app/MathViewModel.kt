@@ -45,6 +45,8 @@ class MathViewModel(
 
     var screen by mutableStateOf(Screen.SETUP)
         private set
+    var mathGamesOpen by mutableStateOf(false)
+        private set
     var setupDialog by mutableStateOf<SetupDialog?>(null)
         private set
     var gameMode by mutableStateOf(GameMode.PRACTICE)
@@ -128,9 +130,9 @@ class MathViewModel(
         private set
     var activeTimeLimitMs by mutableStateOf<Long?>(null)
         private set
-    var showCorrectAnswers by mutableStateOf(settings.getBoolean("show_correct_answers", false))
+    var showCorrectAnswers by mutableStateOf(settings.getBoolean("show_correct_answers", true))
         private set
-    var verticalEquations by mutableStateOf(settings.getBoolean("vertical_equations", false))
+    var verticalEquations by mutableStateOf(settings.getBoolean("vertical_equations", true))
         private set
     var textSizePercent by mutableStateOf(settings.getInt("text_size_percent", DEFAULT_TEXT_SIZE_PERCENT)
         .coerceIn(MIN_TEXT_SIZE_PERCENT, MAX_TEXT_SIZE_PERCENT))
@@ -208,8 +210,19 @@ class MathViewModel(
         edit.apply()
     }
 
+    fun openMathGames() {
+        if (screen == Screen.SETUP && overlay == null) mathGamesOpen = true
+    }
+
+    fun closeMathGames() {
+        if (screen != Screen.SETUP || overlay != null || setupDialog != null) return
+        mathGamesOpen = false
+    }
+
     fun openPracticeGame() {
-        if (screen == Screen.SETUP && overlay == null) setupDialog = SetupDialog.PRACTICE
+        if (screen != Screen.SETUP || overlay != null) return
+        mathGamesOpen = true
+        setupDialog = SetupDialog.PRACTICE
     }
 
     fun openReading() {
@@ -219,6 +232,7 @@ class MathViewModel(
 
     fun openRewardsGame() {
         if (screen != Screen.SETUP || overlay != null) return
+        mathGamesOpen = true
         rewardsQuestionCountText = ""
         setupDialog = SetupDialog.REWARDS
     }
@@ -261,6 +275,7 @@ class MathViewModel(
     }
 
     private fun ready(mode: GameMode, operation: Operation, parameters: GameParameters) {
+        mathGamesOpen = true
         gameMode = mode
         readyGame = ReadyGame(mode, operation, parameters)
         setupDialog = null

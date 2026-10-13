@@ -27,7 +27,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = commits + 1
-        versionName = "0.01.%02d".format(revision)
+        versionName = "0.02.%02d".format(revision)
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

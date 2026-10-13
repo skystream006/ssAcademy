@@ -1,0 +1,27 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="240dp" android:height="240dp"
+    android:viewportWidth="240" android:viewportHeight="240">
+    <path android:pathData="M0,0H240V240H0Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:startX="0" android:startY="0" android:endX="240" android:endY="240" android:type="linear">
+                <item android:offset="0" android:color="#2AA89C" />
+                <item android:offset="1" android:color="#12586D" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path android:fillColor="#18D8FFF1" android:pathData="M-35,130a100,100 0,1 0,200 0a100,100 0,1 0,-200 0" />
+    <path android:fillColor="#BCEEEA" android:pathData="M71,45H108V87L148,150Q158,170 136,174H44Q22,170 32,150L71,87Z" />
+    <path android:fillColor="#458DC0" android:pathData="M60,117Q86,104 118,117L141,153Q149,165 134,165H46Q31,165 39,153Z" />
+    <path android:fillColor="#F0FAE8" android:pathData="M64,39H115V51H64Z" />
+    <path android:strokeColor="#FFFFFF" android:strokeAlpha="0.65" android:strokeWidth="4" android:strokeLineCap="round" android:fillColor="#00000000"
+        android:pathData="M80,61V88L55,132M57,147H68M69,129H79" />
+    <path android:fillColor="#9DF0CE" android:pathData="M91,143a6,6 0,1 0,12 0a6,6 0,1 0,-12 0M107,158a4,4 0,1 0,8 0a4,4 0,1 0,-8 0M86,99a4,4 0,1 0,8 0a4,4 0,1 0,-8 0" />
+    <group android:pivotX="177" android:pivotY="70" android:rotation="-30">
+        <path android:strokeColor="#FFE59C" android:strokeWidth="3" android:fillColor="#00000000"
+            android:pathData="M141,70a36,14 0,1 0,72 0a36,14 0,1 0,-72 0M163,70a14,36 0,1 0,28 0a14,36 0,1 0,-28 0" />
+    </group>
+    <path android:fillColor="#FFE59C" android:pathData="M171,70a6,6 0,1 0,12 0a6,6 0,1 0,-12 0M204,52a4,4 0,1 0,8 0a4,4 0,1 0,-8 0" />
+    <path android:strokeColor="#8BE1D0" android:strokeWidth="3" android:fillColor="#00000000"
+        android:pathData="M182,135L196,127L210,135V151L196,159L182,151ZM23,42L35,35L47,42V56L35,63L23,56Z" />
+</vector>
