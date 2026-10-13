@@ -485,7 +485,7 @@ class MathAppTest {
             compose.onNodeWithText(type.fragmentLabel, substring = true).assertDoesNotExist()
         }
         compose.onNodeWithText("Unavailable: no rewards enabled in this tier.").assertDoesNotExist()
-        compose.onNodeWithText("Unavailable: Rewards system is OFF.").assertDoesNotExist()
+        compose.onNodeWithText("Unavailable: Math Rewards System is OFF.").assertDoesNotExist()
         compose.runOnIdle { model.chooseRewardEnabled(RewardType.LOLLIPOP, false) }
         compose.onNodeWithText("Unavailable: no rewards enabled in this tier.").assertDoesNotExist()
         compose.runOnIdle {
@@ -496,16 +496,16 @@ class MathAppTest {
             compose.onNodeWithText(type.fragmentLabel, substring = true).assertDoesNotExist()
         }
         compose.runOnIdle { model.chooseRewardsEnabled(false) }
-        compose.onNodeWithText("Prize fragments are unavailable while the Rewards system is OFF.")
+        compose.onNodeWithText("Prize fragments are unavailable while Math Rewards System is OFF.")
             .performScrollTo().assertIsDisplayed()
-        compose.onAllNodesWithText("Unavailable: Rewards system is OFF.").assertCountEquals(RewardTier.entries.size)
+        compose.onAllNodesWithText("Unavailable: Math Rewards System is OFF.").assertCountEquals(RewardTier.entries.size)
         compose.onNodeWithText("Unavailable: no rewards enabled in this tier.").performScrollTo().assertIsDisplayed()
         RewardType.entries.forEach { type ->
             compose.onNodeWithText(type.fragmentLabel, substring = true).assertDoesNotExist()
         }
         compose.runOnIdle { model.chooseRewardEnabled(RewardType.LOLLIPOP, true) }
         compose.onNodeWithText("Unavailable: no rewards enabled in this tier.").assertDoesNotExist()
-        compose.onAllNodesWithText("Unavailable: Rewards system is OFF.").assertCountEquals(RewardTier.entries.size)
+        compose.onAllNodesWithText("Unavailable: Math Rewards System is OFF.").assertCountEquals(RewardTier.entries.size)
         compose.onNodeWithText("• Pokémon: 15 or more questions.").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("rewards-question-count-25").performScrollTo().performClick()
         compose.onNodeWithTag("rewards-operation-ADDITION").performScrollTo().assertIsEnabled()
@@ -599,6 +599,7 @@ class MathAppTest {
         compose.onNodeWithTag("practice-game").assertIsDisplayed()
         compose.onNode(isDialog()).assertDoesNotExist()
         compose.onNodeWithContentDescription("Settings").performClick()
+        compose.onNodeWithText("Math Settings").performScrollTo().performClick()
         compose.onNodeWithTag("practice-history").performClick()
         compose.onNodeWithText("Multiplication · 4 to 6").performClick()
         compose.onNodeWithText("Multiplication · numbers 4 to 6").assertIsDisplayed()
@@ -682,7 +683,7 @@ class MathAppTest {
         val check = compose.onNodeWithText("Check for updates").assertIsDisplayed().assertHasClickAction()
             .assertIsEnabled().fetchSemanticsNode().boundsInRoot
         val message = compose.onNodeWithText(UpdateState().message).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
-        val history = compose.onNodeWithTag("practice-history").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val history = compose.onNodeWithText("Math Settings").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
 
         assertTrue(heading.right <= check.left)
         assertTrue(installed.right <= check.left)
@@ -731,7 +732,7 @@ class MathAppTest {
         assertTrue(model.showTimer)
         compose.onNodeWithContentDescription("Show timer").assertIsOn().performClick().assertIsOff()
         assertFalse(model.showTimer)
-        compose.onNodeWithTag("practice-history").performClick()
+        compose.onNodeWithTag("practice-history").performScrollTo().performClick()
         compose.onNodeWithText("No practice results yet", substring = true).assertIsDisplayed()
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithText("Settings").assertIsDisplayed()
@@ -1226,6 +1227,7 @@ class MathAppTest {
         assertNull(model.feedback)
 
         compose.onNodeWithContentDescription("Settings").performClick()
+        compose.onNodeWithText("Math Settings").performScrollTo().performClick()
         compose.onNodeWithTag("practice-history").performClick()
         compose.onNodeWithText("Addition · 1 to 10").performClick()
         compose.onNodeWithText("${problem.text} = $given").assertIsDisplayed()
@@ -1234,7 +1236,7 @@ class MathAppTest {
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithText("Math Settings").performScrollTo().performClick()
         compose.onNodeWithContentDescription("Show correct answers").performScrollTo().performClick()
-        compose.onNodeWithTag("practice-history").performClick()
+        compose.onNodeWithTag("practice-history").performScrollTo().performClick()
         compose.onNodeWithText("Addition · 1 to 10").performClick()
         compose.onNodeWithText("Correct answer: ${problem.answer}").assertIsDisplayed()
     }
@@ -1285,6 +1287,7 @@ class MathAppTest {
         assertTrue(result.attempts.all { it.problem.left in 1..100 && it.problem.right in 1..7 })
         compose.onNodeWithTag("done-button").performClick()
         compose.onNodeWithContentDescription("Settings").performClick()
+        compose.onNodeWithText("Math Settings").performScrollTo().performClick()
         compose.onNodeWithTag("practice-history").performClick()
         compose.onNodeWithText("Division · first up to 100 · second up to 7").assertIsDisplayed()
     }

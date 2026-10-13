@@ -23,7 +23,14 @@ enum class Screen { SETUP, READY, PLAYING, RESULTS }
 
 enum class SetupDialog { PRACTICE, REWARDS }
 
-enum class Overlay { SETTINGS, REWARDS_SETUP, HISTORY, REWARDS, POKEMONS, READING }
+enum class Overlay { SETTINGS, REWARDS_SETUP, HISTORY, SUBJECT_HISTORY, REWARDS, POKEMONS, READING }
+
+enum class Subject(val label: String, val rewardsPreference: String) {
+    MATH("Math", "rewards_enabled"),
+    READING("Reading", "reading_rewards_enabled"),
+    SCIENCE("Science", "science_rewards_enabled"),
+    ADVANCED("Advanced", "advanced_rewards_enabled")
+}
 
 data class Feedback(val text: String, val correct: Boolean)
 
@@ -94,6 +101,8 @@ class MathViewModel(
         private set
     var historyDetail by mutableStateOf<PracticeResult?>(null)
         private set
+    var historySubject by mutableStateOf(Subject.MATH)
+        private set
     var rewardBalances by mutableStateOf<Map<RewardType, RewardBalance>>(emptyMap())
         private set
     var pokemons by mutableStateOf<Set<Celebration>>(emptySet())
@@ -120,8 +129,11 @@ class MathViewModel(
 
     var showTimer by mutableStateOf(settings.getBoolean("show_timer", false))
         private set
-    var rewardsEnabled by mutableStateOf(settings.getBoolean("rewards_enabled", true))
-        private set
+    private var subjectRewards by mutableStateOf(Subject.entries.associateWith {
+        settings.getBoolean(it.rewardsPreference, true)
+    })
+    val rewardsEnabled: Boolean get() = rewardsEnabled(Subject.MATH)
+    fun rewardsEnabled(subject: Subject): Boolean = subjectRewards.getValue(subject)
     var disabledRewards by mutableStateOf(RewardType.entries.filter {
         it.name in settings.getStringSet("disabled_rewards", emptySet()).orEmpty()
     }.toSet())
@@ -547,9 +559,21 @@ class MathViewModel(
     fun openHistory() {
         dismissOverlayReward()
         historyDetail = null
+        historySubject = Subject.MATH
         overlay = Overlay.HISTORY
         updateTimer()
         viewModelScope.launch { reloadHistory() }
+    }
+
+    fun openSubjectHistory(subject: Subject) {
+        if (subject == Subject.MATH) {
+            openHistory()
+            return
+        }
+        dismissOverlayReward()
+        historySubject = subject
+        overlay = Overlay.SUBJECT_HISTORY
+        updateTimer()
     }
 
     fun openRewards() {
@@ -580,7 +604,7 @@ class MathViewModel(
             return
         }
         overlay = when (overlay) {
-            Overlay.HISTORY -> Overlay.SETTINGS
+            Overlay.HISTORY, Overlay.SUBJECT_HISTORY -> Overlay.SETTINGS
             Overlay.REWARDS, Overlay.POKEMONS -> collectionReturnOverlay
             else -> null
         }
@@ -776,8 +800,12 @@ class MathViewModel(
     }
 
     fun chooseRewardsEnabled(value: Boolean) {
-        rewardsEnabled = value
-        settings.edit().putBoolean("rewards_enabled", value).apply()
+        chooseSubjectRewardsEnabled(Subject.MATH, value)
+    }
+
+    fun chooseSubjectRewardsEnabled(subject: Subject, value: Boolean) {
+        subjectRewards = subjectRewards + (subject to value)
+        settings.edit().putBoolean(subject.rewardsPreference, value).apply()
     }
 
     fun chooseRewardEnabled(type: RewardType, enabled: Boolean) {

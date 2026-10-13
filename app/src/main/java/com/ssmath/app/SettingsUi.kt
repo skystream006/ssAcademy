@@ -55,7 +55,7 @@ import androidx.compose.ui.text.style.TextAlign
 import kotlin.math.roundToInt
 
 @Composable
-private fun ScreenScaffold(title: String, onBack: () -> Unit, actions: @Composable RowScope.() -> Unit = {},
+internal fun ScreenScaffold(title: String, onBack: () -> Unit, actions: @Composable RowScope.() -> Unit = {},
     content: @Composable ColumnScope.() -> Unit) {
     BackHandler(onBack = onBack)
     Column(Modifier.fillMaxSize()) {
@@ -95,24 +95,12 @@ fun SettingsScreen(model: MathViewModel) {
                     },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     modifier = Modifier.clickable(onClick = model::openPokemons).testTag("my-pokemons"))
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Rewards system")
-                        Text("Earn prize fragments in Rewards Game by completing 25 or more questions with over 90% correct",
-                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Switch(model.rewardsEnabled, model::chooseRewardsEnabled,
-                        modifier = Modifier.semantics { contentDescription = "Rewards system" })
-                }
             }
             HorizontalDivider()
-            ListItem(headlineContent = { Text("Practice History") },
-                supportingContent = { Text("Review your previous results") },
-                leadingContent = { Icon(Icons.Rounded.History, null) },
-                trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null) },
-                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                modifier = Modifier.clickable(onClick = model::openHistory).testTag("practice-history"))
             CollapsibleSettingsSection("Math Settings", defaultExpanded = false) {
+                SubjectRewardsSetting(model, Subject.MATH,
+                    "Earn prize fragments in Rewards Game by completing 25 or more questions with over 90% correct")
+                SubjectHistorySetting(model, Subject.MATH)
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("Show timer")
@@ -149,6 +137,21 @@ fun SettingsScreen(model: MathViewModel) {
                     trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null) },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     modifier = Modifier.clickable(onClick = model::openRewardsSetup).testTag("rewards-setup"))
+            }
+            HorizontalDivider()
+            CollapsibleSettingsSection("Reading Settings", defaultExpanded = false) {
+                SubjectRewardsSetting(model, Subject.READING,
+                    "Earn reading points for completed checkpoints. Progress and previously earned points are always saved.")
+                SubjectHistorySetting(model, Subject.READING)
+            }
+            listOf(Subject.SCIENCE, Subject.ADVANCED).forEach { subject ->
+                HorizontalDivider()
+                CollapsibleSettingsSection("${subject.label} Settings", defaultExpanded = false) {
+                    SubjectRewardsSetting(model, subject,
+                        "Choose whether to earn rewards when ${subject.label.lowercase()} activities become available.")
+                    SubjectHistorySetting(model, subject)
+                    Text("More activities are coming soon.", style = MaterialTheme.typography.bodySmall)
+                }
             }
             HorizontalDivider()
             CollapsibleSettingsSection("Appearance", defaultExpanded = false) {
@@ -196,6 +199,45 @@ fun SettingsScreen(model: MathViewModel) {
     }
     if (showingAdmin) {
         AdminDialog(model, onDismiss = { showingAdmin = false })
+    }
+}
+
+@Composable
+private fun SubjectRewardsSetting(model: MathViewModel, subject: Subject, description: String) {
+    val label = "${subject.label} Rewards System"
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(label)
+            Text(description, style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Switch(model.rewardsEnabled(subject), { model.chooseSubjectRewardsEnabled(subject, it) },
+            modifier = Modifier.semantics { contentDescription = label })
+    }
+}
+
+@Composable
+private fun SubjectHistorySetting(model: MathViewModel, subject: Subject) {
+    ListItem(headlineContent = { Text("${subject.label} Practice History") },
+        supportingContent = { Text("Review your previous ${subject.label.lowercase()} results") },
+        leadingContent = { Icon(Icons.Rounded.History, null) },
+        trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null) },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        modifier = Modifier.clickable { model.openSubjectHistory(subject) }
+            .testTag(if (subject == Subject.MATH) "practice-history" else "${subject.name.lowercase()}-practice-history"))
+}
+
+@Composable
+fun SubjectHistoryScreen(model: MathViewModel) {
+    ScreenScaffold("${model.historySubject.label} Practice History", model::closeOverlay) {
+        if (model.historySubject == Subject.READING) {
+            ReadingHistoryScreen()
+        } else {
+            Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+                Text("No ${model.historySubject.label.lowercase()} practice results yet. More activities are coming soon.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
     }
 }
 
@@ -472,7 +514,7 @@ fun HistoryScreen(model: MathViewModel) {
             }
         }
     } else {
-        ScreenScaffold("Practice History", model::closeOverlay, actions = {
+        ScreenScaffold("Math Practice History", model::closeOverlay, actions = {
             if (model.history.isNotEmpty()) IconButton(onClick = { confirmClear = true }) {
                 Icon(Icons.Rounded.DeleteSweep, contentDescription = "Clear history")
             }

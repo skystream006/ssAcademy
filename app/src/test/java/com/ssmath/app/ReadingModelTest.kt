@@ -11,8 +11,9 @@ internal fun readingFixture(content: ReadingActivity = ReadingContent.activities
         attempts = listOf(ReadingAttempt("attempt-a", "reader-a", content.id, 1_700_000_000_000))
     )
 
-internal fun readingAnswer(data: ReadingData, index: Int, key: String = "answer") =
-    ReadingEngine.submit(ReadingEngine.field(data, "answer", index.toString()), key, 1_700_000_000_100)
+internal fun readingAnswer(data: ReadingData, index: Int, key: String = "answer", rewardsEnabled: Boolean = true) =
+    ReadingEngine.submit(ReadingEngine.field(data, "answer", index.toString()), key, 1_700_000_000_100,
+        rewardsEnabled = rewardsEnabled)
 
 internal fun readingCorrect(data: ReadingData): Int =
     requireNotNull(ReadingEngine.question(requireNotNull(data.active))).answer
@@ -28,36 +29,39 @@ internal fun readingOrder(data: ReadingData, order: List<Int>): ReadingData {
     return result
 }
 
-internal fun readingSolve(data: ReadingData): ReadingData {
+internal fun readingSolve(data: ReadingData, rewardsEnabled: Boolean = true): ReadingData {
     var result = data
     val content = requireNotNull(data.active).content
     when (content.game) {
         ReadingGame.MISSING, ReadingGame.CAPTION, ReadingGame.DETECTIVE ->
-            result = readingAnswer(result, requireNotNull(content.question).answer)
+            result = readingAnswer(result, requireNotNull(content.question).answer, rewardsEnabled = rewardsEnabled)
         ReadingGame.SCRAMBLE, ReadingGame.SEQUENCE -> {
-            result = ReadingEngine.submit(readingOrder(result, content.validOrders.first()), "order")
+            result = ReadingEngine.submit(readingOrder(result, content.validOrders.first()), "order",
+                rewardsEnabled = rewardsEnabled)
             result = readingAnswer(result, requireNotNull(content.question).answer,
-                if (content.game == ReadingGame.SCRAMBLE) "bonus" else "answer")
+                if (content.game == ReadingGame.SCRAMBLE) "bonus" else "answer", rewardsEnabled)
         }
         ReadingGame.CHAPTER -> {
             result = ReadingEngine.branch(result, 0)
-            result = readingAnswer(result, content.branches[0].question.answer)
+            result = readingAnswer(result, content.branches[0].question.answer, rewardsEnabled = rewardsEnabled)
         }
         ReadingGame.STUDIO -> ReadingEngine.studioKeys.forEachIndexed { index, key ->
-            result = ReadingEngine.submit(ReadingEngine.field(result, key, content.writingChoices[index][0]), key)
+            result = ReadingEngine.submit(ReadingEngine.field(result, key, content.writingChoices[index][0]), key,
+                rewardsEnabled = rewardsEnabled)
         }
         ReadingGame.PARTNERS -> {
             result = ReadingEngine.partner(result, "reader-b")
             repeat(4) { index ->
                 result = ReadingEngine.submit(ReadingEngine.field(result, "turn", "Sentence ${index + 1}.",
-                    expectedTurn = index), "turn", expectedTurn = index)
+                    expectedTurn = index), "turn", expectedTurn = index, rewardsEnabled = rewardsEnabled)
             }
             result = ReadingEngine.reread(readingOrder(result, listOf(0, 1, 2, 3)))
-            result = ReadingEngine.submit(result, "shared")
+            result = ReadingEngine.submit(result, "shared", rewardsEnabled = rewardsEnabled)
         }
     }
     if (content.game == ReadingGame.DETECTIVE)
-        result = ReadingEngine.submit(ReadingEngine.field(result, "evidence", content.evidence.toString()), "evidence")
+        result = ReadingEngine.submit(ReadingEngine.field(result, "evidence", content.evidence.toString()), "evidence",
+            rewardsEnabled = rewardsEnabled)
     return ReadingEngine.finish(result, 1_700_000_000_200)
 }
 
@@ -121,6 +125,99 @@ class ReadingModelTest {
                 assertEquals(result, ReadingEngine.submit(result, it))
             }
         }
+    }
+
+    @Test fun disabledRewardsKeepEveryActivityCheckpointAccuracyMilestoneAndStoryWithoutPoints() {
+        ReadingContent.activities.forEach { content ->
+            val result = readingSolve(readingFixture(content), rewardsEnabled = false)
+            val rewarded = readingSolve(readingFixture(content))
+            ReadingEngine.validate(result)
+            assertTrue(content.id, requireNotNull(result.active).checkpoints.values.all { it.earned && !it.awardedPoint })
+            assertEquals(content.id, rewarded.active?.checkpoints?.keys, result.active?.checkpoints?.keys)
+            assertEquals(content.id, rewarded.stories, result.stories)
+            listOf("reader-a", "reader-b").forEach { id ->
+                assertEquals(content.id, 0, result.points(id))
+                assertEquals(content.id, 0, result.sharedPoints(id))
+                assertEquals(content.id, rewarded.completions(id), result.completions(id))
+                assertEquals(content.id, rewarded.sharedCompletions(id), result.sharedCompletions(id))
+                assertEquals(content.id, rewarded.milestones(id), result.milestones(id))
+                assertEquals(content.id, rewarded.accuracy(id), result.accuracy(id))
+            }
+            assertEquals(result, ReadingEngine.finish(result))
+            result.active?.checkpoints?.keys?.forEach { key ->
+                assertEquals(result, ReadingEngine.submit(result, key, rewardsEnabled = true))
+            }
+        }
+    }
+
+    @Test fun onlyTheSuccessfulSubmissionDeterminesWhetherRetryEarnsPoints() {
+        listOf(false, true).forEach { enabledAtCompletion ->
+            var data = readingAnswer(readingFixture(), readingWrong(readingFixture()),
+                rewardsEnabled = !enabledAtCompletion)
+            assertEquals(ReadingAccuracy(0, 1, 0, 0), data.accuracy("reader-a"))
+            assertEquals(0, data.points("reader-a"))
+            data = readingAnswer(ReadingEngine.hint(data), readingCorrect(data),
+                rewardsEnabled = enabledAtCompletion)
+            assertEquals(ReadingAccuracy(0, 1, 1, 1), data.accuracy("reader-a"))
+            assertEquals(if (enabledAtCompletion) 1 else 0, data.points("reader-a"))
+            assertEquals(enabledAtCompletion, data.active?.checkpoints?.get("answer")?.awardedPoint)
+            assertTrue(requireNotNull(data.active).earned("answer"))
+            assertTrue(requireNotNull(data.active).feedback.contains("Checkpoint saved"))
+            assertEquals(enabledAtCompletion, requireNotNull(data.active).feedback.contains("+1 point"))
+            repeat(5) {
+                assertEquals(data, ReadingEngine.submit(data, "answer", rewardsEnabled = !enabledAtCompletion))
+            }
+            assertEquals(2, data.active?.checkpoints?.get("answer")?.tries)
+            assertEquals(1, ReadingEngine.finish(data).completions("reader-a"))
+        }
+    }
+
+    @Test fun switchingRewardsAcrossAResumedStoryKeepsOldPointsAndNeverRetrocreditsDisabledCheckpoints() {
+        val content = ReadingContent.forGame(ReadingGame.STUDIO, ReadingLevel.SPROUT).first()
+        var data = readingFixture(content)
+        ReadingEngine.studioKeys.forEachIndexed { index, key ->
+            val enabled = index % 2 == 0
+            data = ReadingEngine.submit(ReadingEngine.field(data, key, content.writingChoices[index][0]), key,
+                rewardsEnabled = enabled)
+            assertEquals(if (index < 2) 1 else 2, data.points("reader-a"))
+            assertEquals(enabled, data.active?.checkpoints?.get(key)?.awardedPoint)
+            assertEquals(data, ReadingEngine.submit(data, key, rewardsEnabled = !enabled))
+            data = ReadingEngine.selectProfile(ReadingEngine.selectProfile(data, "reader-b"), "reader-a")
+            data = ReadingEngine.start(data, content.game, content.level)
+            assertEquals("attempt-a", data.active?.id)
+        }
+        data = ReadingEngine.finish(data)
+        assertEquals(2, data.points("reader-a"))
+        assertEquals(1, data.completions("reader-a"))
+        assertEquals("attempt-a", data.stories.single().attemptId)
+        assertEquals(4, data.active?.checkpoints?.size)
+        ReadingEngine.validate(data)
+    }
+
+    @Test fun partnerParticipationAndSharedCompletionStaySeparateFromAwardedPoints() {
+        val content = ReadingContent.forGame(ReadingGame.PARTNERS, ReadingLevel.SPROUT).first()
+        var data = ReadingEngine.partner(readingFixture(content), "reader-b")
+        repeat(4) { turn ->
+            data = ReadingEngine.submit(ReadingEngine.field(data, "turn", "Sentence $turn.", expectedTurn = turn),
+                "turn", expectedTurn = turn, rewardsEnabled = turn in 1..2)
+            assertEquals(data, ReadingEngine.submit(data, "turn", expectedTurn = turn, rewardsEnabled = true))
+        }
+        assertEquals(0, data.points("reader-a"))
+        assertEquals(1, data.points("reader-b"))
+        assertTrue(requireNotNull(data.active).earned("participation:reader-a"))
+        data = ReadingEngine.submit(ReadingEngine.reread(readingOrder(data, listOf(0, 1, 2, 3))),
+            "shared", rewardsEnabled = false)
+        assertTrue(requireNotNull(data.active).feedback.contains("Checkpoint saved"))
+        assertFalse(requireNotNull(data.active).feedback.contains(" point"))
+        assertEquals(data, ReadingEngine.submit(data, "shared", rewardsEnabled = true))
+        data = ReadingEngine.finish(data)
+        listOf("reader-a", "reader-b").forEach { id ->
+            assertEquals(0, data.sharedPoints(id))
+            assertEquals(1, data.sharedCompletions(id))
+            assertTrue(data.milestones(id).contains("Reading together · completed a shared story"))
+        }
+        assertEquals(1, data.stories.size)
+        ReadingEngine.validate(data)
     }
 
     @Test fun everyExplicitScrambleOrderIsAcceptedAndUnlistedOrdersAreNot() {
@@ -266,6 +363,9 @@ class ReadingModelTest {
         data = ReadingEngine.finish(data)
         assertEquals(1, data.sharedCompletions("reader-a"))
         assertEquals(1, data.sharedCompletions("reader-b"))
+        assertEquals(1, data.sharedPoints("reader-a"))
+        assertEquals(1, data.sharedPoints("reader-b"))
+        assertEquals(data, ReadingEngine.submit(data, "shared", rewardsEnabled = false))
         assertEquals(1, data.points("reader-a"))
         assertEquals(1, data.points("reader-b"))
         assertEquals(1, data.stories.size)

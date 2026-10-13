@@ -10,7 +10,7 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    your collections; Back returns you to the home screen without losing your setup choices.
    Below the collections, four illustrated square buttons form a 2-by-2 subject grid:
    **Math**, **Reading**, **Science**, and **Advanced**. Tap **Math** to choose
-   **Practice Game** or **Rewards Game**; **Back to subjects** or Android Back returns
+   **Practice Game** or **Rewards Game**; the filled **Back to subjects** button or Android Back returns
    to the subject grid. Tap **Reading** for the offline reading activities described below.
    **Science** and **Advanced** show the toast **More Activities are coming soon!**
    Their backgrounds are drawn with bundled vectors and work offline.
@@ -90,11 +90,19 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
 The semi-transparent (50% opacity) settings button in the bottom-right corner opens
 **Settings**:
 
-**Rewards** and **Math Settings** are collapsed by default; tap either heading to
+**Rewards** and each subject's settings are collapsed by default; tap a heading to
 expand or collapse it without changing your choices. **Rewards** contains
-**My Rewards**, **My Pokémons**, and **Rewards system**. **Math Settings** contains
+**My Rewards** and **My Pokémons**. **Math Settings** contains
+**Math Rewards System**, **Math Practice History**,
 **Show timer** (and its conditional **Time limit**), **Show correct answers**,
 **Vertical equations**, and **Default Math Reward Game Settings**.
+**Reading Settings** contains **Reading Rewards System** and **Reading Practice History**,
+with a reader selector for each reader's dated activity records. Viewing this history
+does not change the active reader or interrupt a saved reading draft.
+**Science Settings** and **Advanced Settings** each have their own rewards switch
+and practice history; these show an empty state until their activities are available.
+All four reward switches are independent and on by default. Existing Math reward
+preferences are preserved, and disabling a subject's rewards never removes earned rewards.
 Saved preferences are preserved; the defaults below apply when no choice has been saved.
 
 - **App updates** – at the top, check GitHub for a newer release using the button
@@ -117,7 +125,7 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   Tap an image to replay its animation; close it or wait for it to finish to return to your collection.
   The collection is saved on this device. Each presented celebration is also recorded
   with its practice result, including repeat celebrations; replaying an image does not award it again.
-- **Practice History** – review any previously saved result, delete one, or clear all.
+- **Math Practice History** – under Math Settings, review any previously saved math result, delete one, or clear all.
   Rewards Game entries have a translucent theme-colored background to distinguish
   them from Practice Game entries, even when no prize was earned.
   Deleting results also removes their claimed reward fragments from the available
@@ -133,7 +141,7 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   use your previous number limits (or 1–10 on a new install). Previously saved
   Rewards Game question counts are no longer used. Editing defaults during a game
   leaves its active questions unchanged and its timer paused until you leave Settings.
-- **Rewards system** – on by default. In **Rewards Game**, earn
+- **Math Rewards System** – under Math Settings, on by default. In **Rewards Game**, earn
   prizes for completing **25 or more questions** with **more than 90% correct**.
   This setting never enables prizes in Practice Game.
   After the celebration, tap the hopping gift box to open it and release confetti.
@@ -152,9 +160,13 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   with the result; deleting a result removes its claimed fragment from your available rewards.
   A gift dismissed before opening can still be claimed from its history entry.
   All reward illustrations and animations are drawn in the app and work offline.
+- **Reading Rewards System** – under Reading Settings, controls new individual and shared
+  reading checkpoint points, independently of Math prizes. When off, checkpoints,
+  accuracy, activity completions, milestones, and stories still save normally. Existing
+  points remain; switching back on does not award points for checkpoints completed while off.
 - **Show timer** – off by default. Show or hide the timer while practicing. The timer pauses while
-  Settings, Practice History, My Rewards, or My Pokémons is open, or the app is in the background.
-  When both Rewards system and Show timer are enabled, **Time limit** offers
+  Settings, any subject's Practice History, My Rewards, or My Pokémons is open, or the app is in the background.
+  When both Math Rewards System and Show timer are enabled, **Time limit** offers
   **None** or **5–60 minutes** in 5-minute increments. The selection applies to the
   next Rewards Game, not Practice Game. A timed game shows time remaining and ends when time runs out,
   saving the partial result without a prize. Changing settings during practice does

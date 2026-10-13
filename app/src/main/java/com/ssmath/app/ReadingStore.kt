@@ -85,6 +85,7 @@ class ReadingViewModel(
     var saving by mutableStateOf(false)
         private set
     private var pending: ReadingData? = null
+    private val settings = application.getSharedPreferences("settings", 0)
     private val commands = Channel<Command>(Channel.UNLIMITED)
     private val deferred = ArrayDeque<Command.Edit>()
     private sealed interface Command {
@@ -164,6 +165,11 @@ class ReadingViewModel(
         val current = data
         if (current != null && storageError == null)
             commands.trySend(Command.Edit(current.selectedProfileId, current.profile?.activeAttemptId, block))
+    }
+
+    fun submit(key: String, expectedTurn: Int? = null) {
+        val rewardsEnabled = settings.getBoolean(Subject.READING.rewardsPreference, true)
+        act { ReadingEngine.submit(it, key, expectedTurn = expectedTurn, rewardsEnabled = rewardsEnabled) }
     }
 
     fun retry() {

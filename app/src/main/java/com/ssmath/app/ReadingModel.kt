@@ -24,9 +24,11 @@ data class ReadingCheckpoint(
     val supportedAtCompletion: Boolean = false,
     val readerId: String? = null,
     val shared: Boolean = false,
-    val objective: Boolean = true
+    val objective: Boolean = true,
+    val rewardGranted: Boolean = true
 ) {
     val earned: Boolean get() = earnedAt != null
+    val awardedPoint: Boolean get() = earned && rewardGranted
     val independent: Boolean get() = earned && firstCorrect && !firstSupported
     val retried: Boolean get() = earned && tries > 1
 }
@@ -85,8 +87,9 @@ data class ReadingData(
     fun name(id: String) = profiles.first { it.id == id }.name
     fun attemptsFor(id: String) = attempts.filter { it.includes(id) }
     fun points(id: String) = attempts.sumOf { a ->
-        a.checkpoints.values.count { it.earned && !it.shared && it.readerId == id }
+        a.checkpoints.values.count { it.awardedPoint && !it.shared && it.readerId == id }
     }
+    fun sharedPoints(id: String) = attemptsFor(id).count { it.checkpoints["shared"]?.awardedPoint == true }
     fun sharedCompletions(id: String) = attemptsFor(id).count { it.earned("shared") }
     fun completions(id: String) = attemptsFor(id).count { it.finishedAt != null }
     fun milestones(id: String): List<String> = buildList {
@@ -232,7 +235,7 @@ object ReadingEngine {
 
     fun ready(a: ReadingAttempt) = requiredKeys(a).all { a.earned(it) }
 
-    private fun award(a: ReadingAttempt, key: String, correct: Boolean, now: Long,
+    private fun award(a: ReadingAttempt, key: String, correct: Boolean, now: Long, rewardsEnabled: Boolean,
                       readerId: String? = a.ownerId, shared: Boolean = false, objective: Boolean = true): ReadingAttempt {
         val old = a.checkpoints[key] ?: ReadingCheckpoint(readerId = readerId, shared = shared, objective = objective)
         if (old.earned) return a
@@ -241,20 +244,22 @@ object ReadingEngine {
             firstSupported = if (old.tries == 0) a.supported else old.firstSupported,
             firstAt = if (old.tries == 0) now else old.firstAt,
             earnedAt = if (correct) now else null,
-            supportedAtCompletion = correct && a.supported)
+            supportedAtCompletion = correct && a.supported,
+            rewardGranted = correct && rewardsEnabled)
         return a.copy(checkpoints = a.checkpoints + (key to check), feedback = if (correct)
-            if (shared) "Your shared story earned 1 shared completion point!" else "Checkpoint saved · +1 point!"
+            if (!rewardsEnabled) "Checkpoint saved · rewards are off."
+            else if (shared) "Your shared story earned 1 shared completion point!" else "Checkpoint saved · +1 point!"
         else "Not quite yet. Reread, try a hint, and try again. Your points stay safe.")
     }
 
     fun submit(data: ReadingData, key: String, now: Long = System.currentTimeMillis(),
-               expectedTurn: Int? = null): ReadingData = edit(data) { a ->
+               expectedTurn: Int? = null, rewardsEnabled: Boolean = true): ReadingData = edit(data) { a ->
         if (a.earned(key)) return@edit a
         val game = a.content.game
         when {
             key == "order" && game in listOf(ReadingGame.SCRAMBLE, ReadingGame.SEQUENCE) -> {
                 if (a.order.size != a.content.tiles.size) a.copy(feedback = "Place every tile before checking.")
-                else award(a, key, a.order in a.content.validOrders, now)
+                else award(a, key, a.order in a.content.validOrders, now, rewardsEnabled)
             }
             (key == "answer" && game in listOf(ReadingGame.MISSING, ReadingGame.SEQUENCE, ReadingGame.DETECTIVE,
                 ReadingGame.CAPTION, ReadingGame.CHAPTER)) || (key == "bonus" && game == ReadingGame.SCRAMBLE) -> {
@@ -263,18 +268,19 @@ object ReadingEngine {
                 if ((game == ReadingGame.SEQUENCE || game == ReadingGame.SCRAMBLE) && !a.earned("order")) a
                 else if (question == null || answer == null || answer !in question.choices.indices)
                     a.copy(feedback = "Choose an answer before checking.")
-                else award(a, key, answer == question.answer, now)
+                else award(a, key, answer == question.answer, now, rewardsEnabled)
             }
             key == "evidence" && game == ReadingGame.DETECTIVE && a.earned("answer") -> {
                 val index = a.fields["evidence"]?.toIntOrNull()
                 if (index == null || index !in a.content.passage.indices) a.copy(feedback = "Tap a sentence in the passage.")
-                else award(a, key, index == a.content.evidence, now)
+                else award(a, key, index == a.content.evidence, now, rewardsEnabled)
             }
             key in studioKeys && game == ReadingGame.STUDIO -> {
                 val before = studioKeys.takeWhile { it != key }
                 if (!before.all { a.earned(it) }) a
                 else if (a.fields[key].isNullOrBlank()) a.copy(feedback = "Choose a story tile or type your own idea.")
-                else award(a.copy(fields = a.fields + (key to a.fields.getValue(key).trim())), key, true, now, objective = false)
+                else award(a.copy(fields = a.fields + (key to a.fields.getValue(key).trim())), key, true, now,
+                    rewardsEnabled, objective = false)
             }
             key == "turn" && game == ReadingGame.PARTNERS && a.partnerId != null &&
                 a.turns.size < 4 && expectedTurn == a.turns.size -> {
@@ -284,12 +290,12 @@ object ReadingEngine {
                     val author = if (a.turns.size % 2 == 0) a.ownerId else a.partnerId
                     val next = a.copy(turns = a.turns + ReadingTurn(author, text), fields = a.fields - "turn",
                         feedback = "Sentence saved. Pass the story to the next reader.")
-                    award(next, "participation:$author", true, now, readerId = author, objective = false)
+                    award(next, "participation:$author", true, now, rewardsEnabled, readerId = author, objective = false)
                 }
             }
             key == "shared" && game == ReadingGame.PARTNERS && a.turns.size == 4 &&
                 a.order.sorted() == listOf(0, 1, 2, 3) && a.reread ->
-                award(a, key, true, now, readerId = null, shared = true, objective = false)
+                award(a, key, true, now, rewardsEnabled, readerId = null, shared = true, objective = false)
             else -> a
         }
     }
