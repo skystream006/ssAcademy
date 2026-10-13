@@ -73,6 +73,7 @@ internal fun ScreenScaffold(title: String, onBack: () -> Unit, actions: @Composa
 @Composable
 fun SettingsScreen(model: MathViewModel) {
     var showingAdmin by rememberSaveable { mutableStateOf(false) }
+    var showingReadingGames by rememberSaveable { mutableStateOf(false) }
     ScreenScaffold("Settings", model::closeOverlay) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -143,6 +144,12 @@ fun SettingsScreen(model: MathViewModel) {
                 SubjectRewardsSetting(model, Subject.READING,
                     "Earn reading points for completed checkpoints. Progress and previously earned points are always saved.")
                 SubjectHistorySetting(model, Subject.READING)
+                ListItem(headlineContent = { Text("Active Reading Games") },
+                    supportingContent = { Text("Choose which reading games are available") },
+                    leadingContent = { Icon(Icons.Rounded.Settings, null) },
+                    trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null) },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    modifier = Modifier.clickable { showingReadingGames = true }.testTag("active-reading-games"))
             }
             listOf(Subject.SCIENCE, Subject.ADVANCED).forEach { subject ->
                 HorizontalDivider()
@@ -200,6 +207,34 @@ fun SettingsScreen(model: MathViewModel) {
     if (showingAdmin) {
         AdminDialog(model, onDismiss = { showingAdmin = false })
     }
+    if (showingReadingGames) {
+        ActiveReadingGamesDialog(model, onDismiss = { showingReadingGames = false })
+    }
+}
+
+@Composable
+private fun ActiveReadingGamesDialog(model: MathViewModel, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Active Reading Games") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Choose which games are available for all readers. Changes are saved automatically. " +
+                    "Saved drafts, history, and points are kept when a game is disabled.")
+                ReadingGame.entries.forEach { game ->
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text(game.title, Modifier.weight(1f))
+                        Switch(game !in model.disabledReadingGames,
+                            onCheckedChange = { model.chooseReadingGameEnabled(game, it) },
+                            modifier = Modifier.semantics { contentDescription = game.title })
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        modifier = Modifier.testTag("active-reading-games-dialog")
+    )
 }
 
 @Composable

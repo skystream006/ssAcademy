@@ -48,12 +48,13 @@ private tailrec fun Context.readingActivity(): ComponentActivity? = when (this) 
 }
 
 @Composable
-fun ReadingScreen(onExit: () -> Unit, textSizePercent: Int, onTextSizeChange: (Int) -> Unit) {
+fun ReadingScreen(onExit: () -> Unit, textSizePercent: Int, onTextSizeChange: (Int) -> Unit,
+                  disabledGames: Set<ReadingGame> = emptySet()) {
     val activity = requireNotNull(LocalContext.current.readingActivity())
     val model: ReadingViewModel = viewModel(viewModelStoreOwner = activity)
     val speaker = rememberOfflineReadingSpeaker()
     ReadingModule(model, onExit, textSizePercent, onTextSizeChange,
-        speaker.available, speaker::speak, speaker::stop)
+        speaker.available, speaker::speak, speaker::stop, disabledGames)
 }
 
 @Composable
@@ -99,11 +100,14 @@ internal fun ReadingModule(
     onTextSizeChange: (Int) -> Unit,
     narrationAvailable: Boolean = false,
     speak: (String) -> Boolean = { false },
-    stop: () -> Unit = {}
+    stop: () -> Unit = {},
+    disabledGames: Set<ReadingGame> = emptySet()
 ) {
     val data = model.data
     var failedNavigationToMenu by remember { mutableStateOf(false) }
-    val page = if (failedNavigationToMenu) ReadingPage.MENU else data?.page ?: ReadingPage.MENU
+    val disabledDraft = data?.active?.let { it.open && it.content.game in disabledGames } == true
+    val page = if (failedNavigationToMenu || (data?.page == ReadingPage.ACTIVITY && disabledDraft))
+        ReadingPage.MENU else data?.page ?: ReadingPage.MENU
     val back: () -> Unit = {
         stop()
         if (page == ReadingPage.MENU) onExit()
@@ -131,16 +135,17 @@ internal fun ReadingModule(
     }
     val profile = data.profile
     when (page) {
-        ReadingPage.MENU -> ReadingMenu(data, model, onExit, stop)
+        ReadingPage.MENU -> ReadingMenu(data, model, onExit, stop, disabledGames)
         ReadingPage.PROFILES -> ReadingProfiles(data, model, back, stop)
         ReadingPage.PROGRESS -> ReadingProgress(data, model, textSizePercent, onTextSizeChange,
-            narrationAvailable, speak, stop, back)
+            narrationAvailable, speak, stop, back, disabledGames)
         ReadingPage.ACTIVITY -> {
             val attempt = data.active
             if (attempt == null || profile == null) ReadingColumn("reading-empty") {
                 Text("Choose a reader and an activity to begin.")
                 ReadingButton("Back to reading menu", "reading-back", action = back)
-            } else ReadingActivityScreen(data, model, attempt, narrationAvailable, speak, stop, back)
+            } else ReadingActivityScreen(data, model, attempt, narrationAvailable, speak, stop, back,
+                attempt.content.game !in disabledGames)
         }
     }
 }
@@ -184,17 +189,20 @@ private fun ReadingPictureView(picture: ReadingPicture) {
 }
 
 @Composable
-private fun ReadingMenu(data: ReadingData, model: ReadingViewModel, onExit: () -> Unit, stop: () -> Unit) {
+private fun ReadingMenu(data: ReadingData, model: ReadingViewModel, onExit: () -> Unit, stop: () -> Unit,
+                        disabledGames: Set<ReadingGame>) {
     val profile = data.profile
     var discard by remember { mutableStateOf<ReadingGame?>(null) }
     val recommended = listOf(ReadingGame.MISSING, ReadingGame.SEQUENCE, ReadingGame.STUDIO)
-    val games = recommended + ReadingGame.entries.filterNot { it in recommended }
+        .filterNot { it in disabledGames }
+    val games = recommended + ReadingGame.entries.filterNot { it in recommended || it in disabledGames }
     ReadingColumn("reading-menu") {
         ReadingHeading("Reading adventures")
         Text("Read, imagine, and make stories. Take your time: hints and retries are always welcome.")
         ReadingButton("Readers · ${profile?.name ?: "add your first reader"}", "reading-profiles") {
             stop(); model.act { it.copy(page = ReadingPage.PROFILES) }
         }
+        if (games.isEmpty()) Text("No reading games are active. Enable games in Settings > Reading Settings > Active Reading Games.")
         if (profile == null) Text("An adult can add a local reader to save each person's own progress.")
         else {
             Text("Hello, ${profile.name}! ${data.points(profile.id)} reading points")
@@ -204,9 +212,11 @@ private fun ReadingMenu(data: ReadingData, model: ReadingViewModel, onExit: () -
                     model.act { ReadingEngine.level(it, level) }
                 }
             }
-            Text("Start here · three recommended games", style = MaterialTheme.typography.titleLarge)
+            if (recommended.isNotEmpty()) Text(
+                if (recommended.size == 3) "Start here · three recommended games" else "Start here · recommended games",
+                style = MaterialTheme.typography.titleLarge)
             games.forEachIndexed { index, game ->
-                if (index == 3) Text("More ways to read and create", style = MaterialTheme.typography.titleLarge)
+                if (index == recommended.size) Text("More ways to read and create", style = MaterialTheme.typography.titleLarge)
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(game.title, style = MaterialTheme.typography.titleLarge)
@@ -281,9 +291,10 @@ private fun ReadingListen(text: String, available: Boolean, speak: (String) -> B
 
 @Composable
 private fun ReadingActivityScreen(data: ReadingData, model: ReadingViewModel, a: ReadingAttempt,
-                                  available: Boolean, speak: (String) -> Boolean, stop: () -> Unit, back: () -> Unit) {
+                                  available: Boolean, speak: (String) -> Boolean, stop: () -> Unit, back: () -> Unit,
+                                  gameEnabled: Boolean) {
     if (a.finishedAt != null) {
-        ReadingSummary(data, model, a, available, speak, stop, back)
+        ReadingSummary(data, model, a, available, speak, stop, back, gameEnabled)
         return
     }
     val content = a.content
@@ -532,7 +543,8 @@ private fun ReadingPartners(data: ReadingData, a: ReadingAttempt, model: Reading
 
 @Composable
 private fun ReadingSummary(data: ReadingData, model: ReadingViewModel, a: ReadingAttempt,
-                           available: Boolean, speak: (String) -> Boolean, stop: () -> Unit, back: () -> Unit) {
+                           available: Boolean, speak: (String) -> Boolean, stop: () -> Unit, back: () -> Unit,
+                           gameEnabled: Boolean) {
     ReadingColumn("reading-summary") {
         ReadingPictureView(ReadingPicture("📖 🌱 ✨", "An open book with a growing shoot and sparkling stars"))
         ReadingHeading("Your reading is growing!")
@@ -555,7 +567,7 @@ private fun ReadingSummary(data: ReadingData, model: ReadingViewModel, a: Readin
         }
         Text("Your private milestones", style = MaterialTheme.typography.titleLarge)
         data.milestones(requireNotNull(data.selectedProfileId)).forEach { Text("✦ $it") }
-        ReadingButton("Next activity · new attempt", "reading-next") {
+        ReadingButton("Next activity · new attempt", "reading-next", enabled = gameEnabled) {
             stop(); model.act { ReadingEngine.start(it, a.content.game, a.content.level) }
         }
         ReadingButton("Back to reading menu", "reading-back", action = back)
@@ -565,7 +577,7 @@ private fun ReadingSummary(data: ReadingData, model: ReadingViewModel, a: Readin
 @Composable
 private fun ReadingProgress(data: ReadingData, model: ReadingViewModel, textSizePercent: Int,
                             onTextSizeChange: (Int) -> Unit, available: Boolean, speak: (String) -> Boolean,
-                            stop: () -> Unit, back: () -> Unit) {
+                            stop: () -> Unit, back: () -> Unit, disabledGames: Set<ReadingGame>) {
     val profile = data.profile ?: return
     ReadingColumn("reading-dashboard") {
         ReadingHeading("Private reading progress")
@@ -604,7 +616,7 @@ private fun ReadingProgress(data: ReadingData, model: ReadingViewModel, textSize
         if (data.milestones(profile.id).isEmpty()) Text("Your first completed activity will begin this collection.")
         data.milestones(profile.id).forEach { Text("✦ $it") }
         HorizontalDivider()
-        ReadingHistoryEntries(data, profile.id) { attempt ->
+        ReadingHistoryEntries(data, profile.id, disabledGames) { attempt ->
             stop(); model.act { ReadingEngine.resume(it, attempt.id) }
         }
 
@@ -625,7 +637,8 @@ private fun ReadingProgress(data: ReadingData, model: ReadingViewModel, textSize
 }
 
 @Composable
-private fun ReadingHistoryEntries(data: ReadingData, readerId: String, onOpen: ((ReadingAttempt) -> Unit)? = null) {
+private fun ReadingHistoryEntries(data: ReadingData, readerId: String, disabledGames: Set<ReadingGame> = emptySet(),
+                                  onOpen: ((ReadingAttempt) -> Unit)? = null) {
     Text("Dated activity history", style = MaterialTheme.typography.titleLarge)
     val attempts = data.attemptsFor(readerId).asReversed()
     if (attempts.isEmpty()) Text("No reading practice results yet for this reader.")
@@ -642,7 +655,8 @@ private fun ReadingHistoryEntries(data: ReadingData, readerId: String, onOpen: (
                 if (objective.isNotEmpty()) Text("${objective.count { it.independent }}/${objective.size} first-try independent · " +
                     "${objective.count { it.earned && it.supportedAtCompletion }} supported · ${objective.count { it.retried }} retried")
                 if (onOpen != null && !a.abandoned) ReadingChoice(
-                    if (a.finishedAt != null) "Read summary" else "Resume draft", "reading-history-${a.id}"
+                    if (a.finishedAt != null) "Read summary" else "Resume draft", "reading-history-${a.id}",
+                    enabled = a.finishedAt != null || a.content.game !in disabledGames
                 ) { onOpen(a) }
             }
         }

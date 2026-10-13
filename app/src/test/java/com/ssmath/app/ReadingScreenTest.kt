@@ -4,6 +4,7 @@ import android.app.Application
 import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
@@ -45,17 +46,20 @@ class ReadingScreenTest {
     @Volatile private var saveGate: CountDownLatch? = null
     @Volatile private var saveEntered: CountDownLatch? = null
     private val textSize = mutableIntStateOf(100)
+    private val disabledGames = mutableStateOf<Set<ReadingGame>>(emptySet())
 
     @Before fun clean() {
         application.getSharedPreferences("settings", 0).edit().clear().commit()
         listOf(file, File(file.path + ".bak"), File(file.path + ".new")).forEach { it.delete() }
     }
 
-    private fun show(data: ReadingData, speech: Boolean = false, percent: Int = 100, history: Boolean = false) {
+    private fun show(data: ReadingData, speech: Boolean = false, percent: Int = 100, history: Boolean = false,
+                     disabled: Set<ReadingGame> = emptySet()) {
         val store = ReadingStore(file)
         store.load()
         store.save(data)
         textSize.intValue = percent
+        disabledGames.value = disabled
         model = ReadingViewModel(application, object : ReadingStorage {
             override fun load() = store.load()
             override fun save(data: ReadingData) {
@@ -69,7 +73,8 @@ class ReadingScreenTest {
             MathTheme(textSizePercent = textSize.intValue) {
                 if (history) ReadingHistoryContent(model)
                 else ReadingModule(model, { exited++ }, textSize.intValue, { textSize.intValue = it },
-                    narrationAvailable = speech, speak = { lastSpoken = it; speechWorks }, stop = { stopped++ })
+                    narrationAvailable = speech, speak = { lastSpoken = it; speechWorks }, stop = { stopped++ },
+                    disabledGames = disabledGames.value)
             }
         }
         compose.waitUntil(5_000) { model.data != null }
@@ -193,6 +198,78 @@ class ReadingScreenTest {
             hasTestTag(recommended[0]) or hasTestTag(recommended[1]) or hasTestTag(recommended[2])
         ).fetchSemanticsNodes()
         assertEquals(recommended, nodes.map { it.config[SemanticsProperties.TestTag] })
+    }
+
+    @Test fun disabledGamesAreHiddenWithoutMisgroupingRemainingRecommendations() {
+        show(readingFixture().copy(page = ReadingPage.MENU),
+            disabled = setOf(ReadingGame.MISSING, ReadingGame.CAPTION))
+        compose.onNodeWithTag("reading-game-MISSING").assertDoesNotExist()
+        compose.onNodeWithTag("reading-new-MISSING").assertDoesNotExist()
+        compose.onNodeWithTag("reading-game-CAPTION").assertDoesNotExist()
+        val labels = setOf("Start here · recommended games", "More ways to read and create")
+        val nodes = compose.onAllNodes(androidx.compose.ui.test.SemanticsMatcher("Game or group heading") {
+            it.config.getOrElse(SemanticsProperties.TestTag) { "" }.startsWith("reading-game-") ||
+                it.config.getOrElse(SemanticsProperties.Text) { emptyList() }.any { text -> text.text in labels }
+        }).fetchSemanticsNodes()
+        assertEquals(listOf("Start here · recommended games", "reading-game-SEQUENCE", "reading-game-STUDIO",
+            "More ways to read and create", "reading-game-SCRAMBLE", "reading-game-DETECTIVE",
+            "reading-game-CHAPTER", "reading-game-PARTNERS"), nodes.map {
+            it.config.getOrElse(SemanticsProperties.TestTag) { it.config[SemanticsProperties.Text].single().text }
+        })
+        click("reading-game-SEQUENCE")
+        waitFor { it.page == ReadingPage.ACTIVITY && it.active?.content?.game == ReadingGame.SEQUENCE }
+    }
+
+    @Test fun allGamesCanBeDisabledWithoutLosingReaderProgressOrNavigation() {
+        val data = readingFixture().copy(page = ReadingPage.MENU)
+        show(data, disabled = ReadingGame.entries.toSet())
+        ReadingGame.entries.forEach { compose.onNodeWithTag("reading-game-${it.name}").assertDoesNotExist() }
+        compose.onNodeWithText("No reading games are active. Enable games in Settings > Reading Settings > Active Reading Games.")
+            .performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Start here · three recommended games").assertDoesNotExist()
+        compose.onNodeWithText("More ways to read and create").assertDoesNotExist()
+        assertEquals(data, ReadingStore(file).load())
+        click("reading-progress")
+        waitFor { it.page == ReadingPage.PROGRESS }
+        click("reading-back")
+        waitFor { it.page == ReadingPage.MENU }
+        click("reading-exit")
+        assertEquals(1, exited)
+    }
+
+    @Test fun disablingRestoredDraftBlocksPlayAndHistoryResumeUntilReenabledWithoutLosingCredit() {
+        val fixture = readingFixture()
+        val data = readingAnswer(fixture, readingCorrect(fixture))
+        show(data, disabled = setOf(ReadingGame.MISSING))
+        compose.onNodeWithTag("reading-menu").assertIsDisplayed()
+        compose.onNodeWithTag("reading-activity").assertDoesNotExist()
+        assertEquals(data, ReadingStore(file).load())
+        click("reading-progress")
+        waitFor { it.page == ReadingPage.PROGRESS }
+        compose.onNodeWithTag("reading-history-attempt-a").performScrollTo().assertIsNotEnabled()
+        assertEquals(data.attempts, model.data?.attempts)
+        assertEquals(1, model.data?.points("reader-a"))
+        compose.runOnIdle { disabledGames.value = emptySet() }
+        compose.onNodeWithTag("reading-history-attempt-a").assertIsEnabled().performClick()
+        waitFor { it.page == ReadingPage.ACTIVITY }
+        compose.onNodeWithTag("reading-activity").assertIsDisplayed()
+        assertEquals(data.active, model.data?.active)
+        assertEquals(data.attempts, ReadingStore(file).load().attempts)
+    }
+
+    @Test fun disabledGameHistoryStillOpensSummaryButCannotStartNextActivity() {
+        val data = readingSolve(readingFixture()).copy(page = ReadingPage.PROGRESS)
+        show(data, disabled = setOf(ReadingGame.MISSING))
+        click("reading-history-attempt-a")
+        waitFor { it.page == ReadingPage.ACTIVITY }
+        compose.onNodeWithTag("reading-summary").assertIsDisplayed()
+        compose.onNodeWithTag("reading-next").performScrollTo().assertIsNotEnabled()
+        assertEquals(data.attempts, ReadingStore(file).load().attempts)
+        compose.runOnIdle { disabledGames.value = emptySet() }
+        compose.onNodeWithTag("reading-next").assertIsEnabled().performClick()
+        waitFor { it.active?.id != "attempt-a" }
+        assertEquals(2, model.data?.attempts?.size)
+        assertEquals(1, model.data?.points("reader-a"))
     }
 
     @Test fun sequencerSupportsTapRemovalOrderedEventsAndComprehension() {

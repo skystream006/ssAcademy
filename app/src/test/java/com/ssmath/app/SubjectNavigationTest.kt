@@ -8,8 +8,11 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ApplicationProvider
 import java.io.File
 import kotlinx.coroutines.Dispatchers
@@ -149,5 +152,31 @@ class SubjectNavigationTest {
         compose.onNodeWithTag("rewards-game").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("subject-Reading").assertDoesNotExist()
         assertNull(model.overlay)
+    }
+
+    @Test fun activeReadingGameSettingsApplyOnEntryAndKeepSavedDrafts() {
+        val data = readingFixture().copy(page = ReadingPage.MENU)
+        val store = ReadingStore(File(application.filesDir, "reading_private.json"))
+        store.load()
+        store.save(data)
+        val readingModel = ViewModelProvider(compose.activity,
+            ViewModelProvider.AndroidViewModelFactory(application))[ReadingViewModel::class.java]
+        val model = model()
+        model.openSettings()
+        compose.setContent { MathAppContent(model) }
+        compose.onNodeWithText("Reading Settings").performScrollTo().performClick()
+        compose.onNodeWithTag("active-reading-games").performScrollTo().performClick()
+        compose.onNodeWithContentDescription(ReadingGame.MISSING.title).performScrollTo()
+            .assertIsOn().performClick().assertIsOff()
+        compose.onNodeWithText("Close").performClick()
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.onNodeWithTag("subject-Reading").performScrollTo().performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithTag("reading-menu").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.runOnIdle { assertEquals(data, readingModel.data) }
+        compose.onNodeWithTag("reading-game-MISSING").assertDoesNotExist()
+        compose.onNodeWithTag("reading-game-SEQUENCE").performScrollTo().assertIsDisplayed()
+        assertEquals(data, store.load())
     }
 }

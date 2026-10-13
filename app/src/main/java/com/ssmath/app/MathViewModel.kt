@@ -138,6 +138,10 @@ class MathViewModel(
         it.name in settings.getStringSet("disabled_rewards", emptySet()).orEmpty()
     }.toSet())
         private set
+    var disabledReadingGames by mutableStateOf(ReadingGame.entries.filter {
+        it.name in settings.getStringSet("disabled_reading_games", emptySet()).orEmpty()
+    }.toSet())
+        private set
     var timeLimitMinutes by mutableStateOf(normalizeTimeLimit(settings.getInt("time_limit_minutes", 0)))
         private set
     var activeTimeLimitMs by mutableStateOf<Long?>(null)
@@ -811,6 +815,11 @@ class MathViewModel(
     fun chooseRewardEnabled(type: RewardType, enabled: Boolean) {
         disabledRewards = if (enabled) disabledRewards - type else disabledRewards + type
         settings.edit().putStringSet("disabled_rewards", disabledRewards.map { it.name }.toSet()).apply()
+    }
+
+    fun chooseReadingGameEnabled(game: ReadingGame, enabled: Boolean) {
+        disabledReadingGames = if (enabled) disabledReadingGames - game else disabledReadingGames + game
+        settings.edit().putStringSet("disabled_reading_games", disabledReadingGames.map { it.name }.toSet()).apply()
     }
 
     fun chooseTimeLimitMinutes(value: Int) {
