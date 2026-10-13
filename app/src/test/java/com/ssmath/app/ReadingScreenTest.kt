@@ -235,6 +235,23 @@ class ReadingScreenTest {
         assertEquals(model.data?.stories, ReadingStore(file).load().stories)
     }
 
+    @Test fun storyStudioSavesEachPartWithoutClaimingDisabledPoints() {
+        application.getSharedPreferences("settings", 0).edit().putBoolean("reading_rewards_enabled", false).commit()
+        show(readingFixture(ReadingContent.forGame(ReadingGame.STUDIO, ReadingLevel.SPROUT).first()))
+        ReadingEngine.studioKeys.forEach { key ->
+            click("reading-studio-$key-0")
+            waitFor { !it.active?.fields?.get(key).isNullOrBlank() }
+            click("reading-save-$key")
+            waitFor { it.active?.earned(key) == true }
+            compose.onNodeWithText("$key saved").performScrollTo().assertIsDisplayed()
+            compose.onNodeWithText("$key saved · +1").assertDoesNotExist()
+        }
+        click("reading-finish")
+        waitFor { it.stories.size == 1 }
+        compose.onNodeWithText("Individual points this attempt: 0").performScrollTo().assertIsDisplayed()
+        assertEquals(0, ReadingStore(file).load().points("reader-a"))
+    }
+
     @Test fun typedStoryDraftKeepsRapidCharactersAndRestoresAfterLeavingActivity() {
         show(readingFixture(ReadingContent.forGame(ReadingGame.STUDIO, ReadingLevel.SPROUT).first()))
         val editor = compose.onNodeWithTag("reading-write-character").performScrollTo()

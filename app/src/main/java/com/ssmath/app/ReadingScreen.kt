@@ -313,7 +313,7 @@ private fun ReadingActivityScreen(data: ReadingData, model: ReadingViewModel, a:
                 if (a.earned("order")) {
                     Text(if (a.checkpoints["order"]?.awardedPoint == true)
                         "Order checkpoint earned · +1" else "Order checkpoint saved")
-                    if (content.game == ReadingGame.SCRAMBLE) Text("Optional bonus · answer for +1, or finish now.")
+                    if (content.game == ReadingGame.SCRAMBLE) Text("Optional bonus · answer for an extra checkpoint, or finish now.")
                     ReadingQuestionView(a, model, if (content.game == ReadingGame.SCRAMBLE) "bonus" else "answer")
                 }
             }
@@ -460,7 +460,8 @@ private fun ReadingStudio(a: ReadingAttempt, model: ReadingViewModel) {
             ReadingButton("Save $key", "reading-save-$key", !a.earned(key) && !a.fields[key].isNullOrBlank()) {
                 model.submit(key)
             }
-            if (a.earned(key)) Text("$key saved · +1")
+            if (a.earned(key)) Text(if (a.checkpoints[key]?.awardedPoint == true)
+                "$key saved · +1" else "$key saved")
         } else Text("Save the previous part to unlock this checkpoint.")
     }
     if (ReadingEngine.ready(a)) {
