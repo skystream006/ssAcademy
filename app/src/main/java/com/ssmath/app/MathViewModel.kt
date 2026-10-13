@@ -45,6 +45,8 @@ class MathViewModel(
 
     var screen by mutableStateOf(Screen.SETUP)
         private set
+    var mathGamesOpen by mutableStateOf(false)
+        private set
     var setupDialog by mutableStateOf<SetupDialog?>(null)
         private set
     var gameMode by mutableStateOf(GameMode.PRACTICE)
@@ -208,12 +210,24 @@ class MathViewModel(
         edit.apply()
     }
 
+    fun openMathGames() {
+        if (screen == Screen.SETUP && overlay == null) mathGamesOpen = true
+    }
+
+    fun closeMathGames() {
+        if (screen != Screen.SETUP || overlay != null || setupDialog != null) return
+        mathGamesOpen = false
+    }
+
     fun openPracticeGame() {
-        if (screen == Screen.SETUP && overlay == null) setupDialog = SetupDialog.PRACTICE
+        if (screen != Screen.SETUP || overlay != null) return
+        mathGamesOpen = true
+        setupDialog = SetupDialog.PRACTICE
     }
 
     fun openRewardsGame() {
         if (screen != Screen.SETUP || overlay != null) return
+        mathGamesOpen = true
         rewardsQuestionCountText = ""
         setupDialog = SetupDialog.REWARDS
     }
@@ -256,6 +270,7 @@ class MathViewModel(
     }
 
     private fun ready(mode: GameMode, operation: Operation, parameters: GameParameters) {
+        mathGamesOpen = true
         gameMode = mode
         readyGame = ReadyGame(mode, operation, parameters)
         setupDialog = null
