@@ -30,6 +30,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ApplicationProvider
 import java.io.File
 import kotlin.random.Random
@@ -769,9 +770,64 @@ class MathAppTest {
         assertTrue(model().showCorrectAnswers)
     }
 
+    @Test
+    @Config(qualifiers = "w320dp-h480dp")
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun nameEditorRemainsUsableWithLargeTextOnSmallScreens() {
+        val reading = ReadingViewModel(application, object : ReadingStorage {
+            override fun load() = readingFixture()
+            override fun save(data: ReadingData) = Unit
+        }, Dispatchers.Unconfined)
+        compose.setContent { MathTheme(textSizePercent = 200) { ChangeNameDialog(reading, {}) } }
+        compose.onNodeWithTag("settings-name").performScrollTo().assertIsDisplayed()
+            .assertTextContains("Ari").performTextReplacement("Alex")
+        compose.onNodeWithTag("settings-save-name").assertIsDisplayed().assertIsEnabled().performClick()
+        compose.runOnIdle { assertEquals("Alex", reading.data?.profile?.name) }
+        compose.onNodeWithText("Cancel").assertIsDisplayed()
+    }
+
+    @Test fun settingsCanCancelValidateAndSaveTheGameNameWithoutLosingProgress() {
+        val file = File(application.filesDir, "reading_private.json")
+        val store = ReadingStore(file)
+        store.load()
+        val original = readingFixture()
+        store.save(original)
+        // The default AndroidViewModelFactory can retain a previous Robolectric Application.
+        ViewModelProvider(compose.activity,
+            ViewModelProvider.AndroidViewModelFactory(application))[ReadingViewModel::class.java]
+        val model = model()
+        compose.setContent { MathAppContent(model) }
+        compose.onNodeWithContentDescription("Settings").performClick()
+        compose.onNodeWithTag("change-name").performScrollTo().performClick()
+        compose.waitUntil(5_000) { compose.onAllNodesWithTag("settings-name").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("settings-name").assertTextContains("Ari")
+        compose.onNodeWithTag("settings-save-name").assertIsNotEnabled()
+        compose.onNodeWithTag("settings-name").performTextReplacement("Not saved")
+        compose.onNodeWithText("Cancel").performClick()
+        compose.onNodeWithTag("change-name-dialog").assertDoesNotExist()
+        assertEquals(original, ReadingStore(file).load())
+
+        compose.onNodeWithTag("change-name").performClick()
+        compose.onNodeWithTag("settings-name").assertTextContains("Ari").performTextReplacement("   ")
+        compose.onNodeWithTag("settings-save-name").assertIsNotEnabled()
+        compose.onNodeWithTag("settings-name").performTextReplacement("bO")
+        compose.onNodeWithTag("settings-save-name").performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithText("Choose a different reader name.").fetchSemanticsNodes().isNotEmpty()
+        }
+        assertEquals(original, ReadingStore(file).load())
+        compose.onNodeWithTag("settings-name").performTextReplacement("  Alex  ")
+        compose.onNodeWithTag("settings-save-name").performClick()
+        compose.waitUntil(5_000) { compose.onAllNodesWithTag("change-name-dialog").fetchSemanticsNodes().isEmpty() }
+        assertEquals(ReadingEngine.renameProfile(original, "Alex"), ReadingStore(file).load())
+        compose.onNodeWithTag("change-name").performClick()
+        compose.onNodeWithTag("settings-name").assertTextContains("Alex")
+    }
+
     @Test fun appearanceStartsCollapsedAndKeepsChoicesWhenToggledOrReopened() {
         val model = model()
         model.chooseSkin(AppSkin.GALAXY)
+        model.chooseSkins(false)
         compose.setContent { MathAppContent(model) }
         compose.onNodeWithContentDescription("Settings").performClick()
         val appearance = compose.onNodeWithText("Appearance")

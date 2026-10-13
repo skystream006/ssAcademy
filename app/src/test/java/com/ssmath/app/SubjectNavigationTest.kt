@@ -49,7 +49,9 @@ class SubjectNavigationTest {
         model.openSettings()
         compose.setContent { MathAppContent(model) }
         Subject.entries.forEach { subject ->
-            compose.onNodeWithText("${subject.label} Settings").performScrollTo().performClick()
+            compose.onNodeWithText(
+                if (subject == Subject.ADVANCED) "Advanced Subject Settings" else "${subject.label} Settings")
+                .performScrollTo().performClick()
             compose.onNodeWithText("${subject.label} Practice History").performScrollTo().performClick()
             compose.onNodeWithText("${subject.label} Practice History").assertIsDisplayed()
             if (subject == Subject.READING) {

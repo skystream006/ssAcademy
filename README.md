@@ -106,7 +106,7 @@ You can disable every game; the reading menu will explain where to enable them a
 **Reading Practice History** opens
 with dated activity records. Older installations with multiple readers retain a read-only
 history selector, without changing the local user or interrupting a saved reading draft.
-**Science Settings** and **Advanced Settings** each have their own rewards switch
+**Science Settings** and **Advanced Subject Settings** each have their own rewards switch
 and practice history; these show an empty state until their activities are available.
 All four reward switches are independent and on by default. Existing Math reward
 preferences are preserved, and disabling a subject's rewards never removes earned rewards.
@@ -114,6 +114,8 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
 
 - **App updates** – at the top, check GitHub for a newer release using the button
   beside the installed version, then download and install it.
+- **Change Name** – edit the name used for all games on this device. Save a name of
+  1–40 characters, or cancel to keep the current name. Progress, stories, and points stay intact.
 - **My Rewards** – under Rewards, view your collected prizes and
   one-third fragments in a four-column grid grouped by **Tier 1** and **Tier 2**,
   even when the rewards system is disabled.
@@ -198,7 +200,8 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   Mechanics, Aurora Borealis, Desert Dunes, Bamboo Grove, Autumn River, Alpine Dawn,
   Rainy Window, Volcanic Ember, Crystal Cavern, Paper Lanterns, and Synthwave Grid.
   The ten additions come from [ssMusic Player PR #155](https://github.com/skystream006/ssMusic_Player/pull/155).
-  Your color theme stays the same.
+  Ocean Wave is enabled by default. Saved skin selections and an explicitly disabled
+  Skins switch are preserved. Your color theme stays the same.
 - **Debug logging** – off by default. See [Debug logging](#debug-logging).
 
 ## Reading

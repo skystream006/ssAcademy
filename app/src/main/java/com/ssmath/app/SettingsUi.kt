@@ -51,6 +51,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.text.style.TextAlign
 import kotlin.math.roundToInt
 
@@ -73,12 +74,18 @@ internal fun ScreenScaffold(title: String, onBack: () -> Unit, actions: @Composa
 @Composable
 fun SettingsScreen(model: MathViewModel) {
     var showingAdmin by rememberSaveable { mutableStateOf(false) }
+    var showingName by rememberSaveable { mutableStateOf(false) }
     var showingReadingGames by rememberSaveable { mutableStateOf(false) }
     var showingReadingLevel by rememberSaveable { mutableStateOf(false) }
     ScreenScaffold("Settings", model::closeOverlay) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             UpdateSettings()
+            ListItem(headlineContent = { Text("Change Name") },
+                supportingContent = { Text("Update the name used for all your games") },
+                trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null) },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                modifier = Modifier.clickable { showingName = true }.testTag("change-name"))
             CollapsibleSettingsSection("Rewards", defaultExpanded = false) {
                 ListItem(headlineContent = { Text("My Rewards") },
                     supportingContent = { Text("Your prizes and fragments") },
@@ -165,7 +172,8 @@ fun SettingsScreen(model: MathViewModel) {
             }
             listOf(Subject.SCIENCE, Subject.ADVANCED).forEach { subject ->
                 HorizontalDivider()
-                CollapsibleSettingsSection("${subject.label} Settings", defaultExpanded = false) {
+                val title = if (subject == Subject.ADVANCED) "Advanced Subject Settings" else "${subject.label} Settings"
+                CollapsibleSettingsSection(title, defaultExpanded = false) {
                     SubjectRewardsSetting(model, subject,
                         "Choose whether to earn rewards when ${subject.label.lowercase()} activities become available.")
                     SubjectHistorySetting(model, subject)
@@ -219,12 +227,58 @@ fun SettingsScreen(model: MathViewModel) {
     if (showingAdmin) {
         AdminDialog(model, onDismiss = { showingAdmin = false })
     }
+    if (showingName) {
+        ChangeNameDialog(rememberReadingViewModel(), onDismiss = { showingName = false })
+    }
     if (showingReadingGames) {
         ActiveReadingGamesDialog(model, onDismiss = { showingReadingGames = false })
     }
     if (showingReadingLevel) {
         ReadingLevelDialog(rememberReadingViewModel(), onDismiss = { showingReadingLevel = false })
     }
+}
+
+@Composable
+internal fun ChangeNameDialog(model: ReadingViewModel, onDismiss: () -> Unit) {
+    val profile = model.data?.profile
+    var name by rememberSaveable(profile?.id, profile?.name) { mutableStateOf(profile?.name.orEmpty()) }
+    var requestedName by rememberSaveable { mutableStateOf<String?>(null) }
+    val validName = name.trim().let { it.length in 1..40 && it.none(Char::isISOControl) }
+    LaunchedEffect(profile?.name, requestedName, model.saving, model.storageError) {
+        if (requestedName != null && profile?.name == requestedName && !model.saving && model.storageError == null) {
+            onDismiss()
+        }
+    }
+    AlertDialog(onDismissRequest = onDismiss,
+        title = { Text("Change Name") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("One name for all your games, saved only on this device. Your progress stays the same.")
+                if (model.storageError != null) {
+                    Text(requireNotNull(model.storageError))
+                    TextButton(onClick = model::retry, enabled = !model.saving) { Text("Retry storage") }
+                } else if (profile == null) {
+                    Text(if (model.data == null) "Opening your private reading shelf…" else "Enter your name to get started.")
+                } else {
+                    OutlinedTextField(name, { name = it.take(40) }, label = { Text("Your name") },
+                        singleLine = true, enabled = !model.saving,
+                        modifier = Modifier.fillMaxWidth().testTag("settings-name"))
+                    model.message?.let { Text(it) }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                requestedName = name.trim()
+                model.updateName(name)
+            }, enabled = profile != null && validName && name.trim() != profile.name &&
+                !model.saving && model.storageError == null,
+                modifier = Modifier.testTag("settings-save-name")) { Text("Save") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        // Keep text-field remeasurement from alternating between platform dialog widths.
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+        modifier = Modifier.widthIn(max = 440.dp).fillMaxWidth().padding(16.dp).testTag("change-name-dialog"))
 }
 
 @Composable

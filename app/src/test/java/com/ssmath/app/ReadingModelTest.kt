@@ -66,6 +66,33 @@ internal fun readingSolve(data: ReadingData, rewardsEnabled: Boolean = true): Re
 }
 
 class ReadingModelTest {
+    @Test fun renamingOnlyChangesTheSelectedProfilesName() {
+        val draft = readingFixture()
+        val completedStory = readingSolve(readingFixture(
+            ReadingContent.forGame(ReadingGame.PARTNERS, ReadingLevel.SPROUT).first()))
+        listOf(draft, completedStory).forEach { original ->
+            val renamed = ReadingEngine.renameProfile(original, "  Alex  ")
+            assertEquals("Alex", renamed.profile?.name)
+            assertEquals(original, renamed.copy(profiles = original.profiles))
+            assertEquals(original.profiles.first().copy(name = "Alex"), renamed.profiles.first())
+            assertEquals(original.profiles.last(), renamed.profiles.last())
+            assertEquals(original.points("reader-a"), renamed.points("reader-a"))
+            assertEquals(original.sharedPoints("reader-a"), renamed.sharedPoints("reader-a"))
+            ReadingEngine.validate(renamed)
+        }
+    }
+
+    @Test fun renamingValidatesNamesWithoutReplacingTheProfile() {
+        val original = readingFixture()
+        listOf("", "   ", "x".repeat(41), "Al\u0000ex", " bO ").forEach { name ->
+            assertThrows(IllegalArgumentException::class.java) { ReadingEngine.renameProfile(original, name) }
+        }
+        assertEquals(original, ReadingEngine.renameProfile(original, " Ari "))
+        assertEquals("ARI", ReadingEngine.renameProfile(original, "ARI").profile?.name)
+        assertEquals("x".repeat(40), ReadingEngine.renameProfile(original, "x".repeat(40)).profile?.name)
+        assertThrows(IllegalArgumentException::class.java) { ReadingEngine.renameProfile(ReadingData(), "Alex") }
+    }
+
     @Test fun everyGameHasThreeOriginalActivitiesAtEachLevelWithValidFiniteContent() {
         assertEquals(48, ReadingContent.activities.size)
         assertEquals(48, ReadingContent.activities.map { it.id }.distinct().size)

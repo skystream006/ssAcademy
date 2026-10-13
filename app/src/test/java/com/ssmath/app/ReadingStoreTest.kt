@@ -210,6 +210,36 @@ class ReadingStoreTest {
         assertEquals(1, storage.maximumConcurrentWrites)
     }
 
+    @Test fun updatedNameSurvivesReloadWithAllProgressIntact() {
+        val original = readingSolve(readingFixture(
+            ReadingContent.forGame(ReadingGame.STUDIO, ReadingLevel.SPROUT).first()))
+        val store = ReadingStore(file)
+        store.load()
+        store.save(original)
+        val model = ReadingViewModel(application, store)
+        await { model.data != null }
+        model.updateName("  Alex  ")
+        await { model.data?.profile?.name == "Alex" && !model.saving }
+        val restored = ReadingStore(file).load()
+        assertEquals(ReadingEngine.renameProfile(original, "Alex"), restored)
+    }
+
+    @Test fun failedNameSaveKeepsOriginalUntilRetrySucceeds() {
+        val original = readingFixture()
+        val storage = RecordingStorage(original)
+        val model = ReadingViewModel(application, storage)
+        await { model.data != null }
+        storage.failSave = true
+        model.updateName("Alex")
+        await { model.storageError != null && !model.saving }
+        assertEquals(original, model.data)
+        assertEquals(original, storage.saved)
+        storage.failSave = false
+        model.retry()
+        await { model.storageError == null && model.data?.profile?.name == "Alex" && !model.saving }
+        assertEquals(ReadingEngine.renameProfile(original, "Alex"), storage.saved)
+    }
+
     @Test fun failedSaveBlocksEditsAndRetryCommitsTheSamePendingCheckpointExactlyOnce() {
         val storage = RecordingStorage(ReadingEngine.field(readingFixture(), "answer", readingCorrect(readingFixture()).toString()))
         val model = ReadingViewModel(application, storage)

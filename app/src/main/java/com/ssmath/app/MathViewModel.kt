@@ -160,7 +160,7 @@ class MathViewModel(
         private set
     var mode by mutableStateOf(settings.getString("mode", null))
         private set
-    var skinsEnabled by mutableStateOf(settings.getBoolean("skins_enabled", false))
+    var skinsEnabled by mutableStateOf(settings.getBoolean("skins_enabled", true))
         private set
     var skin by mutableStateOf(AppSkin.fromPreference(settings.getString("skin", null)))
         private set

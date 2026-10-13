@@ -89,13 +89,20 @@ class SkinsTest {
         assertEquals(AppSkin.SYNTHWAVE_GRID, restored.skin)
     }
 
-    @Test fun missingOrUnknownPreferencesKeepTheOriginalDefault() {
-        assertFalse(MathViewModel(application).skinsEnabled)
+    @Test fun missingOrUnknownPreferencesDefaultToOceanWave() {
+        assertTrue(MathViewModel(application).skinsEnabled)
         listOf(null, "", "unknown", "aurora_borealis", "Aurora Borealis").forEach { value ->
             settings.edit().putString("skin", value).commit()
-            assertEquals(AppSkin.CHERRY_BLOSSOM, AppSkin.fromPreference(value))
-            assertEquals(AppSkin.CHERRY_BLOSSOM, MathViewModel(application).skin)
+            assertEquals(AppSkin.OCEAN_WAVE, AppSkin.fromPreference(value))
+            assertEquals(AppSkin.OCEAN_WAVE, MathViewModel(application).skin)
         }
+    }
+
+    @Test fun savedSkinAndDisabledPreferenceOverrideDefaults() {
+        settings.edit().putString("skin", AppSkin.CHERRY_BLOSSOM.name).putBoolean("skins_enabled", false).commit()
+        val restored = MathViewModel(application)
+        assertEquals(AppSkin.CHERRY_BLOSSOM, restored.skin)
+        assertFalse(restored.skinsEnabled)
     }
 
     @Test
@@ -148,6 +155,7 @@ class SkinsTest {
     fun pickerDismissalAndDisablingSkinsPreserveSelection() {
         val model = MathViewModel(application)
         model.chooseSkin(AppSkin.SYNTHWAVE_GRID)
+        model.chooseSkins(false)
         compose.setContent {
             MathTheme {
                 SkinSetting(model.skinsEnabled, model.skin, model::chooseSkin, model::chooseSkins)
