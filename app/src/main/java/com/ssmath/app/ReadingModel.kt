@@ -173,10 +173,10 @@ object ReadingEngine {
         })
     }
 
-    fun field(data: ReadingData, key: String, value: String): ReadingData = edit(data) { a ->
+    fun field(data: ReadingData, key: String, value: String, expectedTurn: Int? = null): ReadingData = edit(data) { a ->
         val permitted = when (a.content.game) {
             ReadingGame.STUDIO -> key in studioKeys
-            ReadingGame.PARTNERS -> key == "turn" && a.turns.size < 4 && a.partnerId != null
+            ReadingGame.PARTNERS -> key == "turn" && a.turns.size < 4 && a.partnerId != null && expectedTurn == a.turns.size
             else -> key == "answer" || (key == "evidence" && a.content.game == ReadingGame.DETECTIVE)
         }
         if (!permitted || a.earned(key) || (key == "answer" && a.earned("bonus"))) a
@@ -189,9 +189,9 @@ object ReadingEngine {
         else a.copy(order = a.order + index, reread = false, feedback = "")
     }
 
-    fun removeTile(data: ReadingData, position: Int): ReadingData = edit(data) { a ->
-        if (a.earned("order") || a.earned("shared") || position !in a.order.indices) a
-        else a.copy(order = a.order.filterIndexed { i, _ -> i != position }, reread = false, feedback = "")
+    fun removeTile(data: ReadingData, tileId: Int): ReadingData = edit(data) { a ->
+        if (a.earned("order") || a.earned("shared") || tileId !in a.order) a
+        else a.copy(order = a.order.filterNot { it == tileId }, reread = false, feedback = "")
     }
 
     fun hint(data: ReadingData): ReadingData = edit(data) { it.copy(hints = it.hints + 1, feedback = it.content.hint) }
@@ -247,7 +247,8 @@ object ReadingEngine {
         else "Not quite yet. Reread, try a hint, and try again. Your points stay safe.")
     }
 
-    fun submit(data: ReadingData, key: String, now: Long = System.currentTimeMillis()): ReadingData = edit(data) { a ->
+    fun submit(data: ReadingData, key: String, now: Long = System.currentTimeMillis(),
+               expectedTurn: Int? = null): ReadingData = edit(data) { a ->
         if (a.earned(key)) return@edit a
         val game = a.content.game
         when {
@@ -275,7 +276,8 @@ object ReadingEngine {
                 else if (a.fields[key].isNullOrBlank()) a.copy(feedback = "Choose a story tile or type your own idea.")
                 else award(a.copy(fields = a.fields + (key to a.fields.getValue(key).trim())), key, true, now, objective = false)
             }
-            key == "turn" && game == ReadingGame.PARTNERS && a.partnerId != null && a.turns.size < 4 -> {
+            key == "turn" && game == ReadingGame.PARTNERS && a.partnerId != null &&
+                a.turns.size < 4 && expectedTurn == a.turns.size -> {
                 val text = a.fields["turn"]?.trim().orEmpty()
                 if (text.isEmpty()) a.copy(feedback = "Pick a sentence idea or type your own sentence.")
                 else {
@@ -331,8 +333,12 @@ object ReadingEngine {
                 val validKeys = requiredKeys(a) + if (a.content.game == ReadingGame.SCRAMBLE) listOf("bonus") else emptyList()
                 val participation = a.content.game == ReadingGame.PARTNERS &&
                     key in listOfNotNull("participation:${a.ownerId}", a.partnerId?.let { "participation:$it" })
+                val expectedReader = if (participation) key.removePrefix("participation:") else a.ownerId
                 (key in validKeys || participation) && c.tries > 0 &&
-                    (if (c.shared) key == "shared" && c.readerId == null else c.readerId in profileIds)
+                    c.shared == (key == "shared") &&
+                    c.readerId == (if (c.shared) null else expectedReader) &&
+                    c.objective == (a.content.game !in listOf(ReadingGame.STUDIO, ReadingGame.PARTNERS)) &&
+                    (!c.firstCorrect || (c.earned && c.tries == 1))
             })
             require(a.finishedAt == null || ready(a))
         }

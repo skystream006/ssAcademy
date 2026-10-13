@@ -144,12 +144,16 @@ private fun ReadingChoice(label: String, tag: String, selected: Boolean = false,
 private fun ReadingPictureView(picture: ReadingPicture) {
     Text(picture.symbol, style = MaterialTheme.typography.displayMedium,
         modifier = Modifier.clearAndSetSemantics { contentDescription = picture.description })
+    Text(picture.description, style = MaterialTheme.typography.bodyMedium,
+        modifier = Modifier.clearAndSetSemantics {})
 }
 
 @Composable
 private fun ReadingMenu(data: ReadingData, model: ReadingViewModel, onExit: () -> Unit, stop: () -> Unit) {
     val profile = data.profile
     var discard by remember { mutableStateOf<ReadingGame?>(null) }
+    val recommended = listOf(ReadingGame.MISSING, ReadingGame.SEQUENCE, ReadingGame.STUDIO)
+    val games = recommended + ReadingGame.entries.filterNot { it in recommended }
     ReadingColumn("reading-menu") {
         ReadingHeading("Reading adventures")
         Text("Read, imagine, and make stories. Take your time: hints and retries are always welcome.")
@@ -166,7 +170,7 @@ private fun ReadingMenu(data: ReadingData, model: ReadingViewModel, onExit: () -
                 }
             }
             Text("Start here · three recommended games", style = MaterialTheme.typography.titleLarge)
-            ReadingGame.entries.forEachIndexed { index, game ->
+            games.forEachIndexed { index, game ->
                 if (index == 3) Text("More ways to read and create", style = MaterialTheme.typography.titleLarge)
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -175,7 +179,7 @@ private fun ReadingMenu(data: ReadingData, model: ReadingViewModel, onExit: () -
                         val draft = ReadingEngine.draft(data, game, profile.level)
                         ReadingButton(if (draft != null) "Resume ${game.title}" else "Play ${game.title}",
                             "reading-game-${game.name}") {
-                            stop(); model.act { ReadingEngine.start(it, game, profile.level) }
+                            stop(); model.act { ReadingEngine.start(it, game, requireNotNull(it.profile).level) }
                         }
                         if (draft != null) ReadingChoice("Start a new attempt instead", "reading-new-${game.name}") {
                             discard = game
@@ -248,12 +252,18 @@ private fun ReadingActivityScreen(data: ReadingData, model: ReadingViewModel, a:
         return
     }
     val content = a.content
+    var instructionsUnavailable by remember(a.id) { mutableStateOf(false) }
     ReadingColumn("reading-activity") {
         ReadingHeading(content.game.title)
         Text("${data.name(a.ownerId)} · ${content.level.label}")
         Text(content.title, style = MaterialTheme.typography.titleLarge)
         ReadingPictureView(content.picture)
         Text(content.game.guidance)
+        ReadingChoice("Listen to instructions", "reading-instructions", enabled = available) {
+            instructionsUnavailable = !speak(content.game.guidance)
+        }
+        if (instructionsUnavailable) Text("Instruction audio is unavailable. You can still read the instructions above.")
+        Text("Instruction audio does not count as passage narration.")
         Text("Draft saved automatically. +1 per checkpoint; hints and retries never remove points.")
         when (content.game) {
             ReadingGame.MISSING, ReadingGame.CAPTION -> {
@@ -319,7 +329,8 @@ private fun ReadingActivityScreen(data: ReadingData, model: ReadingViewModel, a:
                 content.tiles.joinToString(". ") else a.order.joinToString(" ") { content.tiles[it] }
             ReadingGame.CAPTION -> content.question?.choices?.joinToString(". ").orEmpty()
             ReadingGame.STUDIO -> ReadingEngine.storyText(a)
-            ReadingGame.PARTNERS -> a.turns.joinToString(" ") { it.text }
+            ReadingGame.PARTNERS -> if (a.order.isNotEmpty()) ReadingEngine.storyText(a)
+                else a.turns.joinToString(" ") { it.text }
             else -> content.passage.joinToString(" ")
         }
         ReadingListen(text, available, speak, stop) {
@@ -353,7 +364,7 @@ private fun ReadingTiles(a: ReadingAttempt, model: ReadingViewModel, tiles: List
     if (a.order.isEmpty()) Text("Tap the tiles below to begin.")
     a.order.forEachIndexed { position, tile ->
         ReadingChoice("${position + 1}. ${tiles[tile]} · tap to remove", "reading-placed-$position",
-            enabled = !locked) { model.act { ReadingEngine.removeTile(it, position) } }
+            enabled = !locked) { model.act { ReadingEngine.removeTile(it, tile) } }
     }
     Text("Available tiles")
     tiles.forEachIndexed { index, tile ->
@@ -367,21 +378,29 @@ private fun ReadingTiles(a: ReadingAttempt, model: ReadingViewModel, tiles: List
     Text("To reorder: remove a placed tile, then tap it to add it at the end. No dragging needed.")
 }
 
+private data class ReadingEditor(val text: String, val update: (String) -> Unit)
+
 @Composable
-private fun ReadingDraftText(a: ReadingAttempt, key: String, label: String, enabled: Boolean,
-                             model: ReadingViewModel) {
-    // A local editor buffer keeps typing responsive while the ordered disk writer catches up.
-    var text by rememberSaveable(a.id, key) { mutableStateOf(a.fields[key].orEmpty()) }
-    val persisted = a.fields[key].orEmpty()
-    androidx.compose.runtime.LaunchedEffect(persisted, model.saving) {
-        // Tile choices are applied to the same editor; typed updates already have this value.
-        if (persisted != text && !model.saving) text = persisted
+private fun rememberReadingEditor(a: ReadingAttempt, key: String, model: ReadingViewModel): ReadingEditor {
+    val turn = if (key == "turn") a.turns.size else -1
+    // Presets and typing share one immediate value; an older disk acknowledgement cannot replace it.
+    var text by rememberSaveable(a.id, key, model.data?.selectedProfileId, turn) {
+        mutableStateOf(a.fields[key].orEmpty())
     }
-    OutlinedTextField(text, {
-        text = it.take(500)
-        val value = text
-        model.act { d -> ReadingEngine.field(d, key, value) }
-    }, label = { Text(label) }, enabled = enabled,
+    val locked = a.content.game == ReadingGame.STUDIO && a.earned(key)
+    androidx.compose.runtime.LaunchedEffect(a.id, key, model.data?.selectedProfileId, locked) {
+        if (locked) text = a.fields[key].orEmpty()
+    }
+    return ReadingEditor(text) { raw ->
+        val value = raw.take(500)
+        text = value
+        model.act { ReadingEngine.field(it, key, value, expectedTurn = a.turns.size) }
+    }
+}
+
+@Composable
+private fun ReadingDraftText(editor: ReadingEditor, key: String, label: String, enabled: Boolean) {
+    OutlinedTextField(editor.text, editor.update, label = { Text(label) }, enabled = enabled,
         modifier = Modifier.fillMaxWidth().testTag("reading-write-$key"))
 }
 
@@ -392,14 +411,15 @@ private fun ReadingStudio(a: ReadingAttempt, model: ReadingViewModel) {
         Text("${index + 1}. ${key.replaceFirstChar { it.uppercase() }} · one checkpoint",
             style = MaterialTheme.typography.titleLarge)
         if (unlocked) {
+            val editor = rememberReadingEditor(a, key, model)
             if (!a.earned(key)) {
                 a.content.writingChoices[index].forEachIndexed { choiceIndex, choice ->
-                    ReadingChoice(choice, "reading-studio-$key-$choiceIndex", a.fields[key] == choice) {
-                        model.act { ReadingEngine.field(it, key, choice) }
+                    ReadingChoice(choice, "reading-studio-$key-$choiceIndex", editor.text == choice) {
+                        editor.update(choice)
                     }
                 }
             }
-            ReadingDraftText(a, key, "Your $key idea", !a.earned(key), model)
+            ReadingDraftText(editor, key, "Your $key idea", !a.earned(key))
             ReadingButton("Save $key", "reading-save-$key", !a.earned(key) && !a.fields[key].isNullOrBlank()) {
                 model.act { ReadingEngine.submit(it, key) }
             }
@@ -433,6 +453,7 @@ private fun ReadingPartners(data: ReadingData, a: ReadingAttempt, model: Reading
         Text("${index + 1}. ${data.name(turn.readerId)}: ${turn.text}")
     }
     if (a.turns.size < 4) {
+        val editor = rememberReadingEditor(a, "turn", model)
         val author = if (a.turns.size % 2 == 0) a.ownerId else a.partnerId
         Text("Turn ${a.turns.size + 1} of 4 · ${data.name(author)} writes",
             style = MaterialTheme.typography.titleLarge)
@@ -446,15 +467,15 @@ private fun ReadingPartners(data: ReadingData, a: ReadingAttempt, model: Reading
             }
         }
         choices.forEachIndexed { index, choice ->
-            ReadingChoice(choice, "reading-turn-choice-$index", a.fields["turn"] == choice) {
-                model.act { ReadingEngine.field(it, "turn", choice) }
+            ReadingChoice(choice, "reading-turn-choice-$index", editor.text == choice) {
+                editor.update(choice)
             }
         }
         androidx.compose.runtime.key(a.turns.size) {
-            ReadingDraftText(a, "turn", "Your sentence", true, model)
+            ReadingDraftText(editor, "turn", "Your sentence", true)
         }
         ReadingButton("Save sentence and pass turn", "reading-save-turn", !a.fields["turn"].isNullOrBlank()) {
-            stop(); model.act { ReadingEngine.submit(it, "turn") }
+            stop(); model.act { ReadingEngine.submit(it, "turn", expectedTurn = a.turns.size) }
         }
     } else {
         Text("Arrange your four sentences and reread them together.")

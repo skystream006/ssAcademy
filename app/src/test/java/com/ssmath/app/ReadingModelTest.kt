@@ -14,9 +14,16 @@ internal fun readingFixture(content: ReadingActivity = ReadingContent.activities
 internal fun readingAnswer(data: ReadingData, index: Int, key: String = "answer") =
     ReadingEngine.submit(ReadingEngine.field(data, "answer", index.toString()), key, 1_700_000_000_100)
 
+internal fun readingCorrect(data: ReadingData): Int =
+    requireNotNull(ReadingEngine.question(requireNotNull(data.active))).answer
+
+internal fun readingWrong(data: ReadingData): Int =
+    (readingCorrect(data) + 1) % requireNotNull(ReadingEngine.question(requireNotNull(data.active))).choices.size
+
 internal fun readingOrder(data: ReadingData, order: List<Int>): ReadingData {
     var result = data
-    while (requireNotNull(result.active).order.isNotEmpty()) result = ReadingEngine.removeTile(result, 0)
+    while (requireNotNull(result.active).order.isNotEmpty())
+        result = ReadingEngine.removeTile(result, requireNotNull(result.active).order.first())
     order.forEach { result = ReadingEngine.placeTile(result, it) }
     return result
 }
@@ -42,7 +49,8 @@ internal fun readingSolve(data: ReadingData): ReadingData {
         ReadingGame.PARTNERS -> {
             result = ReadingEngine.partner(result, "reader-b")
             repeat(4) { index ->
-                result = ReadingEngine.submit(ReadingEngine.field(result, "turn", "Sentence ${index + 1}."), "turn")
+                result = ReadingEngine.submit(ReadingEngine.field(result, "turn", "Sentence ${index + 1}.",
+                    expectedTurn = index), "turn", expectedTurn = index)
             }
             result = ReadingEngine.reread(readingOrder(result, listOf(0, 1, 2, 3)))
             result = ReadingEngine.submit(result, "shared")
@@ -87,6 +95,11 @@ class ReadingModelTest {
                     assertEquals(4, c.writingChoices.size)
                     assertTrue(c.writingChoices.all { choices -> choices.size >= 3 && choices.all { it.isNotBlank() } })
                 }
+            }
+            ReadingGame.entries.take(6).forEach { game ->
+                val answers = ReadingContent.activities.filter { it.game == game }
+                    .flatMap { listOfNotNull(it.question) + it.branches.map { b -> b.question } }
+                assertTrue("$game must vary answer positions", answers.map { it.answer }.distinct().size > 1)
             }
         }
     }
@@ -145,10 +158,10 @@ class ReadingModelTest {
     }
 
     @Test fun wrongFirstTryIsCountedImmediatelyAndRetriesNeverSubtractOrBecomeIndependent() {
-        var data = readingAnswer(readingFixture(), 0)
+        var data = readingAnswer(readingFixture(), readingWrong(readingFixture()))
         assertEquals(ReadingAccuracy(0, 1, 0, 0), data.accuracy("reader-a"))
         assertEquals(0, data.points("reader-a"))
-        data = readingAnswer(data, 2)
+        data = readingAnswer(data, readingCorrect(data))
         assertEquals(ReadingAccuracy(0, 1, 0, 1), data.accuracy("reader-a"))
         assertEquals(1, data.points("reader-a"))
         repeat(5) { data = ReadingEngine.submit(data, "answer") }
@@ -158,22 +171,23 @@ class ReadingModelTest {
 
     @Test fun hintsAndSuccessfullyQueuedNarrationPreventIndependentCreditButFailedSpeechDoesNot() {
         var hinted = ReadingEngine.hint(readingFixture())
-        hinted = readingAnswer(hinted, 2)
+        hinted = readingAnswer(hinted, readingCorrect(hinted))
         assertEquals(ReadingAccuracy(0, 1, 1, 0), hinted.accuracy("reader-a"))
         var narrated = ReadingEngine.narration(readingFixture(), queued = true)
-        narrated = readingAnswer(narrated, 2)
+        narrated = readingAnswer(narrated, readingCorrect(narrated))
         assertEquals(ReadingAccuracy(0, 1, 1, 0), narrated.accuracy("reader-a"))
-        val failedSpeech = readingAnswer(ReadingEngine.narration(readingFixture(), queued = false), 2)
+        val failedSpeech = readingAnswer(ReadingEngine.narration(readingFixture(), queued = false), readingCorrect(readingFixture()))
         assertEquals(ReadingAccuracy(1, 1, 0, 0), failedSpeech.accuracy("reader-a"))
         assertEquals(failedSpeech.accuracy("reader-a"),
             ReadingEngine.narration(ReadingEngine.hint(failedSpeech), true).accuracy("reader-a"))
-        val both = readingAnswer(ReadingEngine.hint(readingAnswer(readingFixture(), 0)), 2)
+        val both = readingAnswer(ReadingEngine.hint(readingAnswer(readingFixture(), readingWrong(readingFixture()))),
+            readingCorrect(readingFixture()))
         assertEquals(ReadingAccuracy(0, 1, 1, 1), both.accuracy("reader-a"))
     }
 
     @Test fun sequencingComprehensionAndEvidenceRequireTheirEarlierCheckpoints() {
         val sequence = readingFixture(ReadingContent.find("sequence-seed"))
-        val earlyAnswer = readingAnswer(sequence, 2)
+        val earlyAnswer = readingAnswer(sequence, readingCorrect(sequence))
         assertEquals(0, earlyAnswer.points("reader-a"))
         assertFalse(requireNotNull(earlyAnswer.active).checkpoints.containsKey("answer"))
         val detective = ReadingEngine.field(readingFixture(ReadingContent.find("detective-bag")), "evidence", "1")
@@ -181,14 +195,23 @@ class ReadingModelTest {
     }
 
     @Test fun completedCheckpointsFreezeAnswersOrdersAndWriting() {
-        val missing = readingAnswer(readingFixture(), 2)
-        assertEquals(missing, ReadingEngine.field(missing, "answer", "0"))
+        val missing = readingAnswer(readingFixture(), readingCorrect(readingFixture()))
+        assertEquals(missing, ReadingEngine.field(missing, "answer", readingWrong(missing).toString()))
         var sequence = readingFixture(ReadingContent.find("sequence-seed"))
         sequence = ReadingEngine.submit(readingOrder(sequence, listOf(1, 2, 0)), "order")
         assertEquals(sequence, ReadingEngine.removeTile(sequence, 0))
         var studio = readingFixture(ReadingContent.forGame(ReadingGame.STUDIO, ReadingLevel.SPROUT).first())
         studio = ReadingEngine.submit(ReadingEngine.field(studio, "character", "A fox"), "character")
         assertEquals(studio, ReadingEngine.field(studio, "character", "A dog"))
+    }
+
+    @Test fun tileRemovalUsesStableIdentityForRepeatedAndDistinctQueuedTaps() {
+        var data = readingOrder(readingFixture(ReadingContent.find("sequence-seed")), listOf(1, 2, 0))
+        data = ReadingEngine.removeTile(data, 1)
+        assertEquals(listOf(2, 0), data.active?.order)
+        assertEquals(data, ReadingEngine.removeTile(data, 1))
+        data = ReadingEngine.removeTile(data, 0)
+        assertEquals(listOf(2), data.active?.order)
     }
 
     @Test fun profilesAreTrimmedValidatedAndDraftsStayIsolatedAcrossSwitches() {
@@ -208,7 +231,7 @@ class ReadingModelTest {
     }
 
     @Test fun explicitNewAttemptArchivesOldDraftWithoutLosingCreditOrItsFirstTry() {
-        var data = readingAnswer(readingFixture(), 2)
+        var data = readingAnswer(readingFixture(), readingCorrect(readingFixture()))
         val resumed = ReadingEngine.start(data, ReadingGame.MISSING, ReadingLevel.SPROUT)
         assertEquals("attempt-a", resumed.active?.id)
         data = ReadingEngine.start(data, ReadingGame.MISSING, ReadingLevel.SPROUT, true, "new-attempt")
@@ -225,8 +248,9 @@ class ReadingModelTest {
         assertThrows(IllegalArgumentException::class.java) { ReadingEngine.partner(data, "missing") }
         data = ReadingEngine.partner(data, "reader-b")
         repeat(4) { index ->
-            data = ReadingEngine.submit(ReadingEngine.field(data, "turn", "Turn $index."), "turn")
-            val repeated = ReadingEngine.submit(data, "turn")
+            data = ReadingEngine.submit(ReadingEngine.field(data, "turn", "Turn $index.", expectedTurn = index),
+                "turn", expectedTurn = index)
+            val repeated = ReadingEngine.submit(data, "turn", expectedTurn = index)
             assertEquals(data.active?.turns, repeated.active?.turns)
             assertEquals(data.active?.checkpoints, repeated.active?.checkpoints)
             assertEquals(index + 1, data.active?.turns?.size)

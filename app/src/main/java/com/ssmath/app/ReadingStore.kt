@@ -86,8 +86,13 @@ class ReadingViewModel(
         private set
     private var pending: ReadingData? = null
     private val commands = Channel<Command>(Channel.UNLIMITED)
+    private val deferred = ArrayDeque<Command.Edit>()
     private sealed interface Command {
-        class Edit(val block: (ReadingData) -> ReadingData) : Command
+        class Edit(
+            val profileId: String?,
+            val attemptId: String?,
+            val block: (ReadingData) -> ReadingData
+        ) : Command
         data object Retry : Command
     }
 
@@ -96,21 +101,29 @@ class ReadingViewModel(
             load()
             for (command in commands) {
                 when (command) {
-                    Command.Retry -> if (pending != null) persist(requireNotNull(pending)) else load()
+                    Command.Retry -> {
+                        if (pending != null) persist(requireNotNull(pending)) else load()
+                        while (storageError == null && deferred.isNotEmpty()) apply(deferred.removeFirst())
+                    }
                     is Command.Edit -> {
-                        val current = data
-                        if (storageError != null || current == null) continue
-                        val next = try {
-                            command.block(current)
-                        } catch (error: IllegalArgumentException) {
-                            message = error.message ?: "Please check that choice."
-                            continue
-                        }
-                        if (next != current) persist(next)
+                        // Already accepted edits must survive a preceding failed write.
+                        if (storageError != null) deferred.addLast(command) else apply(command)
                     }
                 }
             }
         }
+    }
+
+    private suspend fun apply(command: Command.Edit) {
+        val current = data ?: return
+        if (current.selectedProfileId != command.profileId || current.profile?.activeAttemptId != command.attemptId) return
+        val next = try {
+            command.block(current)
+        } catch (error: IllegalArgumentException) {
+            message = error.message ?: "Please check that choice."
+            return
+        }
+        if (next != current) persist(next)
     }
 
     private suspend fun load() {
@@ -148,7 +161,9 @@ class ReadingViewModel(
     }
 
     fun act(block: (ReadingData) -> ReadingData) {
-        if (data != null && storageError == null) commands.trySend(Command.Edit(block))
+        val current = data
+        if (current != null && storageError == null)
+            commands.trySend(Command.Edit(current.selectedProfileId, current.profile?.activeAttemptId, block))
     }
 
     fun retry() {

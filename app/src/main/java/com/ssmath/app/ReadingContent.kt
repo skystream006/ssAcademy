@@ -42,8 +42,11 @@ data class ReadingActivity(
 
 /** Original, bundled stories: no downloads, random answer generation, or external images. */
 object ReadingContent {
-    private fun q(prompt: String, answer: String, vararg others: String) =
-        ReadingQuestion(prompt, listOf(*others, answer), others.size)
+    private fun q(prompt: String, answer: String, vararg others: String): ReadingQuestion {
+        val position = "$prompt|$answer".hashCode().ushr(1) % (others.size + 1)
+        val choices = others.toMutableList().apply { add(position, answer) }
+        return ReadingQuestion(prompt, choices, position)
+    }
 
     private fun p(symbol: String, description: String) = ReadingPicture(symbol, description)
 

@@ -1,11 +1,19 @@
 package com.ssmath.app
 
 import android.app.Application
+import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import org.junit.Assert.*
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -14,11 +22,15 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class SubjectNavigationTest {
+    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     private val application get() = ApplicationProvider.getApplicationContext<Application>()
 
     @Before fun setup() {
         application.getSharedPreferences("settings", 0).edit().clear().commit()
         File(application.filesDir, "practice_history.json").delete()
+        listOf("reading_private.json", "reading_private.json.bak", "reading_private.json.new").forEach {
+            File(application.filesDir, it).delete()
+        }
     }
 
     private fun model() = MathViewModel(application, ioDispatcher = Dispatchers.Unconfined)
@@ -62,5 +74,21 @@ class SubjectNavigationTest {
         model.openPracticeGame()
         model.openRewardsGame()
         assertNull(model.setupDialog)
+    }
+
+    @Test fun homeOpensTheActivityScopedReadingModuleAndReturnsToMathChoices() {
+        val model = model()
+        compose.setContent { MathAppContent(model) }
+        compose.onNodeWithTag("reading-games").performScrollTo().performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithTag("reading-menu").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("reading-menu").assertIsDisplayed()
+        compose.onNodeWithTag("settings-button").assertDoesNotExist()
+        compose.onNodeWithTag("reading-exit").performScrollTo().performClick()
+        compose.onNodeWithTag("home-screen").assertIsDisplayed()
+        compose.onNodeWithTag("practice-game").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("rewards-game").performScrollTo().assertIsDisplayed()
+        assertNull(model.overlay)
     }
 }
