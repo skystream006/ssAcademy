@@ -23,7 +23,7 @@ enum class Screen { SETUP, READY, PLAYING, RESULTS }
 
 enum class SetupDialog { PRACTICE, REWARDS }
 
-enum class Overlay { SETTINGS, REWARDS_SETUP, HISTORY, SUBJECT_HISTORY, REWARDS, POKEMONS, READING }
+enum class Overlay { SETTINGS, REWARDS_SETUP, HISTORY, SUBJECT_HISTORY, REWARDS, POKEMONS, READING, READING_PROGRESS }
 
 enum class Subject(val label: String, val rewardsPreference: String) {
     MATH("Math", "rewards_enabled"),
@@ -65,6 +65,7 @@ class MathViewModel(
     var overlay by mutableStateOf<Overlay?>(null)
         private set
     private var collectionReturnOverlay: Overlay? = null
+    private var settingsReturnOverlay: Overlay? = null
     var selectedOperation by mutableStateOf(Operation.fromPreference(settings.getString("operation", null)))
         private set
     var minimumText by mutableStateOf(settings.getInt("minimum", MIN_MAXIMUM).toString())
@@ -556,7 +557,20 @@ class MathViewModel(
     fun openSettings() {
         dismissOverlayReward()
         rewardRemovalError = null
+        if (overlay == null || overlay == Overlay.READING) settingsReturnOverlay = overlay
         overlay = Overlay.SETTINGS
+        updateTimer()
+    }
+
+    fun openReadingProgress() {
+        if (overlay != Overlay.SETTINGS) return
+        overlay = Overlay.READING_PROGRESS
+        updateTimer()
+    }
+
+    fun openReadingFromProgress() {
+        if (overlay != Overlay.READING_PROGRESS) return
+        overlay = Overlay.READING
         updateTimer()
     }
 
@@ -608,7 +622,8 @@ class MathViewModel(
             return
         }
         overlay = when (overlay) {
-            Overlay.HISTORY, Overlay.SUBJECT_HISTORY -> Overlay.SETTINGS
+            Overlay.HISTORY, Overlay.SUBJECT_HISTORY, Overlay.READING_PROGRESS -> Overlay.SETTINGS
+            Overlay.SETTINGS -> settingsReturnOverlay
             Overlay.REWARDS, Overlay.POKEMONS -> collectionReturnOverlay
             else -> null
         }

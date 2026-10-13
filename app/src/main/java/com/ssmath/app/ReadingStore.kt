@@ -172,6 +172,10 @@ class ReadingViewModel(
         act { ReadingEngine.submit(it, key, expectedTurn = expectedTurn, rewardsEnabled = rewardsEnabled) }
     }
 
+    fun setName(name: String) {
+        act { if (it.profile == null) ReadingEngine.addProfile(it, name) else it }
+    }
+
     fun retry() {
         commands.trySend(Command.Retry)
     }

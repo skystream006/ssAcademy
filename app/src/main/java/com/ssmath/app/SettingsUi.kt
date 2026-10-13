@@ -74,6 +74,7 @@ internal fun ScreenScaffold(title: String, onBack: () -> Unit, actions: @Composa
 fun SettingsScreen(model: MathViewModel) {
     var showingAdmin by rememberSaveable { mutableStateOf(false) }
     var showingReadingGames by rememberSaveable { mutableStateOf(false) }
+    var showingReadingLevel by rememberSaveable { mutableStateOf(false) }
     ScreenScaffold("Settings", model::closeOverlay) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -144,6 +145,17 @@ fun SettingsScreen(model: MathViewModel) {
                 SubjectRewardsSetting(model, Subject.READING,
                     "Earn reading points for completed checkpoints. Progress and previously earned points are always saved.")
                 SubjectHistorySetting(model, Subject.READING)
+                ListItem(headlineContent = { Text("Reading Progress") },
+                    supportingContent = { Text("Private progress and saved stories") },
+                    leadingContent = { Icon(Icons.Rounded.History, null) },
+                    trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null) },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    modifier = Modifier.clickable(onClick = model::openReadingProgress).testTag("reading-progress"))
+                ListItem(headlineContent = { Text("Set Reading Level") },
+                    leadingContent = { Icon(Icons.Rounded.Settings, null) },
+                    trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null) },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    modifier = Modifier.clickable { showingReadingLevel = true }.testTag("set-reading-level"))
                 ListItem(headlineContent = { Text("Active Reading Games") },
                     supportingContent = { Text("Choose which reading games are available") },
                     leadingContent = { Icon(Icons.Rounded.Settings, null) },
@@ -210,6 +222,44 @@ fun SettingsScreen(model: MathViewModel) {
     if (showingReadingGames) {
         ActiveReadingGamesDialog(model, onDismiss = { showingReadingGames = false })
     }
+    if (showingReadingLevel) {
+        ReadingLevelDialog(rememberReadingViewModel(), onDismiss = { showingReadingLevel = false })
+    }
+}
+
+@Composable
+internal fun ReadingLevelDialog(model: ReadingViewModel, onDismiss: () -> Unit) {
+    val profile = model.data?.profile
+    AlertDialog(onDismissRequest = onDismiss,
+        title = { Text("Set Reading Level") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (model.storageError != null) {
+                    Text(requireNotNull(model.storageError))
+                    TextButton(onClick = model::retry) { Text("Retry storage") }
+                } else if (profile == null) {
+                    Text(if (model.data == null) "Opening your private reading shelf…" else "Enter your name to get started.")
+                } else {
+                    Text("Choose a level for new activities. Your saved drafts stay at their original level.")
+                    Column(Modifier.selectableGroup()) {
+                        ReadingLevel.entries.forEach { level ->
+                            Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).selectable(
+                                selected = profile.level == level,
+                                role = Role.RadioButton,
+                                enabled = !model.saving,
+                                onClick = { model.act { ReadingEngine.level(it, level) } }
+                            ).testTag("reading-level-${level.name}"),
+                                verticalAlignment = Alignment.CenterVertically) {
+                                RadioButton(selected = profile.level == level, onClick = null)
+                                Text(level.label, Modifier.padding(start = 8.dp))
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+        modifier = Modifier.testTag("reading-level-dialog"))
 }
 
 @Composable
@@ -220,7 +270,7 @@ private fun ActiveReadingGamesDialog(model: MathViewModel, onDismiss: () -> Unit
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Choose which games are available for all readers. Changes are saved automatically. " +
+                Text("Choose which games are available. Changes are saved automatically. " +
                     "Saved drafts, history, and points are kept when a game is disabled.")
                 ReadingGame.entries.forEach { game ->
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

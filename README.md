@@ -96,14 +96,16 @@ expand or collapse it without changing your choices. **Rewards** contains
 **Math Rewards System**, **Math Practice History**,
 **Show timer** (and its conditional **Time limit**), **Show correct answers**,
 **Vertical equations**, and **Default Math Reward Game Settings**.
-**Reading Settings** contains **Active Reading Games**, **Reading Rewards System**, and **Reading Practice History**.
+**Reading Settings** contains **Reading Progress**, **Set Reading Level**, **Active Reading Games**,
+**Reading Rewards System**, and **Reading Practice History**. **Set Reading Level** opens a dialog
+with the available levels; existing drafts keep their original level.
 **Active Reading Games** opens a dialog with a switch for each reading game, all enabled by default.
-Changes are saved automatically for all readers on this device. Disabled games cannot be started or resumed,
+Changes are saved automatically on this device. Disabled games cannot be started or resumed,
 but their drafts, history, stories, and earned points are kept; re-enable a game to resume its drafts.
 You can disable every game; the reading menu will explain where to enable them again.
 **Reading Practice History** opens
-with a reader selector for each reader's dated activity records. Viewing this history
-does not change the active reader or interrupt a saved reading draft.
+with dated activity records. Older installations with multiple readers retain a read-only
+history selector, without changing the local user or interrupting a saved reading draft.
 **Science Settings** and **Advanced Settings** each have their own rewards switch
 and practice history; these show an empty state until their activities are available.
 All four reward switches are independent and on by default. Existing Math reward
@@ -201,11 +203,17 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
 
 ## Reading
 
-Open **Reading** on the home screen and create a local reader profile (a nickname
-is enough). Reading progress is separate from math history and prizes. Choose a
-reading level and a game; activities use large tappable choices, not timed reading
-or mandatory dragging. Missing Word Mission, Story Sequencer, and Story Studio are
-the recommended starting activities.
+On first startup, **Welcome to the Academy! What is your name?** asks for one local
+name (a nickname is enough) to use across the app. An existing saved reader name is
+reused; there is no add-reader or switch-reader screen.
+Open **Reading** on the home screen to choose from illustrated square game buttons.
+**Rewards** and **Pokémon** shortcuts stay at the top, as on the Math page.
+Reading progress is separate from math history and prizes. Use **Settings → Reading Settings →
+Set Reading Level** to choose a level, and **Reading Progress** to view the private dashboard.
+Activities use large tappable choices, not timed reading or mandatory dragging.
+Tapping a game with a draft opens resume/new-attempt choices; Story Builder Partners
+also shows this dialog before its first attempt, with resume disabled until a draft exists.
+Starting over requires confirmation before archiving a saved draft.
 
 | Game | Activity and completion points |
 | --- | --- |
@@ -216,20 +224,20 @@ the recommended starting activities.
 | Caption Quest | Match an illustration with a written caption: 1 point. |
 | Choose the Next Chapter | Choose a story branch freely, then answer its comprehension question: 1 point for comprehension, none for choosing a direction. |
 | Story Studio | Create a story with character, setting, problem, and ending checkpoints: up to 4 points. Use suggested tiles or type your own words. |
-| Story Builder Partners | Two different local readers take alternating turns, then arrange and reread their story. Shared points and each reader's contributions are tracked separately. |
+| Story Builder Partners | Take turns with a friend or grown-up (no extra profile needed), or write both parts yourself, then arrange and reread the story. The local user earns one participation point and the story earns one separate shared completion point. Existing two-reader stories keep their original attribution and points. |
 
 Hints and retries never remove points, and there are no speed bonuses. Each
 checkpoint awards points once within an attempt, even after leaving and resuming.
-Starting a new attempt allows fresh practice and points. The adult progress view
+Starting a new attempt allows fresh practice and points. The Reading Progress view
 distinguishes points and completed activities from independent first-try answers,
 retries, hints, and passage narration. Creative stories use completion checkpoints,
 not automatic judgments of imagination or spelling. Personal milestones replace
 class rankings.
 
-Drafts, saved stories, reader profiles, and progress are automatically saved in
+Drafts, saved stories, the local name, and progress are automatically saved in
 private app storage on this tablet. There are no reading accounts, uploads, public
-leaderboards, microphone recordings, or cloud-generated activities. Profiles are
-for organizing a shared tablet, not password-protected accounts. Android backups
+leaderboards, microphone recordings, or cloud-generated activities. Older reader records
+are retained to preserve existing history, not exposed as switchable accounts. Android backups
 and device transfer are disabled; uninstalling the app removes its local data.
 The existing app updater may still contact GitHub independently of reading.
 
