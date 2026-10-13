@@ -51,6 +51,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.text.style.TextAlign
 import kotlin.math.roundToInt
 
@@ -275,7 +276,9 @@ internal fun ChangeNameDialog(model: ReadingViewModel, onDismiss: () -> Unit) {
                 modifier = Modifier.testTag("settings-save-name")) { Text("Save") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-        modifier = Modifier.testTag("change-name-dialog"))
+        // Keep text-field remeasurement from alternating between platform dialog widths.
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+        modifier = Modifier.widthIn(max = 440.dp).fillMaxWidth().padding(16.dp).testTag("change-name-dialog"))
 }
 
 @Composable

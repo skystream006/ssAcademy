@@ -30,6 +30,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ApplicationProvider
 import java.io.File
 import kotlin.random.Random
@@ -769,12 +770,31 @@ class MathAppTest {
         assertTrue(model().showCorrectAnswers)
     }
 
+    @Test
+    @Config(qualifiers = "w320dp-h480dp")
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun nameEditorRemainsUsableWithLargeTextOnSmallScreens() {
+        val reading = ReadingViewModel(application, object : ReadingStorage {
+            override fun load() = readingFixture()
+            override fun save(data: ReadingData) = Unit
+        }, Dispatchers.Unconfined)
+        compose.setContent { MathTheme(textSizePercent = 200) { ChangeNameDialog(reading, {}) } }
+        compose.onNodeWithTag("settings-name").performScrollTo().assertIsDisplayed()
+            .assertTextContains("Ari").performTextReplacement("Alex")
+        compose.onNodeWithTag("settings-save-name").assertIsDisplayed().assertIsEnabled().performClick()
+        compose.runOnIdle { assertEquals("Alex", reading.data?.profile?.name) }
+        compose.onNodeWithText("Cancel").assertIsDisplayed()
+    }
+
     @Test fun settingsCanCancelValidateAndSaveTheGameNameWithoutLosingProgress() {
         val file = File(application.filesDir, "reading_private.json")
         val store = ReadingStore(file)
         store.load()
         val original = readingFixture()
         store.save(original)
+        // The default AndroidViewModelFactory can retain a previous Robolectric Application.
+        ViewModelProvider(compose.activity,
+            ViewModelProvider.AndroidViewModelFactory(application))[ReadingViewModel::class.java]
         val model = model()
         compose.setContent { MathAppContent(model) }
         compose.onNodeWithContentDescription("Settings").performClick()
