@@ -14,7 +14,7 @@ import org.junit.Test
 
 class AppUpdaterTest {
     private val cacheDir: File = Files.createTempDirectory("updates").toFile()
-    private val download = "https://github.com/skystream006/ssMath/releases/download/v0.01.12/ssMath-v0.01.12.apk"
+    private val download = "https://github.com/skystream006/ssAcademy/releases/download/v0.01.12/ssAcademy-v0.01.12.apk"
 
     @After fun cleanup() { cacheDir.deleteRecursively() }
 
@@ -22,7 +22,7 @@ class AppUpdaterTest {
         tag: String = "v0.01.12",
         draft: Boolean = false,
         prerelease: Boolean = false,
-        name: String = "ssMath-v0.01.12.apk",
+        name: String = "ssAcademy-v0.01.12.apk",
         url: String = download,
         size: Long = 1234
     ) = """{"tag_name":"$tag","draft":$draft,"prerelease":$prerelease,"assets":[{"name":"$name","browser_download_url":"$url","size":$size}]}"""
@@ -40,6 +40,7 @@ class AppUpdaterTest {
     }
 
     @Test fun stableReleaseSelectsExpectedUniversalApk() {
+        assertEquals("https://api.github.com/repos/skystream006/ssAcademy/releases/latest", UPDATE_ENDPOINT)
         val parsed = parseUpdateRelease(release())
         assertEquals("0.01.12", parsed.version)
         assertEquals(download, parsed.url.toString())
@@ -60,7 +61,7 @@ class AppUpdaterTest {
             release(name = "arm64.apk"), release(size = 0), release(size = MAX_UPDATE_BYTES + 1),
             release(url = "https://example.com/update.apk"),
             release(url = download.replace("/v0.01.12/", "/v0.01.13/")),
-            release(url = download.replace("ssMath-v0.01.12.apk", "other.apk")),
+            release(url = download.replace("ssAcademy-v0.01.12.apk", "other.apk")),
             """{"tag_name":"v0.01.12","draft":false,"prerelease":false,"assets":[]}""",
             "{}", "[]", "not json"
         ).forEach { body -> assertThrows(body, IOException::class.java) { parseUpdateRelease(body) } }
@@ -74,6 +75,7 @@ class AppUpdaterTest {
             download.replace("github.com", "username@github.com"),
             download.replace("github.com", "github.com:444"),
             download.replace("skystream006", "someone-else"),
+            download.replace("/ssAcademy/", "/another-app/"),
             download.replace("/releases/download/", "/blob/"),
             "$download?token=anything", "$download#fragment",
             download.replace("v0.01.12.apk", "v0.01.12%2Fother.apk"),

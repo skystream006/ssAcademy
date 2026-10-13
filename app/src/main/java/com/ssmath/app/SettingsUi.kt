@@ -186,7 +186,7 @@ fun SettingsScreen(model: MathViewModel) {
             }
             HorizontalDivider()
             DebugLogSettings(onOpenAdmin = { showingAdmin = true })
-            Text("ssMath ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.labelSmall,
+            Text("ssAcademy ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.labelSmall,
                 modifier = Modifier.padding(bottom = 20.dp))
         }
     }

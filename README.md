@@ -1,4 +1,4 @@
-# ssMath
+# ssAcademy
 
 A native Kotlin / Jetpack Compose Android app for practicing math. Android 8.0
 (API 26) or newer; targets Android 16 (API 36).
@@ -204,7 +204,8 @@ Rebuilding the same commit keeps its version.
 Every build is signed with the repository's checked-in debug key
 (`app/debug.keystore`, alias `androiddebugkey`, passwords `android`), so local
 builds, CI builds and manual releases all share one signing certificate and can
-update each other. `applicationId` is `com.ssmath.app`.
+update each other. `applicationId` remains `com.ssmath.app` so the ssAcademy rename
+preserves existing installations, settings, and practice history.
 
 ### APK updates
 
@@ -214,13 +215,18 @@ updates**, then **Download and install** and confirm the download.
 
 The download shows progress and can be cancelled. The app checks the package,
 version and signing certificate before handing the APK to Android. If prompted,
-allow **Install unknown apps** for ssMath, then return to the app to confirm
+allow **Install unknown apps** for ssAcademy, then return to the app to confirm
 installation. Android still asks for final approval; a compatible update keeps your
 settings and practice history.
 
-For the first installation, download `ssMath-v<version>.apk` from this repository's
+For the first installation, download `ssAcademy-v<version>.apk` from this repository's
 **Releases** and open it on the phone. Extract Actions artifact ZIPs before opening
 an APK.
+
+To upgrade from ssMath, install the ssAcademy APK from **Releases** over the existing
+app using the same signing key. The old updater expects the previous APK name, so
+this first renamed update must be installed manually. Do not uninstall the old app;
+installing over it keeps your saved data.
 
 ### Publishing update-compatible releases
 

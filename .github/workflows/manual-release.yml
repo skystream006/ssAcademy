@@ -91,7 +91,7 @@ jobs:
             exit 1
           fi
           "$apksigner" verify --verbose --print-certs "app/build/outputs/apk/release/${apk}"
-          name="ssMath-v${version}"
+          name="ssAcademy-v${version}"
           cp "app/build/outputs/apk/release/${apk}" "${name}.apk"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "name=${name}" >> "$GITHUB_OUTPUT"
@@ -113,7 +113,7 @@ jobs:
             exit 0
           fi
           gh release create "$tag" "${APK_NAME}.apk" \
-            --target "$(git rev-parse HEAD)" --title "ssMath ${VERSION}" \
+            --target "$(git rev-parse HEAD)" --title "ssAcademy ${VERSION}" \
             --generate-notes --latest
       - name: Remove signing key
         if: always()

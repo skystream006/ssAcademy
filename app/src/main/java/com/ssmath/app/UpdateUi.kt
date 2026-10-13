@@ -42,7 +42,7 @@ fun UpdateNotification(model: AppUpdater = viewModel()) {
     LaunchedEffect(version, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             version?.let {
-                Toast.makeText(context, "ssMath $it is available. Open Settings > App updates to download.", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, "ssAcademy $it is available. Open Settings > App updates to download.", Toast.LENGTH_LONG).show()
                 model.consumeNotification()
             }
         }

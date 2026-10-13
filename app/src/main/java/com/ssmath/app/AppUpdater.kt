@@ -128,7 +128,7 @@ class AppUpdater(application: Application) : AndroidViewModel(application) {
         currentCoroutineContext().ensureActive()
         val call = client.newCall(Request.Builder().url(url).header("Accept",
             if (url.host == "api.github.com") "application/vnd.github+json" else "application/octet-stream")
-            .header("User-Agent", "ssMath/${BuildConfig.VERSION_NAME}").build())
+            .header("User-Agent", "ssAcademy/${BuildConfig.VERSION_NAME}").build())
         activeCall = call
         currentCoroutineContext().ensureActive()
         return call.awaitResponse()

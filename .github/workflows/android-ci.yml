@@ -28,6 +28,6 @@ jobs:
         run: sh ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
       - uses: actions/upload-artifact@v6
         with:
-          name: ssMath-debug-apk
+          name: ssAcademy-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error

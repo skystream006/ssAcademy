@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "ssMath"
+rootProject.name = "ssAcademy"
 include(":app")
