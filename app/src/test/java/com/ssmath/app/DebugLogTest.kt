@@ -2,6 +2,7 @@ package com.ssmath.app
 
 import android.app.Application
 import android.content.Context
+import android.content.Intent
 import androidx.test.core.app.ApplicationProvider
 import java.io.File
 import java.io.IOException
@@ -71,6 +72,14 @@ class DebugLogTest {
         val lines = store.read().lineSequence().filter { it.isNotEmpty() }.toList()
         assertEquals(DebugLogStore.MAX_REACTIVE_ENTRIES, lines.size)
         assertTrue(lines.last().endsWith("GAME_STARTED status=249"))
+    }
+
+    @Test fun sharedLogUsesAppNameAndPreservesText() {
+        val intent = DebugLog.shareIntent("diagnostic log")
+        assertEquals(Intent.ACTION_SEND, intent.action)
+        assertEquals("text/plain", intent.type)
+        assertEquals("ssAcademy debug log", intent.getStringExtra(Intent.EXTRA_SUBJECT))
+        assertEquals("diagnostic log", intent.getStringExtra(Intent.EXTRA_TEXT))
     }
 
     @Test fun clearingRemovesAllLogFilesButKeepsOptIn() {

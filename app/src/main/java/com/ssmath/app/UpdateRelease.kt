@@ -21,8 +21,8 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Response
 
 internal const val MAX_UPDATE_BYTES = 100L * 1024 * 1024
-internal const val UPDATE_ENDPOINT = "https://api.github.com/repos/skystream006/ssMath/releases/latest"
-private const val RELEASE_PATH = "/skystream006/ssMath/releases/download/"
+internal const val UPDATE_ENDPOINT = "https://api.github.com/repos/skystream006/ssAcademy/releases/latest"
+private const val RELEASE_PATH = "/skystream006/ssAcademy/releases/download/"
 internal const val MAX_METADATA_BYTES = 1024L * 1024
 
 internal data class UpdateVersion(val major: Long, val minor: Long, val revision: Long) : Comparable<UpdateVersion> {
@@ -78,7 +78,7 @@ internal fun parseUpdateRelease(body: String): UpdateRelease {
     if (!tag.startsWith("v") || UpdateVersion.parse(version) == null) {
         throw IOException("The latest release has an unsupported version tag. Ask the maintainer to publish v0.01.NN.")
     }
-    val filename = "ssMath-v$version.apk"
+    val filename = "ssAcademy-v$version.apk"
     val assets = (root["assets"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
     val asset = assets.filter {
         (it["name"] as? JsonPrimitive)?.contentOrNull?.endsWith(".apk", ignoreCase = true) == true

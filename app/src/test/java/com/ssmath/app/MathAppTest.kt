@@ -620,6 +620,15 @@ class MathAppTest {
         }
     }
 
+    @Test fun appLabelAndSettingsShowSsAcademyWithoutChangingInstalledIdentity() {
+        assertEquals("com.ssmath.app", application.packageName)
+        assertEquals("ssAcademy", application.applicationInfo.loadLabel(application.packageManager).toString())
+        val model = model()
+        compose.setContent { MathAppContent(model) }
+        compose.onNodeWithContentDescription("Settings").performClick()
+        compose.onNodeWithText("ssAcademy ${BuildConfig.VERSION_NAME}").performScrollTo().assertIsDisplayed()
+    }
+
     @Test fun settingsCanShowAndHideTheTimerAndOpenPracticeHistory() {
         val model = model()
         compose.setContent { MathAppContent(model) }

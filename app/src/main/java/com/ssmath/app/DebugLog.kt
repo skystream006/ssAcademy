@@ -67,7 +67,7 @@ object DebugLog {
 
     fun shareIntent(text: String): Intent = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"
-        putExtra(Intent.EXTRA_SUBJECT, "ssMath debug log")
+        putExtra(Intent.EXTRA_SUBJECT, "ssAcademy debug log")
         putExtra(Intent.EXTRA_TEXT, text.take(DebugLogStore.MAX_EXPORT_BYTES))
     }
 }
