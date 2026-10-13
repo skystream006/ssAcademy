@@ -95,7 +95,7 @@ class GameModesTest {
             ProgressIcon.entries.forEach { expected ->
                 val beforeStart = starts
                 val previous = model.progressIcon
-                if (mode == GameMode.PRACTICE) readyPractice(model, 3) else readyRewards(model, 3)
+                if (mode == GameMode.PRACTICE) readyPractice(model, 10) else readyRewards(model, 10)
                 assertEquals(beforeStart, starts)
                 assertEquals(previous, model.progressIcon)
                 model.start()
@@ -118,7 +118,7 @@ class GameModesTest {
                 assertEquals(beforeStart + 1, starts)
                 assertEquals(expected, model.progressIcon)
                 if (expected.ordinal % 2 == 0) {
-                    answerAndCheckIcon()
+                    repeat(8) { answerAndCheckIcon() }
                     assertEquals(Screen.RESULTS, model.screen)
                     model.dismissCelebration()
                     model.done()
@@ -765,16 +765,25 @@ class GameModesTest {
         assertEquals(model.rewardBalances, restored.rewardBalances)
     }
 
-    @Test fun earlyPracticeFinishesDoNotAwardScenesOrPrizes() {
-        val model = model()
-        readyPractice(model, count = 50)
-        model.start()
-        repeat(5) { answer(model, correct = false) }
-        assertEquals(Screen.RESULTS, model.screen)
-        assertNotNull(model.earlyFinishMessage)
-        assertNull(model.celebration)
-        assertNull(model.lastResult!!.prizeType)
-        assertTrue(model.pokemons.isEmpty())
+    @Test fun bothModesFinishOnlyAboveTenPercentWrongWithoutScenesOrPrizes() {
+        GameMode.entries.forEach { mode ->
+            mapOf(10 to 2, 15 to 2, 25 to 3, 50 to 6, 100 to 11).forEach { (count, limit) ->
+                val model = model()
+                if (mode == GameMode.PRACTICE) readyPractice(model, count) else readyRewards(model, count)
+                model.start()
+                repeat(limit - 1) { answer(model, correct = false) }
+                assertEquals(Screen.PLAYING, model.screen)
+                assertNull(model.lastResult)
+                answer(model, correct = false)
+                assertEquals(Screen.RESULTS, model.screen)
+                assertEquals(limit, model.lastResult!!.wrong)
+                assertNotNull(model.earlyFinishMessage)
+                assertNull(model.celebration)
+                assertNull(model.lastResult!!.prizeType)
+                assertTrue(model.pokemons.isEmpty())
+                model.done()
+            }
+        }
     }
 
     @Test fun practiceKeepsElapsedTimerWithoutApplyingTheRewardsTimeLimit() {

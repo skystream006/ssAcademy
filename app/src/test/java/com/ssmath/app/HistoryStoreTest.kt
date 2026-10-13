@@ -20,7 +20,7 @@ class HistoryStoreTest {
     private fun result(finishedAt: Long, correct: Int = 2) = PracticeResult(
         id = finishedAt, finishedAt = finishedAt, operation = Operation.ADDITION, maximum = 10, durationMs = 61_000,
         attempts = List(correct) { Attempt(Problem(1, it + 1, Operation.ADDITION), it + 2) } +
-            List(MAX_WRONG_ANSWERS) { Attempt(Problem(2, 2, Operation.ADDITION), 5) })
+            List(5) { Attempt(Problem(2, 2, Operation.ADDITION), 5) })
 
     @Test fun savesResultsNewestFirstAndReloadsThem() {
         assertEquals(emptyList<PracticeResult>(), store.load())
@@ -30,7 +30,7 @@ class HistoryStoreTest {
         val loaded = HistoryStore(file).load()
         assertEquals(listOf(3_000L, 2_000L, 1_000L), loaded.map { it.finishedAt })
         assertEquals(4, loaded.first().correct)
-        assertEquals(MAX_WRONG_ANSWERS, loaded.first().wrong)
+        assertEquals(5, loaded.first().wrong)
         assertTrue(loaded.first().attempts.first().correct)
         assertEquals(result(3_000, correct = 4), loaded.first())
     }
