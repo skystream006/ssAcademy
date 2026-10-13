@@ -42,32 +42,35 @@ class CelebrationUiTest {
     @Test fun tentacruelGeodudePlaysAndFinishes() = playsAndFinishes(Celebration.TENTACRUEL_GEODUDE)
     @Test fun mewPlaysAndFinishes() = playsAndFinishes(Celebration.MEW)
 
-    @Test fun everyAddedPokemonCanReplayWithItsLabelAndCloseOrFinish() {
+    @Test fun everyCelebrationCanReplayWithItsLabelAndCloseOrFinish() {
         var selected by mutableStateOf<Celebration?>(null)
         var completions = 0
         compose.mainClock.autoAdvance = false
         compose.setContent {
             MathTheme {
                 Text("Collection")
-                selected?.let { pokemon ->
-                    CelebrationDialog(pokemon, replay = true) {
+                selected?.let { celebration ->
+                    CelebrationDialog(celebration, replay = true) {
                         completions++
                         selected = null
                     }
                 }
             }
         }
-        Celebration.pokemons.drop(13).forEachIndexed { index, pokemon ->
-            compose.runOnIdle { selected = pokemon }
+        Celebration.entries.forEachIndexed { index, celebration ->
+            compose.runOnIdle { selected = celebration }
             compose.mainClock.advanceTimeByFrame()
             compose.waitForIdle()
             compose.mainClock.advanceTimeBy(64)
-            compose.onNodeWithText(pokemon.label).assertIsDisplayed()
-            compose.onNodeWithContentDescription(pokemon.description).assertIsDisplayed()
+            compose.onNodeWithText(celebration.label).assertIsDisplayed()
+            compose.onNodeWithContentDescription(celebration.description).assertIsDisplayed()
             compose.onNodeWithText("Hurray!!").assertIsDisplayed()
+            compose.onNodeWithText("Congratulations!").assertDoesNotExist()
+            compose.onNodeWithTag("close-celebration").assertIsDisplayed()
             if (index % 2 == 0) compose.onNodeWithTag("close-celebration").performClick()
             compose.mainClock.advanceTimeBy(CELEBRATION_DURATION_MS.toLong())
-            compose.onNodeWithTag("celebration-${pokemon.name}").assertDoesNotExist()
+            compose.onNodeWithTag("celebration-${celebration.name}").assertDoesNotExist()
+            compose.onNodeWithText(celebration.label).assertDoesNotExist()
             compose.runOnIdle { assertEquals(index + 1, completions) }
         }
     }
@@ -83,11 +86,17 @@ class CelebrationUiTest {
             }
         }
         compose.mainClock.advanceTimeBy(64)
+        compose.onNodeWithText("Congratulations!").assertIsDisplayed()
+        compose.onNodeWithText("You answered every question!").assertIsDisplayed()
+        compose.onNodeWithText(celebration.label).assertIsDisplayed()
         compose.onNodeWithContentDescription(celebration.description).assertIsDisplayed()
         compose.onNodeWithText("Hurray!!").assertIsDisplayed()
+        compose.onNodeWithTag("view-results").assertIsDisplayed()
         compose.mainClock.advanceTimeBy(CELEBRATION_DURATION_MS / 2L)
+        compose.onNodeWithText(celebration.label).assertIsDisplayed()
         compose.runOnIdle { assertFalse(finished) }
         compose.mainClock.advanceTimeBy(CELEBRATION_DURATION_MS.toLong())
+        compose.onNodeWithText(celebration.label).assertDoesNotExist()
         compose.onNodeWithText("Results").assertIsDisplayed()
         compose.runOnIdle { assertEquals(1, completions) }
     }
