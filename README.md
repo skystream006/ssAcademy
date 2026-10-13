@@ -249,6 +249,8 @@ read-aloud uses an **installed offline English Android text-to-speech voice**.
 If one is unavailable, reading still works without audio; install an offline
 English voice using the device's text-to-speech settings to enable narration.
 Passage narration is recorded as support; reading instructions aloud is not.
+Missing Word Mission offers instruction audio only, via the speaker icon beside
+the instructions, and displays its colored answer choices in two columns.
 Speech stops when leaving the activity or putting the app in the background.
 
 ## Build and Install

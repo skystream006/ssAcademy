@@ -1,7 +1,10 @@
 package com.ssmath.app
 
 import android.app.Application
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.os.Looper
+import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -16,6 +19,7 @@ import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
@@ -146,6 +150,7 @@ class ReadingScreenTest {
     @Test fun missingWordCanBeCompletedAndBackReturnsToMenuThenExits() {
         show(readingFixture(), speech = true)
         click("reading-instructions")
+        assertEquals(ReadingGame.MISSING.guidance, lastSpoken)
         assertEquals(0, model.data?.active?.narrations)
         chooseCorrectAnswer()
         click("reading-check-answer")
@@ -162,6 +167,133 @@ class ReadingScreenTest {
         assertEquals(1, exited)
         assertTrue(stopped > 0)
         assertEquals(1, ReadingStore(file).load().points("reader-a"))
+    }
+
+    @Test fun missingWordHasInstructionsBelowTitleWithSpeakerOnRightAndBackAtTopLeft() {
+        val data = readingFixture()
+        val content = requireNotNull(data.active).content
+        show(data, speech = true)
+        val back = compose.onNodeWithTag("reading-back").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val title = compose.onNodeWithText(content.game.title).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val instructions = compose.onNodeWithText(content.game.guidance).assertIsDisplayed()
+            .fetchSemanticsNode().boundsInRoot
+        val speaker = compose.onNodeWithContentDescription("Listen to instructions")
+            .assertIsDisplayed().assertHasClickAction().fetchSemanticsNode().boundsInRoot
+        val activityTitle = compose.onNodeWithText(content.title).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val screen = compose.onNodeWithTag("reading-activity").fetchSemanticsNode().boundsInRoot
+        assertTrue(back.bottom <= title.top)
+        assertEquals(title.left, back.left, 1f)
+        assertTrue(title.bottom <= instructions.top)
+        assertTrue(instructions.bottom <= activityTitle.top)
+        assertTrue(instructions.right <= speaker.left)
+        assertEquals(instructions.center.y, speaker.center.y, 1f)
+        assertEquals(screen.right - (title.left - screen.left), speaker.right, 1f)
+        compose.onNodeWithText("Listen to instructions").assertDoesNotExist()
+        compose.onNodeWithText("${data.name("reader-a")} · ${content.level.label}").assertDoesNotExist()
+        compose.onNodeWithText("Instruction audio does not count as passage narration.").assertDoesNotExist()
+        compose.onNodeWithText("Draft saved automatically.", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("Listening is support, not independent reading.", substring = true).assertDoesNotExist()
+        compose.onNodeWithTag("reading-listen").assertDoesNotExist()
+        compose.onNodeWithTag("reading-stop").assertDoesNotExist()
+        val previousStops = stopped
+        compose.onNodeWithTag("reading-back").performClick()
+        waitFor { it.page == ReadingPage.MENU }
+        assertTrue(stopped > previousStops)
+        assertEquals(data.attempts, ReadingStore(file).load().attempts)
+    }
+
+    @Test fun missingWordInstructionFailureCanBeRetriedWithoutRecordingPassageNarration() {
+        val data = readingFixture()
+        show(data, speech = true)
+        speechWorks = false
+        click("reading-instructions")
+        compose.onNodeWithText("Instruction audio is unavailable. You can still read the instructions above.")
+            .assertIsDisplayed()
+        speechWorks = true
+        click("reading-instructions")
+        compose.onNodeWithText("Instruction audio is unavailable.", substring = true).assertDoesNotExist()
+        assertEquals(ReadingGame.MISSING.guidance, lastSpoken)
+        assertEquals(data, model.data)
+        assertEquals(data, ReadingStore(file).load())
+    }
+
+    @Test fun missingWordRemainsPlayableWithoutOfflineInstructionAudio() {
+        show(readingFixture())
+        compose.onNodeWithContentDescription("Listen to instructions").assertIsDisplayed().assertIsNotEnabled()
+        compose.onNodeWithTag("reading-listen").assertDoesNotExist()
+        compose.onNodeWithTag("reading-stop").assertDoesNotExist()
+        chooseCorrectAnswer()
+        click("reading-check-answer")
+        waitFor { it.active?.earned("answer") == true }
+        assertEquals(ReadingAccuracy(1, 1, 0, 0), model.data?.accuracy("reader-a"))
+    }
+
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun missingWordAnswersHaveDistinctColorsAndAnEqualWidthTwoColumnGridWithAnOddLastRow() {
+        show(readingFixture())
+        compose.onNodeWithTag("reading-answer-0").performScrollTo()
+        val answers = (0..2).map {
+            compose.onNodeWithTag("reading-answer-$it").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        }
+        assertEquals(answers[0].top, answers[1].top, 1f)
+        assertTrue(answers[0].right < answers[1].left)
+        assertTrue(maxOf(answers[0].bottom, answers[1].bottom) < answers[2].top)
+        assertEquals(answers[0].left, answers[2].left, 1f)
+        answers.forEach { assertEquals(answers[0].width, it.width, 1f) }
+        compose.runOnIdle {
+            val view = compose.activity.findViewById<View>(android.R.id.content)
+            val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+            try {
+                view.draw(Canvas(bitmap))
+                val colors = answers.map {
+                    bitmap.getPixel(it.center.x.toInt(), (it.top + 4 * view.resources.displayMetrics.density).toInt())
+                }
+                assertEquals(3, colors.toSet().size)
+            } finally {
+                bitmap.recycle()
+            }
+        }
+    }
+
+    @Test
+    @Config(qualifiers = "w320dp-h800dp")
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun missingWordFourChoiceGridAndInstructionsFitAtLargeTextSizes() {
+        val content = ReadingContent.find("missing-generous")
+        val choices = requireNotNull(content.question).choices
+        show(readingFixture(content), speech = true)
+        for (percent in listOf(100, 150, 200)) {
+            compose.runOnIdle { textSize.intValue = percent }
+            compose.onNodeWithTag("reading-instructions").performScrollTo().assertIsDisplayed()
+            val instructions = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+            compose.onNodeWithText(content.game.guidance).performSemanticsAction(
+                androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult
+            ) { it(instructions) }
+            assertFalse("Instructions at $percent%", instructions.single().hasVisualOverflow)
+            choices.indices.chunked(2).forEach { row ->
+                compose.onNodeWithTag("reading-answer-${row.first()}").performScrollTo()
+                val answers = row.map { index ->
+                    val bounds = compose.onNodeWithTag("reading-answer-$index").assertIsDisplayed().assertIsEnabled()
+                        .fetchSemanticsNode().boundsInRoot
+                    val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+                    compose.onNodeWithText(choices[index]).performSemanticsAction(
+                        androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult
+                    ) { it(layouts) }
+                    assertFalse("${choices[index]} at $percent%", layouts.single().hasVisualOverflow)
+                    bounds
+                }
+                assertEquals(answers[0].top, answers[1].top, 1f)
+                assertEquals(answers[0].width, answers[1].width, 1f)
+                assertTrue(answers[0].right < answers[1].left)
+            }
+        }
+        chooseCorrectAnswer()
+        val answer = readingCorrect(requireNotNull(model.data))
+        compose.onNodeWithTag("reading-answer-$answer").assertTextContains("✓ ${choices[answer]}")
+        click("reading-check-answer")
+        waitFor { it.active?.earned("answer") == true }
+        choices.indices.forEach { compose.onNodeWithTag("reading-answer-$it").assertIsNotEnabled() }
     }
 
     @Test fun disablingReadingRewardsStillSavesCompletionWithoutShowingPointAwards() {
@@ -597,10 +729,14 @@ class ReadingScreenTest {
         }
     }
 
-    @Test fun successfulNarrationIsSupportBeforeCheckingAndUnavailableSpeechDoesNotCount() {
-        show(readingFixture(), speech = true)
+    @Test fun otherReadingGamesRetainNarrationSupportAndStopControls() {
+        show(readingFixture(ReadingContent.forGame(ReadingGame.CAPTION, ReadingLevel.SPROUT).first()), speech = true)
+        compose.onNodeWithText("Listen to instructions").performScrollTo().assertIsDisplayed()
         click("reading-listen")
         waitFor { it.active?.narrations == 1 }
+        val previousStops = stopped
+        click("reading-stop")
+        assertTrue(stopped > previousStops)
         chooseCorrectAnswer()
         click("reading-check-answer")
         waitFor { it.points("reader-a") == 1 }
@@ -608,7 +744,7 @@ class ReadingScreenTest {
 
         compose.runOnIdle {
             speechWorks = false
-            model.act { ReadingEngine.start(it, ReadingGame.MISSING, ReadingLevel.SPROUT, true, "fresh") }
+            model.act { ReadingEngine.start(it, ReadingGame.CAPTION, ReadingLevel.SPROUT, true, "fresh") }
         }
         waitFor { it.active?.id == "fresh" }
         click("reading-listen")

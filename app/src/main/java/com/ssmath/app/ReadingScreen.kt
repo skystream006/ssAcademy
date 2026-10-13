@@ -15,14 +15,21 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonColors
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -37,6 +44,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -246,14 +254,19 @@ private fun ReadingButton(label: String, tag: String, enabled: Boolean = true, a
 
 @Composable
 private fun ReadingChoice(label: String, tag: String, selected: Boolean = false,
-                          enabled: Boolean = true, action: () -> Unit) {
-    OutlinedButton(onClick = action, enabled = enabled, modifier = Modifier.fillMaxWidth()
+                          enabled: Boolean = true, modifier: Modifier = Modifier,
+                          colors: ButtonColors = ButtonDefaults.outlinedButtonColors(), action: () -> Unit) {
+    OutlinedButton(onClick = action, enabled = enabled, colors = colors, modifier = modifier.fillMaxWidth()
         .heightIn(min = 56.dp).testTag(tag).semantics {
             stateDescription = if (selected) "Selected" else "Not selected"
         }) {
         Text(if (selected) "✓ $label" else label, Modifier.padding(vertical = 4.dp))
     }
 }
+
+private val MissingWordAnswerColors = listOf(
+    Color(0xFFD5E8FF), Color(0xFFD6F4DF), Color(0xFFFFE7AC), Color(0xFFF5D7F2)
+)
 
 @Composable
 private fun ReadingPictureView(picture: ReadingPicture) {
@@ -376,19 +389,37 @@ private fun ReadingActivityScreen(data: ReadingData, model: ReadingViewModel, a:
         return
     }
     val content = a.content
+    val missingWord = content.game == ReadingGame.MISSING
     var instructionsUnavailable by remember(a.id) { mutableStateOf(false) }
     ReadingColumn("reading-activity") {
+        if (missingWord) {
+            Button(onClick = back, modifier = Modifier.heightIn(min = 56.dp).testTag("reading-back")) {
+                Text("Back to reading menu", Modifier.padding(vertical = 4.dp))
+            }
+        }
         ReadingHeading(content.game.title)
-        Text("${data.name(a.ownerId)} · ${content.level.label}")
+        if (missingWord) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Text(content.game.guidance, Modifier.weight(1f))
+                IconButton(onClick = { instructionsUnavailable = !speak(content.game.guidance) },
+                    enabled = available, modifier = Modifier.size(48.dp).testTag("reading-instructions")) {
+                    Icon(Icons.AutoMirrored.Rounded.VolumeUp, contentDescription = "Listen to instructions")
+                }
+            }
+            if (instructionsUnavailable) Text("Instruction audio is unavailable. You can still read the instructions above.")
+        } else Text("${data.name(a.ownerId)} · ${content.level.label}")
         Text(content.title, style = MaterialTheme.typography.titleLarge)
         ReadingPictureView(content.picture)
-        Text(content.game.guidance)
-        ReadingChoice("Listen to instructions", "reading-instructions", enabled = available) {
-            instructionsUnavailable = !speak(content.game.guidance)
+        if (!missingWord) {
+            Text(content.game.guidance)
+            ReadingChoice("Listen to instructions", "reading-instructions", enabled = available) {
+                instructionsUnavailable = !speak(content.game.guidance)
+            }
+            if (instructionsUnavailable) Text("Instruction audio is unavailable. You can still read the instructions above.")
+            Text("Instruction audio does not count as passage narration.")
+            Text("Draft saved automatically. +1 per checkpoint when Reading Rewards System is on; hints and retries never remove points.")
         }
-        if (instructionsUnavailable) Text("Instruction audio is unavailable. You can still read the instructions above.")
-        Text("Instruction audio does not count as passage narration.")
-        Text("Draft saved automatically. +1 per checkpoint when Reading Rewards System is on; hints and retries never remove points.")
         when (content.game) {
             ReadingGame.MISSING, ReadingGame.CAPTION -> {
                 content.passage.forEach { Text(it, style = MaterialTheme.typography.headlineSmall) }
@@ -448,20 +479,22 @@ private fun ReadingActivityScreen(data: ReadingData, model: ReadingViewModel, a:
             stop(); model.act { ReadingEngine.finish(it) }
         }
         ReadingChoice("Give me a hint", "reading-hint") { model.act { ReadingEngine.hint(it) } }
-        val text = when (content.game) {
-            ReadingGame.CHAPTER -> (content.passage + listOfNotNull(a.branch?.let { content.branches[it].text })).joinToString(" ")
-            ReadingGame.SCRAMBLE, ReadingGame.SEQUENCE -> if (a.order.isEmpty())
-                content.tiles.joinToString(". ") else a.order.joinToString(" ") { content.tiles[it] }
-            ReadingGame.CAPTION -> content.question?.choices?.joinToString(". ").orEmpty()
-            ReadingGame.STUDIO -> ReadingEngine.storyText(a)
-            ReadingGame.PARTNERS -> if (a.order.isNotEmpty()) ReadingEngine.storyText(a)
-                else a.turns.joinToString(" ") { it.text }
-            else -> content.passage.joinToString(" ")
+        if (!missingWord) {
+            val text = when (content.game) {
+                ReadingGame.CHAPTER -> (content.passage + listOfNotNull(a.branch?.let { content.branches[it].text })).joinToString(" ")
+                ReadingGame.SCRAMBLE, ReadingGame.SEQUENCE -> if (a.order.isEmpty())
+                    content.tiles.joinToString(". ") else a.order.joinToString(" ") { content.tiles[it] }
+                ReadingGame.CAPTION -> content.question?.choices?.joinToString(". ").orEmpty()
+                ReadingGame.STUDIO -> ReadingEngine.storyText(a)
+                ReadingGame.PARTNERS -> if (a.order.isNotEmpty()) ReadingEngine.storyText(a)
+                    else a.turns.joinToString(" ") { it.text }
+                else -> content.passage.joinToString(" ")
+            }
+            ReadingListen(text, available, speak, stop) {
+                model.act { ReadingEngine.narration(it, queued = true) }
+            }
+            ReadingButton("Back to reading menu", "reading-back", action = back)
         }
-        ReadingListen(text, available, speak, stop) {
-            model.act { ReadingEngine.narration(it, queued = true) }
-        }
-        ReadingButton("Back to reading menu", "reading-back", action = back)
     }
 }
 
@@ -469,7 +502,22 @@ private fun ReadingActivityScreen(data: ReadingData, model: ReadingViewModel, a:
 private fun ReadingQuestionView(a: ReadingAttempt, model: ReadingViewModel, key: String) {
     val question = ReadingEngine.question(a) ?: return
     Text(question.prompt, style = MaterialTheme.typography.titleLarge)
-    question.choices.forEachIndexed { index, choice ->
+    if (a.content.game == ReadingGame.MISSING) {
+        question.choices.indices.chunked(2).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                row.forEach { index ->
+                    ReadingChoice(question.choices[index], "reading-answer-$index",
+                        a.fields["answer"] == index.toString(), !a.earned(key), modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = MissingWordAnswerColors[index % MissingWordAnswerColors.size],
+                            contentColor = Color(0xFF18212F))) {
+                        model.act { ReadingEngine.field(it, "answer", index.toString()) }
+                    }
+                }
+                if (row.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
+    } else question.choices.forEachIndexed { index, choice ->
         ReadingChoice(choice, "reading-answer-$index", a.fields["answer"] == index.toString(), !a.earned(key)) {
             model.act { ReadingEngine.field(it, "answer", index.toString()) }
         }
