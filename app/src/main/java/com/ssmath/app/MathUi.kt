@@ -153,6 +153,11 @@ internal fun MathAppContent(model: MathViewModel) {
                         Overlay.HISTORY -> HistoryScreen(model)
                         Overlay.REWARDS -> RewardsScreen(model)
                         Overlay.POKEMONS -> PokemonsScreen(model)
+                        Overlay.READING -> ReadingScreen(
+                            onExit = model::closeOverlay,
+                            textSizePercent = model.textSizePercent,
+                            onTextSizeChange = model::chooseTextSize
+                        )
                         null -> {
                             MainContent(model)
                             SettingsButton(model::openSettings, Modifier.align(Alignment.BottomEnd))
@@ -286,7 +291,7 @@ private fun HomeScreen(model: MathViewModel) {
                 }
             }
         } else {
-            SubjectGrid(model::openMathGames, Modifier.weight(1f))
+            SubjectGrid(model::openMathGames, model::openReading, Modifier.weight(1f))
         }
     }
     when (model.setupDialog) {
@@ -320,7 +325,7 @@ private fun HomeScreen(model: MathViewModel) {
 }
 
 @Composable
-private fun SubjectGrid(onMath: () -> Unit, modifier: Modifier = Modifier) {
+private fun SubjectGrid(onMath: () -> Unit, onReading: () -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val comingSoon = {
         Toast.makeText(context, "More Activities are coming soon!", Toast.LENGTH_SHORT).show()
@@ -330,7 +335,7 @@ private fun SubjectGrid(onMath: () -> Unit, modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             SubjectButton("Math", R.drawable.subject_math, onMath, Modifier.weight(1f))
-            SubjectButton("Reading", R.drawable.subject_reading, comingSoon, Modifier.weight(1f))
+            SubjectButton("Reading", R.drawable.subject_reading, onReading, Modifier.weight(1f))
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             SubjectButton("Science", R.drawable.subject_science, comingSoon, Modifier.weight(1f))

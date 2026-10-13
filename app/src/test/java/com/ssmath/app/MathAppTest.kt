@@ -134,7 +134,7 @@ class MathAppTest {
         val model = model()
         compose.setContent { MathAppContent(model) }
         repeat(2) {
-            listOf("Reading", "Science", "Advanced").forEach { subject ->
+            listOf("Science", "Advanced").forEach { subject ->
                 ShadowToast.reset()
                 compose.onNodeWithTag("subject-$subject").performClick()
                 assertEquals("More Activities are coming soon!", ShadowToast.getTextOfLatestToast())

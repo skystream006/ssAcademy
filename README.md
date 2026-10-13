@@ -1,6 +1,6 @@
 # ssAcademy
 
-A native Kotlin / Jetpack Compose Android app for practicing math. Android 8.0
+A native Kotlin / Jetpack Compose Android app for practicing math and reading. Android 8.0
 (API 26) or newer; targets Android 16 (API 36).
 
 ## How it works
@@ -11,7 +11,8 @@ A native Kotlin / Jetpack Compose Android app for practicing math. Android 8.0
    Below the collections, four illustrated square buttons form a 2-by-2 subject grid:
    **Math**, **Reading**, **Science**, and **Advanced**. Tap **Math** to choose
    **Practice Game** or **Rewards Game**; **Back to subjects** or Android Back returns
-   to the subject grid. The other subjects show the toast **More Activities are coming soon!**
+   to the subject grid. Tap **Reading** for the offline reading activities described below.
+   **Science** and **Advanced** show the toast **More Activities are coming soon!**
    Their backgrounds are drawn with bundled vectors and work offline.
    **Practice Game** opens the question setup in a dialog. Choose **Addition**, **Subtraction**,
    **Multiplication** or **Division**, enter the **Minimum number** (defaults to 1)
@@ -180,6 +181,47 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   The ten additions come from [ssMusic Player PR #155](https://github.com/skystream006/ssMusic_Player/pull/155).
   Your color theme stays the same.
 - **Debug logging** – off by default. See [Debug logging](#debug-logging).
+
+## Reading
+
+Open **Reading** on the home screen and create a local reader profile (a nickname
+is enough). Reading progress is separate from math history and prizes. Choose a
+reading level and a game; activities use large tappable choices, not timed reading
+or mandatory dragging. Missing Word Mission, Story Sequencer, and Story Studio are
+the recommended starting activities.
+
+| Game | Activity and completion points |
+| --- | --- |
+| Missing Word Mission | Choose the missing word: 1 point per sentence. |
+| Sentence Scramble | Tap word tiles in order: 1 point, with an optional 1-point extra challenge. More than one valid order is accepted where appropriate. |
+| Story Sequencer | Arrange illustrated story parts: 1 point, plus 1 for a comprehension question. |
+| Reading Detective | Answer a passage question and select its evidence: 1 point each. |
+| Caption Quest | Match an illustration with a written caption: 1 point. |
+| Choose the Next Chapter | Choose a story branch freely, then answer its comprehension question: 1 point for comprehension, none for choosing a direction. |
+| Story Studio | Create a story with character, setting, problem, and ending checkpoints: up to 4 points. Use suggested tiles or type your own words. |
+| Story Builder Partners | Two different local readers take alternating turns, then arrange and reread their story. Shared points and each reader's contributions are tracked separately. |
+
+Hints and retries never remove points, and there are no speed bonuses. Each
+checkpoint awards points once within an attempt, even after leaving and resuming.
+Starting a new attempt allows fresh practice and points. The adult progress view
+distinguishes points and completed activities from independent first-try answers,
+retries, hints, and passage narration. Creative stories use completion checkpoints,
+not automatic judgments of imagination or spelling. Personal milestones replace
+class rankings.
+
+Drafts, saved stories, reader profiles, and progress are automatically saved in
+private app storage on this tablet. There are no reading accounts, uploads, public
+leaderboards, microphone recordings, or cloud-generated activities. Profiles are
+for organizing a shared tablet, not password-protected accounts. Android backups
+and device transfer are disabled; uninstalling the app removes its local data.
+The existing app updater may still contact GitHub independently of reading.
+
+Text size can be adjusted from 80% to 200%. Optional instruction and passage
+read-aloud uses an **installed offline English Android text-to-speech voice**.
+If one is unavailable, reading still works without audio; install an offline
+English voice using the device's text-to-speech settings to enable narration.
+Passage narration is recorded as support; reading instructions aloud is not.
+Speech stops when leaving the activity or putting the app in the background.
 
 ## Build and Install
 
