@@ -8,7 +8,11 @@ A native Kotlin / Jetpack Compose Android app for practicing math. Android 8.0
 1. **Home screen** – use the **Rewards** (gift box) and **Pokémon** (Poké Ball) buttons
    at the top, each with its image to the left of the label, to open
    your collections; Back returns you to the home screen without losing your setup choices.
-   Below the collections, choose **Practice Game** or **Rewards Game**.
+   Below the collections, four illustrated square buttons form a 2-by-2 subject grid:
+   **Math**, **Reading**, **Science**, and **Advanced**. Tap **Math** to choose
+   **Practice Game** or **Rewards Game**; **Back to subjects** or Android Back returns
+   to the subject grid. The other subjects show the toast **More Activities are coming soon!**
+   Their backgrounds are drawn with bundled vectors and work offline.
    **Practice Game** opens the question setup in a dialog. Choose **Addition**, **Subtraction**,
    **Multiplication** or **Division**, enter the **Minimum number** (defaults to 1)
    above the **Maximum number** (both 1 to 10,000; minimum cannot exceed maximum),
@@ -43,7 +47,7 @@ A native Kotlin / Jetpack Compose Android app for practicing math. Android 8.0
    ball, butterfly, fish, frog, bunny, cat, or robot. The same icon stays for every
    jump throughout the test; a new random selection happens only when the next test starts.
    Tap **Quit game** in the upper-right corner (or use Android Back) to leave an unfinished test.
-   Confirm **Quit** to return home without saving that game's progress, or choose
+   Confirm **Quit** to return to the Math games without saving that game's progress, or choose
    **Keep practicing** to continue.
 4. **Results** – after the chosen number of questions (correct or wrong), or
    the wrong-answer limit (or an optional time limit), whichever comes first, the practice stops and shows how many you
@@ -79,7 +83,7 @@ A native Kotlin / Jetpack Compose Android app for practicing math. Android 8.0
    If the wrong-answer limit ends practice before the last question, a dialog says
    **Nice try! You got {XX} right out of {TOTAL}**, using the chosen number of
    questions as the total. Press **View results** to dismiss it.
-   Press **Done** to return to the home screen.
+   Press **Done** to return to the Math games.
 
 The semi-transparent (50% opacity) settings button in the bottom-right corner opens
 **Settings**:

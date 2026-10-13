@@ -2,12 +2,14 @@
 
 package com.ssmath.app
 
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -18,6 +20,7 @@ import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -33,6 +36,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -74,6 +78,8 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -172,12 +178,12 @@ internal fun SettingsButton(onClick: () -> Unit, modifier: Modifier = Modifier) 
 @Composable
 private fun MainContent(model: MathViewModel) {
     var confirmQuit by rememberSaveable(model.screen) { mutableStateOf(false) }
-    BackHandler(enabled = model.screen != Screen.SETUP) {
+    BackHandler(enabled = model.screen != Screen.SETUP || model.mathGamesOpen) {
         when (model.screen) {
             Screen.READY -> model.backToSetup()
             Screen.PLAYING -> confirmQuit = true
             Screen.RESULTS -> model.done()
-            Screen.SETUP -> Unit
+            Screen.SETUP -> model.closeMathGames()
         }
     }
     when (model.screen) {
@@ -262,17 +268,25 @@ private fun HomeScreen(model: MathViewModel) {
                 Text("Pokémon", Modifier.width(IntrinsicSize.Max), textAlign = TextAlign.Center)
             }
         }
-        Column(Modifier.weight(1f).widthIn(max = 440.dp).fillMaxWidth()
-            .padding(bottom = 64.dp).verticalScroll(rememberScrollState()).padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)) {
-            Button(onClick = model::openPracticeGame,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("practice-game")) {
-                Text("Practice Game", textAlign = TextAlign.Center)
+        if (model.mathGamesOpen) {
+            Column(Modifier.weight(1f).widthIn(max = 440.dp).fillMaxWidth().testTag("math-games-screen")
+                .padding(bottom = 64.dp).verticalScroll(rememberScrollState()).padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)) {
+                TextButton(onClick = model::closeMathGames, modifier = Modifier.testTag("subjects-back")) {
+                    Text("Back to subjects")
+                }
+                Text("Math", style = MaterialTheme.typography.headlineMedium)
+                Button(onClick = model::openPracticeGame,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("practice-game")) {
+                    Text("Practice Game", textAlign = TextAlign.Center)
+                }
+                Button(onClick = model::openRewardsGame,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("rewards-game")) {
+                    Text("Rewards Game", textAlign = TextAlign.Center)
+                }
             }
-            Button(onClick = model::openRewardsGame,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("rewards-game")) {
-                Text("Rewards Game", textAlign = TextAlign.Center)
-            }
+        } else {
+            SubjectGrid(model::openMathGames, Modifier.weight(1f))
         }
     }
     when (model.setupDialog) {
@@ -302,6 +316,41 @@ private fun HomeScreen(model: MathViewModel) {
             }
         }
         null -> Unit
+    }
+}
+
+@Composable
+private fun SubjectGrid(onMath: () -> Unit, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val comingSoon = {
+        Toast.makeText(context, "More Activities are coming soon!", Toast.LENGTH_SHORT).show()
+    }
+    Column(modifier.widthIn(max = 440.dp).fillMaxWidth().testTag("subject-grid")
+        .padding(bottom = 64.dp).verticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            SubjectButton("Math", R.drawable.subject_math, onMath, Modifier.weight(1f))
+            SubjectButton("Reading", R.drawable.subject_reading, comingSoon, Modifier.weight(1f))
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            SubjectButton("Science", R.drawable.subject_science, comingSoon, Modifier.weight(1f))
+            SubjectButton("Advanced", R.drawable.subject_advanced, comingSoon, Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+private fun SubjectButton(label: String, background: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Button(onClick = onClick, modifier = modifier.aspectRatio(1f).testTag("subject-$label"),
+        shape = RoundedCornerShape(20.dp), contentPadding = PaddingValues(0.dp)) {
+        Box(Modifier.fillMaxSize()) {
+            Image(painterResource(background), contentDescription = null,
+                contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
+            Text(label, modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                .background(Color(0xF2112440)).padding(horizontal = 8.dp, vertical = 10.dp),
+                color = Color.White, style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        }
     }
 }
 
