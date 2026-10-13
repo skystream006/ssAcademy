@@ -50,6 +50,7 @@ class PokemonSettingsTest {
         val model = model()
         model.openSettings()
         compose.setContent { MathAppContent(model) }
+        compose.onNodeWithText("Rewards").performClick()
         val rewards = compose.onNodeWithTag("my-rewards").fetchSemanticsNode().boundsInRoot
         val pokemons = compose.onNodeWithTag("my-pokemons").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
         val history = compose.onNodeWithTag("practice-history").fetchSemanticsNode().boundsInRoot
@@ -148,6 +149,7 @@ class PokemonSettingsTest {
         compose.runOnIdle {
             model.openSettings()
         }
+        compose.onNodeWithText("Rewards").performScrollTo().performClick()
         compose.onNodeWithTag("my-pokemons").performClick()
         assertSectionCount(CelebrationCategory.POKEMONS,
             if (celebration.category == CelebrationCategory.POKEMONS) "1/157" else "0/157")
@@ -286,6 +288,7 @@ class PokemonSettingsTest {
         compose.onNodeWithText("Close").performClick()
         assertFalse(DebugLog.enabled.value)
         compose.onNodeWithContentDescription("Debug logging").performScrollTo().assertIsOff()
+        compose.onNodeWithText("Rewards").performScrollTo().performClick()
         compose.onNodeWithTag("my-pokemons").performScrollTo().performClick()
         assertSectionCount(CelebrationCategory.POKEMONS, "157/157")
         assertSectionCount(CelebrationCategory.OTHER, "5/5")

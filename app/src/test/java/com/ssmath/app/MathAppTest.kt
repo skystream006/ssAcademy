@@ -193,6 +193,7 @@ class MathAppTest {
                 compose.onNodeWithTag("home-screen").assertIsDisplayed()
 
                 compose.onNodeWithContentDescription("Settings").performClick()
+                compose.onNodeWithText("Rewards").performScrollTo().performClick()
                 compose.onNodeWithTag(settingsTag).performClick()
                 assertEquals(overlay, model.overlay)
                 compose.runOnIdle {
@@ -263,10 +264,12 @@ class MathAppTest {
         model.updateQuestionCount("3")
         compose.setContent { MathAppContent(model) }
         compose.onNodeWithContentDescription("Settings").performClick()
-        compose.onNodeWithTag("rewards-setup").performScrollTo().assert(hasText("Rewards Game Setup"))
+        compose.onNodeWithText("Math Settings").performScrollTo().performClick()
+        compose.onNodeWithTag("rewards-setup").performScrollTo().assert(hasText("Default Math Reward Game Settings"))
         compose.onNodeWithTag("rewards-setup").performScrollTo().performClick()
         compose.onNode(isDialog()).assertDoesNotExist()
         compose.onNodeWithTag("rewards-setup-screen").assertIsDisplayed()
+        compose.onNodeWithText("Default Math Reward Game Settings").assertIsDisplayed()
         Operation.entries.forEachIndexed { index, operation ->
             compose.onNodeWithTag("rewards-${operation.name}-first").performScrollTo()
                 .performTextReplacement((index + 1).toString())
@@ -321,6 +324,7 @@ class MathAppTest {
         val defaults = model.rewardsDefaults
         compose.setContent { MathAppContent(model) }
         compose.onNodeWithContentDescription("Settings").performClick()
+        compose.onNodeWithText("Math Settings").performScrollTo().performClick()
         compose.onNodeWithTag("rewards-setup").performScrollTo().performClick()
         compose.onNodeWithTag("rewards-ADDITION-first").performScrollTo().performTextReplacement("11")
         compose.onNodeWithTag("save-rewards-setup").performScrollTo().assertIsNotEnabled()
@@ -332,6 +336,7 @@ class MathAppTest {
         compose.onNodeWithText("Settings").assertIsDisplayed()
         assertEquals(Overlay.SETTINGS, model.overlay)
         assertEquals(defaults, model.rewardsDefaults)
+        compose.onNodeWithText("Math Settings").performScrollTo().performClick()
         compose.onNodeWithTag("rewards-setup").performScrollTo().performClick()
         compose.onNodeWithTag("rewards-ADDITION-first").performScrollTo().assertTextContains("1")
         compose.onNodeWithText("Back").performScrollTo().performClick()
@@ -378,7 +383,15 @@ class MathAppTest {
         }
         compose.onNodeWithText("Cancel").performScrollTo().performClick()
         compose.onNodeWithContentDescription("Settings").performClick()
+        compose.onNodeWithText("Math Settings").performScrollTo().performClick()
+        compose.onNodeWithTag("rewards-setup").performScrollTo().assertIsDisplayed()
+        val setupLabel = "Default Math Reward Game Settings"
+        assertFalse(textLayout(setupLabel).didOverflowWidth)
+        assertFalse(textLayout(setupLabel).didOverflowHeight)
         compose.onNodeWithTag("rewards-setup").performScrollTo().performClick()
+        compose.onNodeWithText(setupLabel).performScrollTo().assertIsDisplayed()
+        assertFalse(textLayout(setupLabel).didOverflowWidth)
+        assertFalse(textLayout(setupLabel).didOverflowHeight)
         Operation.entries.forEach {
             compose.onNodeWithTag("rewards-${it.name}-first").performScrollTo().assertIsDisplayed()
             compose.onNodeWithTag("rewards-${it.name}-second").performScrollTo().assertIsDisplayed()
@@ -704,6 +717,7 @@ class MathAppTest {
         val model = model()
         compose.setContent { MathAppContent(model) }
         compose.onNodeWithContentDescription("Settings").assertIsDisplayed().performClick()
+        compose.onNodeWithText("Math Settings").performScrollTo().performClick()
         compose.onNodeWithContentDescription("Show timer").performScrollTo().assertIsOff().performClick()
         assertTrue(model.showTimer)
         compose.onNodeWithContentDescription("Show timer").assertIsOn().performClick().assertIsOff()
@@ -734,15 +748,15 @@ class MathAppTest {
         assertFalse(model().showTimer)
     }
 
-    @Test fun correctAnswerVisibilityDefaultsOffAndIsRemembered() {
+    @Test fun correctAnswerVisibilityDefaultsOnAndIsRemembered() {
         val model = model()
-        assertFalse(model.showCorrectAnswers)
-        model.chooseShowCorrectAnswers(true)
         assertTrue(model.showCorrectAnswers)
+        model.chooseShowCorrectAnswers(false)
+        assertFalse(model.showCorrectAnswers)
         val restored = model()
-        assertTrue(restored.showCorrectAnswers)
-        restored.chooseShowCorrectAnswers(false)
-        assertFalse(model().showCorrectAnswers)
+        assertFalse(restored.showCorrectAnswers)
+        restored.chooseShowCorrectAnswers(true)
+        assertTrue(model().showCorrectAnswers)
     }
 
     @Test fun appearanceStartsCollapsedAndKeepsChoicesWhenToggledOrReopened() {
@@ -868,6 +882,7 @@ class MathAppTest {
 
     @Test fun settingsSliderUpdatesTextImmediatelyAndKeepsPracticeUsable() {
         val model = model()
+        model.chooseVerticalEquations(false)
         model.updateQuestionCount("1")
         compose.setContent { MathAppContent(model) }
         compose.onNodeWithTag("subject-Math").performClick()
@@ -1111,6 +1126,8 @@ class MathAppTest {
 
     @Test fun settingsCanShowAndHideWrongAnswerFeedbackDuringPractice() {
         val model = model()
+        model.chooseShowCorrectAnswers(false)
+        model.chooseVerticalEquations(false)
         model.selectOperation(Operation.ADDITION)
         model.submitSetup()
         compose.setContent { MathAppContent(model) }
@@ -1125,10 +1142,12 @@ class MathAppTest {
         assertEquals(Feedback("Not quite!", false), model.feedback)
 
         compose.onNodeWithContentDescription("Settings").performClick()
+        compose.onNodeWithText("Math Settings").performScrollTo().performClick()
         compose.onNodeWithContentDescription("Show correct answers").performScrollTo().assertIsOff().performClick().assertIsOn()
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithText(revealedFeedback).assertIsDisplayed()
         compose.onNodeWithContentDescription("Settings").performClick()
+        compose.onNodeWithText("Math Settings").performScrollTo().performClick()
         compose.onNodeWithContentDescription("Show correct answers").performScrollTo().performClick().assertIsOff()
         compose.onNodeWithContentDescription("Back").performClick()
 
@@ -1154,6 +1173,8 @@ class MathAppTest {
 
     @Test fun hiddenCorrectAnswersStayHiddenInResultsAndHistory() {
         val model = model()
+        model.chooseShowCorrectAnswers(false)
+        model.chooseVerticalEquations(false)
         model.selectOperation(Operation.ADDITION)
         model.updateQuestionCount("1")
         model.submitSetup()
@@ -1183,10 +1204,12 @@ class MathAppTest {
         assertEquals(1, saved.wrong)
 
         compose.onNodeWithContentDescription("Settings").performClick()
+        compose.onNodeWithText("Math Settings").performScrollTo().performClick()
         compose.onNodeWithContentDescription("Show correct answers").performScrollTo().performClick()
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithText("Correct answer: ${problem.answer}").assertIsDisplayed()
         compose.onNodeWithContentDescription("Settings").performClick()
+        compose.onNodeWithText("Math Settings").performScrollTo().performClick()
         compose.onNodeWithContentDescription("Show correct answers").performScrollTo().performClick()
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithText("Correct answer:", substring = true).assertDoesNotExist()
@@ -1200,6 +1223,7 @@ class MathAppTest {
         compose.onNodeWithText("Correct answer:", substring = true).assertDoesNotExist()
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithContentDescription("Back").performClick()
+        compose.onNodeWithText("Math Settings").performScrollTo().performClick()
         compose.onNodeWithContentDescription("Show correct answers").performScrollTo().performClick()
         compose.onNodeWithTag("practice-history").performClick()
         compose.onNodeWithText("Addition · 1 to 10").performClick()
