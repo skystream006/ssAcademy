@@ -280,7 +280,14 @@ class ReadingScreenTest {
                     compose.onNodeWithText(choices[index]).performSemanticsAction(
                         androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult
                     ) { it(layouts) }
-                    assertFalse("${choices[index]} at $percent%", layouts.single().hasVisualOverflow)
+                    val layout = layouts.single()
+                    assertFalse("${choices[index]} at $percent%", layout.didOverflowHeight)
+                    // The paragraph can retain a wider constraint than the wrap-content Text.
+                    repeat(layout.lineCount) { line ->
+                        assertFalse(layout.isLineEllipsized(line))
+                        assertTrue("${choices[index]} line $line at $percent%",
+                            layout.getLineLeft(line) >= 0 && layout.getLineRight(line) <= layout.size.width + 1)
+                    }
                     bounds
                 }
                 assertEquals(answers[0].top, answers[1].top, 1f)
