@@ -179,7 +179,7 @@ object ReadingEngine {
     fun field(data: ReadingData, key: String, value: String, expectedTurn: Int? = null): ReadingData = edit(data) { a ->
         val permitted = when (a.content.game) {
             ReadingGame.STUDIO -> key in studioKeys
-            ReadingGame.PARTNERS -> key == "turn" && a.turns.size < 4 && a.partnerId != null && expectedTurn == a.turns.size
+            ReadingGame.PARTNERS -> key == "turn" && a.turns.size < 4 && expectedTurn == a.turns.size
             else -> key == "answer" || (key == "evidence" && a.content.game == ReadingGame.DETECTIVE)
         }
         if (!permitted || a.earned(key) || (key == "answer" && a.earned("bonus"))) a
@@ -282,12 +282,12 @@ object ReadingEngine {
                 else award(a.copy(fields = a.fields + (key to a.fields.getValue(key).trim())), key, true, now,
                     rewardsEnabled, objective = false)
             }
-            key == "turn" && game == ReadingGame.PARTNERS && a.partnerId != null &&
+            key == "turn" && game == ReadingGame.PARTNERS &&
                 a.turns.size < 4 && expectedTurn == a.turns.size -> {
                 val text = a.fields["turn"]?.trim().orEmpty()
                 if (text.isEmpty()) a.copy(feedback = "Pick a sentence idea or type your own sentence.")
                 else {
-                    val author = if (a.turns.size % 2 == 0) a.ownerId else a.partnerId
+                    val author = if (a.turns.size % 2 == 0) a.ownerId else a.partnerId ?: a.ownerId
                     val next = a.copy(turns = a.turns + ReadingTurn(author, text), fields = a.fields - "turn",
                         feedback = "Sentence saved. Pass the story to the next reader.")
                     award(next, "participation:$author", true, now, rewardsEnabled, readerId = author, objective = false)
@@ -333,7 +333,7 @@ object ReadingEngine {
             val size = if (a.content.game == ReadingGame.PARTNERS) a.turns.size else a.content.tiles.size
             require(a.order.distinct().size == a.order.size && a.order.all { it in 0 until size })
             require(a.turns.size <= 4 && a.turns.withIndex().all { (i, turn) ->
-                turn.text.isNotBlank() && turn.readerId == if (i % 2 == 0) a.ownerId else a.partnerId
+                turn.text.isNotBlank() && turn.readerId == if (i % 2 == 0) a.ownerId else a.partnerId ?: a.ownerId
             })
             require(a.checkpoints.all { (key, c) ->
                 val validKeys = requiredKeys(a) + if (a.content.game == ReadingGame.SCRAMBLE) listOf("bonus") else emptyList()

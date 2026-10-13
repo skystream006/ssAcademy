@@ -121,6 +121,10 @@ internal val WrongRed = Color(0xFFD32F2F)
 fun MathApp(model: MathViewModel) {
     UpdateNotification()
     MathAppContent(model)
+    MathTheme(model.theme, model.mode, model.waveAppearance, if (model.skinsEnabled) model.skin else null,
+        textSizePercent = model.textSizePercent) {
+        AcademyWelcome(rememberReadingViewModel())
+    }
 }
 
 @Composable
@@ -154,12 +158,18 @@ internal fun MathAppContent(model: MathViewModel) {
                         Overlay.SUBJECT_HISTORY -> SubjectHistoryScreen(model)
                         Overlay.REWARDS -> RewardsScreen(model)
                         Overlay.POKEMONS -> PokemonsScreen(model)
-                        Overlay.READING -> ReadingScreen(
-                            onExit = model::closeOverlay,
-                            textSizePercent = model.textSizePercent,
-                            onTextSizeChange = model::chooseTextSize,
-                            disabledGames = model.disabledReadingGames
-                        )
+                        Overlay.READING_PROGRESS -> ReadingProgressScreen(model)
+                        Overlay.READING -> {
+                            ReadingScreen(
+                                onExit = model::closeOverlay,
+                                textSizePercent = model.textSizePercent,
+                                onTextSizeChange = model::chooseTextSize,
+                                disabledGames = model.disabledReadingGames,
+                                onRewards = model::openRewards,
+                                onPokemons = model::openPokemons
+                            )
+                            SettingsButton(model::openSettings, Modifier.align(Alignment.BottomEnd))
+                        }
                         null -> {
                             MainContent(model)
                             SettingsButton(model::openSettings, Modifier.align(Alignment.BottomEnd))
@@ -246,35 +256,8 @@ private fun DialogCard(content: @Composable ColumnScope.() -> Unit) {
 
 @Composable
 private fun HomeScreen(model: MathViewModel) {
-    val textMeasurer = rememberTextMeasurer()
-    val labelWidth = listOf("Rewards", "Pokémon").maxOf {
-        textMeasurer.measure(it, MaterialTheme.typography.labelLarge, softWrap = false).size.width
-    }
-    // Both buttons must fit the wider label, image, spacing, and horizontal padding.
-    val minimumButtonWidth = with(LocalDensity.current) { labelWidth.toDp() } + 24.dp + 8.dp + 16.dp
     Column(Modifier.fillMaxSize().testTag("home-screen"), horizontalAlignment = Alignment.CenterHorizontally) {
-        FlowRow(Modifier.widthIn(max = 440.dp).fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp), maxItemsInEachRow = 2) {
-            Button(onClick = model::openRewards,
-                modifier = Modifier.weight(1f).widthIn(min = minimumButtonWidth)
-                    .heightIn(min = 48.dp).testTag("home-rewards"),
-                contentPadding = PaddingValues(8.dp)) {
-                Image(painterResource(R.drawable.ic_gift_box), contentDescription = null,
-                    modifier = Modifier.size(24.dp).testTag("home-rewards-image"))
-                Spacer(Modifier.width(8.dp))
-                Text("Rewards", Modifier.width(IntrinsicSize.Max), textAlign = TextAlign.Center)
-            }
-            Button(onClick = model::openPokemons,
-                modifier = Modifier.weight(1f).widthIn(min = minimumButtonWidth)
-                    .heightIn(min = 48.dp).testTag("home-pokemons"),
-                contentPadding = PaddingValues(8.dp)) {
-                Image(painterResource(R.drawable.ic_pokeball), contentDescription = null,
-                    modifier = Modifier.size(24.dp).testTag("home-pokemons-image"))
-                Spacer(Modifier.width(8.dp))
-                Text("Pokémon", Modifier.width(IntrinsicSize.Max), textAlign = TextAlign.Center)
-            }
-        }
+        CollectionButtons(model::openRewards, model::openPokemons)
         if (model.mathGamesOpen) {
             Column(Modifier.weight(1f).widthIn(max = 440.dp).fillMaxWidth().testTag("math-games-screen")
                 .padding(bottom = 64.dp).verticalScroll(rememberScrollState()).padding(24.dp),
@@ -327,6 +310,38 @@ private fun HomeScreen(model: MathViewModel) {
 }
 
 @Composable
+internal fun CollectionButtons(onRewards: () -> Unit, onPokemons: () -> Unit, tagPrefix: String = "home") {
+    val textMeasurer = rememberTextMeasurer()
+    val labelWidth = listOf("Rewards", "Pokémon").maxOf {
+        textMeasurer.measure(it, MaterialTheme.typography.labelLarge, softWrap = false).size.width
+    }
+    // Both buttons must fit the wider label, image, spacing, and horizontal padding.
+    val minimumButtonWidth = with(LocalDensity.current) { labelWidth.toDp() } + 24.dp + 8.dp + 16.dp
+    FlowRow(Modifier.widthIn(max = 440.dp).fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp), maxItemsInEachRow = 2) {
+        Button(onClick = onRewards,
+            modifier = Modifier.weight(1f).widthIn(min = minimumButtonWidth)
+                .heightIn(min = 48.dp).testTag("$tagPrefix-rewards"),
+            contentPadding = PaddingValues(8.dp)) {
+            Image(painterResource(R.drawable.ic_gift_box), contentDescription = null,
+                modifier = Modifier.size(24.dp).testTag("$tagPrefix-rewards-image"))
+            Spacer(Modifier.width(8.dp))
+            Text("Rewards", Modifier.width(IntrinsicSize.Max), textAlign = TextAlign.Center)
+        }
+        Button(onClick = onPokemons,
+            modifier = Modifier.weight(1f).widthIn(min = minimumButtonWidth)
+                .heightIn(min = 48.dp).testTag("$tagPrefix-pokemons"),
+            contentPadding = PaddingValues(8.dp)) {
+            Image(painterResource(R.drawable.ic_pokeball), contentDescription = null,
+                modifier = Modifier.size(24.dp).testTag("$tagPrefix-pokemons-image"))
+            Spacer(Modifier.width(8.dp))
+            Text("Pokémon", Modifier.width(IntrinsicSize.Max), textAlign = TextAlign.Center)
+        }
+    }
+}
+
+@Composable
 private fun SubjectGrid(onMath: () -> Unit, onReading: () -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val comingSoon = {
@@ -347,8 +362,9 @@ private fun SubjectGrid(onMath: () -> Unit, onReading: () -> Unit, modifier: Mod
 }
 
 @Composable
-private fun SubjectButton(label: String, background: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Button(onClick = onClick, modifier = modifier.aspectRatio(1f).testTag("subject-$label"),
+internal fun SubjectButton(label: String, background: Int, onClick: () -> Unit, modifier: Modifier = Modifier,
+                           tag: String = "subject-$label") {
+    Button(onClick = onClick, modifier = modifier.aspectRatio(1f).testTag(tag),
         shape = RoundedCornerShape(20.dp), contentPadding = PaddingValues(0.dp)) {
         Box(Modifier.fillMaxSize()) {
             Image(painterResource(background), contentDescription = null,
