@@ -12,6 +12,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -82,7 +83,10 @@ class ReadingScreenTest {
                 if (welcome) AcademyWelcome(model)
             }
         }
-        compose.waitUntil(5_000) { model.data != null }
+        compose.waitUntil(5_000) {
+            shadowOf(Looper.getMainLooper()).idle()
+            model.data != null
+        }
     }
 
     private fun click(tag: String) {
@@ -420,7 +424,9 @@ class ReadingScreenTest {
         assertEquals(data.profiles, model.data?.profiles)
     }
 
-    @Test fun welcomeRequiresAValidNameAndSavesExactlyOneLocalUser() {
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun welcomeRequiresAValidNameAndSavesExactlyOneLocalUser() {
         show(ReadingData(), welcome = true)
         compose.onNodeWithText("Welcome to the Academy! What is your name?").assertIsDisplayed()
         compose.onNodeWithTag("academy-save-name").assertIsNotEnabled()
@@ -446,6 +452,63 @@ class ReadingScreenTest {
         assertEquals(data, model.data)
     }
 
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun welcomeAtLargeTextKeepsTheNameAcrossRecreation() {
+        model = ReadingViewModel(application, ReadingStore(file))
+        val restoration = StateRestorationTester(compose)
+        restoration.setContent { MathTheme(textSizePercent = 200) { AcademyWelcome(model) } }
+        waitFor { it.profiles.isEmpty() }
+        compose.onNodeWithTag("academy-name").performScrollTo().performTextInput("Ari")
+        restoration.emulateSavedInstanceStateRestore()
+        compose.onNodeWithTag("academy-name").performScrollTo().assertTextContains("Ari")
+        compose.onNodeWithTag("academy-save-name").performScrollTo().assertIsDisplayed().performClick()
+        waitFor { it.profile?.name == "Ari" }
+        assertEquals("Ari", ReadingStore(file).load().profiles.single().name)
+    }
+
+    @Test fun unreadableReadingDataDoesNotBlockTheRestOfTheAppWithOnboarding() {
+        file.writeText("unreadable reading data")
+        model = ReadingViewModel(application, ReadingStore(file))
+        compose.setContent { MathTheme { AcademyWelcome(model) } }
+        compose.waitUntil(5_000) {
+            shadowOf(Looper.getMainLooper()).idle()
+            model.storageError != null
+        }
+        compose.onNodeWithTag("academy-welcome").assertDoesNotExist()
+        assertNull(model.data)
+        assertEquals("unreadable reading data", file.readText())
+    }
+
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun failedNameSaveCanBeDeferredWithoutCreatingAnotherUserOnRetry() {
+        var failSave = true
+        var saved = ReadingData()
+        model = ReadingViewModel(application, object : ReadingStorage {
+            override fun load() = saved
+            override fun save(data: ReadingData) {
+                if (failSave) throw java.io.IOException("Storage full")
+                saved = data
+            }
+        })
+        compose.setContent { MathTheme { AcademyWelcome(model) } }
+        waitFor { it.profiles.isEmpty() }
+        compose.onNodeWithTag("academy-name").performTextInput("Ari")
+        compose.onNodeWithTag("academy-save-name").performClick()
+        compose.waitUntil(5_000) {
+            shadowOf(Looper.getMainLooper()).idle()
+            model.storageError != null
+        }
+        compose.onNodeWithText("Continue without reading").performClick()
+        compose.onNodeWithTag("academy-welcome").assertDoesNotExist()
+        assertTrue(saved.profiles.isEmpty())
+        compose.runOnIdle { failSave = false; model.retry() }
+        waitFor { it.profile?.name == "Ari" }
+        assertEquals(1, saved.profiles.size)
+        compose.onNodeWithTag("academy-welcome").assertDoesNotExist()
+    }
+
     @Test fun newAttemptRequiresExplicitDiscardConfirmationAndCancelKeepsDraft() {
         show(readingFixture().copy(page = ReadingPage.MENU))
         click("reading-game-MISSING")
@@ -460,7 +523,7 @@ class ReadingScreenTest {
         assertEquals(2, model.data?.attempts?.size)
     }
 
-    @Test fun partnersDialogSupportsFirstStartResumeAndArchivingWithoutAnotherReader() {
+    @Test fun partnersDialogSupportsFirstStartResumeAndCompletionWithoutAnotherReader() {
         val data = ReadingEngine.addProfile(ReadingData(), "Ari", "reader-a")
         show(data)
         click("reading-game-PARTNERS")
@@ -495,6 +558,23 @@ class ReadingScreenTest {
         assertEquals(1, model.data?.profiles?.size)
         assertEquals(1, model.data?.points("reader-a"))
         assertEquals(1, model.data?.sharedPoints("reader-a"))
+        assertEquals(model.data, ReadingStore(file).load())
+    }
+
+    @Test fun partnersNewAttemptArchivesDraftWithoutLosingParticipationPoints() {
+        var data = ReadingEngine.addProfile(ReadingData(), "Ari", "reader-a")
+        data = ReadingEngine.start(data, ReadingGame.PARTNERS, ReadingLevel.SPROUT, id = "old-story")
+        data = ReadingEngine.submit(ReadingEngine.field(data, "turn", "A fox set out.", expectedTurn = 0),
+            "turn", expectedTurn = 0)
+        show(data.copy(page = ReadingPage.MENU))
+        click("reading-game-PARTNERS")
+        compose.onNodeWithTag("reading-new-PARTNERS").performClick()
+        compose.onNodeWithTag("reading-confirm-new").performClick()
+        waitFor { it.active?.id != "old-story" }
+        assertTrue(requireNotNull(model.data).attempts.first().abandoned)
+        assertEquals(data.attempts.first().checkpoints, model.data?.attempts?.first()?.checkpoints)
+        assertEquals(1, model.data?.points("reader-a"))
+        assertEquals(1, model.data?.profiles?.size)
         assertEquals(model.data, ReadingStore(file).load())
     }
 

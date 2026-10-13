@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -46,6 +47,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
 
@@ -63,38 +65,35 @@ internal fun rememberReadingViewModel(): ReadingViewModel {
 
 @Composable
 internal fun AcademyWelcome(model: ReadingViewModel) {
-    val data = model.data
-    if (data?.profile != null) return
+    val data = model.data ?: return
+    var deferredForStorageError by rememberSaveable { mutableStateOf(false) }
+    if (data.profile != null || (deferredForStorageError && model.storageError != null)) return
     var name by rememberSaveable { mutableStateOf("") }
     val validName = name.trim().let { it.length in 1..40 && it.none(Char::isISOControl) }
-    AlertDialog(onDismissRequest = {},
-        properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
-        title = { Text("Welcome to the Academy! What is your name?") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Dialog(onDismissRequest = {},
+        properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false,
+            usePlatformDefaultWidth = false)) {
+        Card(Modifier.widthIn(max = 440.dp).fillMaxWidth().padding(16.dp).imePadding().testTag("academy-welcome")) {
+            Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Welcome to the Academy! What is your name?", style = MaterialTheme.typography.headlineSmall)
                 if (model.storageError != null) {
                     Text(requireNotNull(model.storageError))
-                } else if (data == null) {
-                    CircularProgressIndicator()
+                    TextButton(onClick = model::retry) { Text("Retry storage") }
+                    TextButton(onClick = { deferredForStorageError = true }) { Text("Continue without reading") }
                 } else {
                     Text("One name for all your games, saved only on this device.")
                     OutlinedTextField(name, { name = it.take(40) }, label = { Text("Your name") },
                         singleLine = true, enabled = !model.saving,
                         modifier = Modifier.fillMaxWidth().testTag("academy-name"))
                     model.message?.let { Text(it) }
+                    Button(onClick = { model.setName(name) },
+                        enabled = validName && !model.saving,
+                        modifier = Modifier.fillMaxWidth().testTag("academy-save-name")) { Text("Let's play") }
                 }
             }
-        },
-        confirmButton = {
-            if (model.storageError != null) {
-                TextButton(onClick = model::retry) { Text("Retry storage") }
-            } else {
-                TextButton(onClick = { model.setName(name) },
-                    enabled = data != null && validName && !model.saving,
-                    modifier = Modifier.testTag("academy-save-name")) { Text("Let's play") }
-            }
-        },
-        modifier = Modifier.testTag("academy-welcome"))
+        }
+    }
 }
 
 @Composable
@@ -278,33 +277,34 @@ private fun ReadingMenu(data: ReadingData, model: ReadingViewModel, onExit: () -
         Column(Modifier.weight(1f).widthIn(max = 600.dp).fillMaxWidth().testTag("reading-menu")
             .verticalScroll(rememberScrollState()).padding(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 64.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        ReadingHeading("Reading adventures")
-        Text("Read, imagine, and make stories. Take your time: hints and retries are always welcome.")
-        if (games.isEmpty()) Text("No reading games are active. Enable games in Settings > Reading Settings > Active Reading Games.")
-        if (profile == null) Text("Enter your name at the welcome screen to save your progress.")
-        else {
-            Text("Hello, ${profile.name}! ${data.points(profile.id)} reading points")
-            BoxWithConstraints(Modifier.fillMaxWidth()) {
-                val columns = if (maxWidth < 320.dp || LocalDensity.current.fontScale > 1.3f) 1 else 2
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    games.chunked(columns).forEach { row ->
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                            row.forEach { game ->
-                                SubjectButton(game.title, game.backgroundImage, {
-                                    stop()
-                                    if (game == ReadingGame.PARTNERS ||
-                                        ReadingEngine.draft(data, game, profile.level) != null) selectedGame = game
-                                    else model.act { ReadingEngine.start(it, game, requireNotNull(it.profile).level) }
-                                }, Modifier.weight(1f), "reading-game-${game.name}")
+            ReadingHeading("Reading adventures")
+            Text("Read, imagine, and make stories. Take your time: hints and retries are always welcome.")
+            if (games.isEmpty()) Text("No reading games are active. Enable games in Settings > Reading Settings > Active Reading Games.")
+            if (profile == null) Text("Enter your name at the welcome screen to save your progress.")
+            else {
+                Text("Hello, ${profile.name}! ${data.points(profile.id)} reading points")
+                BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    val labelSize = with(LocalDensity.current) { MaterialTheme.typography.titleMedium.fontSize.toDp() }
+                    val columns = if (maxWidth < 320.dp || labelSize > 22.dp) 1 else 2
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        games.chunked(columns).forEach { row ->
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                row.forEach { game ->
+                                    SubjectButton(game.title, game.backgroundImage, {
+                                        stop()
+                                        if (game == ReadingGame.PARTNERS ||
+                                            ReadingEngine.draft(data, game, profile.level) != null) selectedGame = game
+                                        else model.act { ReadingEngine.start(it, game, requireNotNull(it.profile).level) }
+                                    }, Modifier.weight(1f), "reading-game-${game.name}")
+                                }
+                                if (row.size < columns) Spacer(Modifier.weight(1f))
                             }
-                            if (row.size < columns) Spacer(Modifier.weight(1f))
                         }
                     }
                 }
+                Text("Private on this device. No leaderboard, timer, or lost points.")
             }
-            Text("Private on this device. No leaderboard, timer, or lost points.")
-        }
-        ReadingButton("Back to learning menu", "reading-exit") { stop(); onExit() }
+            ReadingButton("Back to learning menu", "reading-exit") { stop(); onExit() }
         }
     }
     selectedGame?.takeIf { it !in disabledGames }?.let { game ->

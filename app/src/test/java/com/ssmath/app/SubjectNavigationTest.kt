@@ -1,6 +1,7 @@
 package com.ssmath.app
 
 import android.app.Application
+import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -24,6 +25,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.Shadows.shadowOf
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
@@ -204,7 +206,10 @@ class SubjectNavigationTest {
         compose.onNodeWithTag("set-reading-level").performScrollTo().performClick()
         compose.onNodeWithTag("reading-level-SPROUT").assertIsSelected()
         compose.onNodeWithTag("reading-level-TRAIL").performScrollTo().performClick()
-        compose.waitUntil(5_000) { readingModel.data?.profile?.level == ReadingLevel.TRAIL && !readingModel.saving }
+        compose.waitUntil(5_000) {
+            shadowOf(Looper.getMainLooper()).idle()
+            readingModel.data?.profile?.level == ReadingLevel.TRAIL && !readingModel.saving
+        }
         compose.onNodeWithTag("reading-level-TRAIL").assertIsSelected()
         compose.onNodeWithText("Done").performClick()
         assertEquals(data.attempts, store.load().attempts)
@@ -241,7 +246,10 @@ class SubjectNavigationTest {
         compose.setContent { MathAppContent(model) }
         compose.waitUntil(5_000) { readingModel.data != null }
         compose.onNodeWithTag("reading-history-attempt-a").performScrollTo().performClick()
-        compose.waitUntil(5_000) { readingModel.data?.page == ReadingPage.ACTIVITY }
+        compose.waitUntil(5_000) {
+            shadowOf(Looper.getMainLooper()).idle()
+            readingModel.data?.page == ReadingPage.ACTIVITY
+        }
         assertEquals(Overlay.READING, model.overlay)
         compose.onNodeWithTag("reading-activity").assertIsDisplayed()
         now += 5_000
