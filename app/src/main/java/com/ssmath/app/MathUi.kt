@@ -431,7 +431,7 @@ private fun RewardsSetupScreen(model: MathViewModel) {
     Column(Modifier.fillMaxSize().testTag("rewards-setup-screen").verticalScroll(rememberScrollState())
         .padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         TextButton(onClick = model::cancelRewardsSetup) { Text("Back") }
-        Text("Rewards Game Setup", style = MaterialTheme.typography.headlineSmall)
+        Text("Default Math Reward Game Settings", style = MaterialTheme.typography.headlineSmall)
         Text("Save default number limits for each math type. Choose the number of questions when starting a Rewards Game. " +
             "Practice Game settings stay separate.")
         Operation.entries.forEach { operation ->
