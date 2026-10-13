@@ -147,6 +147,11 @@ internal fun MathAppContent(model: MathViewModel) {
                         Overlay.HISTORY -> HistoryScreen(model)
                         Overlay.REWARDS -> RewardsScreen(model)
                         Overlay.POKEMONS -> PokemonsScreen(model)
+                        Overlay.READING -> ReadingScreen(
+                            onExit = model::closeOverlay,
+                            textSizePercent = model.textSizePercent,
+                            onTextSizeChange = model::chooseTextSize
+                        )
                         null -> {
                             MainContent(model)
                             SettingsButton(model::openSettings, Modifier.align(Alignment.BottomEnd))
@@ -272,6 +277,10 @@ private fun HomeScreen(model: MathViewModel) {
             Button(onClick = model::openRewardsGame,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("rewards-game")) {
                 Text("Rewards Game", textAlign = TextAlign.Center)
+            }
+            Button(onClick = model::openReading,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("reading-games")) {
+                Text("Reading", textAlign = TextAlign.Center)
             }
         }
     }

@@ -23,7 +23,7 @@ enum class Screen { SETUP, READY, PLAYING, RESULTS }
 
 enum class SetupDialog { PRACTICE, REWARDS }
 
-enum class Overlay { SETTINGS, REWARDS_SETUP, HISTORY, REWARDS, POKEMONS }
+enum class Overlay { SETTINGS, REWARDS_SETUP, HISTORY, REWARDS, POKEMONS, READING }
 
 data class Feedback(val text: String, val correct: Boolean)
 
@@ -210,6 +210,11 @@ class MathViewModel(
 
     fun openPracticeGame() {
         if (screen == Screen.SETUP && overlay == null) setupDialog = SetupDialog.PRACTICE
+    }
+
+    fun openReading() {
+        if (screen != Screen.SETUP || overlay != null || setupDialog != null) return
+        overlay = Overlay.READING
     }
 
     fun openRewardsGame() {
