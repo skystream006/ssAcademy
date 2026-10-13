@@ -554,11 +554,9 @@ class MathAppTest {
 
         answer(model.game!!.problem.answer)
         compose.onNodeWithTag("points").assertTextEquals("Points: 1")
-        repeat(MAX_WRONG_ANSWERS - 1) { wrong ->
-            answer(model.game!!.problem.answer + 1)
-            compose.onNodeWithTag("wrong-tally").assertTextEquals("Wrong: ${wrong + 1}")
-            assertNull(model.earlyFinishMessage)
-        }
+        answer(model.game!!.problem.answer + 1)
+        compose.onNodeWithTag("wrong-tally").assertTextEquals("Wrong: 1")
+        assertNull(model.earlyFinishMessage)
         answer(model.game!!.problem.answer + 1)
 
         assertNull(model.celebration)
@@ -570,7 +568,7 @@ class MathAppTest {
             model.updateAnswer("0")
             model.submitAnswer()
         }
-        assertEquals(MAX_WRONG_ANSWERS + 1, model.lastResult!!.attempts.size)
+        assertEquals(3, model.lastResult!!.attempts.size)
         compose.onNodeWithTag("view-results").performClick()
         compose.onNode(isDialog()).assertDoesNotExist()
         assertNull(model.earlyFinishMessage)
@@ -1195,6 +1193,7 @@ class MathAppTest {
         model.chooseShowCorrectAnswers(false)
         model.chooseVerticalEquations(false)
         model.selectOperation(Operation.ADDITION)
+        model.updateQuestionCount("20")
         model.submitSetup()
         compose.setContent { MathAppContent(model) }
         compose.onNodeWithTag("start-button").performClick()
@@ -1223,7 +1222,7 @@ class MathAppTest {
         compose.onNodeWithText("Not quite!").assertIsDisplayed()
         compose.onNodeWithTag("points").assertTextEquals("Points: 0")
         compose.onNodeWithTag("wrong-tally").assertTextEquals("Wrong: 2")
-        compose.onNodeWithTag("question-progress").assertTextEquals("Question 3 of 10")
+        compose.onNodeWithTag("question-progress").assertTextEquals("Question 3 of 20")
         answer(model.game!!.problem.answer)
         compose.onNodeWithText("Correct! +1 point").assertIsDisplayed()
         compose.onNodeWithTag("points").assertTextEquals("Points: 1")
@@ -1389,30 +1388,30 @@ class MathAppTest {
     @Test fun gameProgressCountsCorrectAndWrongAnswersAndResetsForNewPractice() {
         val model = model()
         model.selectOperation(Operation.ADDITION)
-        model.updateQuestionCount("3")
+        model.updateQuestionCount("10")
         model.submitSetup()
         model.start()
         compose.setContent { MathAppContent(model) }
         val progress = compose.onNodeWithTag("game-progress")
-        progress.assertIsDisplayed().assertRangeInfoEquals(ProgressBarRangeInfo(0f, 0f..1f, 2))
+        progress.assertIsDisplayed().assertRangeInfoEquals(ProgressBarRangeInfo(0f, 0f..1f, 9))
         val initialIcon = model.progressIcon
         compose.onNodeWithTag("progress-icon").assertIsDisplayed()
             .assertContentDescriptionEquals("${initialIcon.label} progress icon")
         answer(model.game!!.problem.answer)
-        progress.assertRangeInfoEquals(ProgressBarRangeInfo(1f / 3, 0f..1f, 2))
+        progress.assertRangeInfoEquals(ProgressBarRangeInfo(1f / 10, 0f..1f, 9))
         assertEquals(initialIcon, model.progressIcon)
         compose.onNodeWithTag("progress-icon").assertContentDescriptionEquals("${initialIcon.label} progress icon")
         answer(model.game!!.problem.answer + 1)
         assertEquals(initialIcon, model.progressIcon)
-        progress.assertRangeInfoEquals(ProgressBarRangeInfo(2f / 3, 0f..1f, 2))
-            .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "2 of 3 questions answered"))
+        progress.assertRangeInfoEquals(ProgressBarRangeInfo(2f / 10, 0f..1f, 9))
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "2 of 10 questions answered"))
         compose.onNodeWithTag("progress-icon").assertContentDescriptionEquals("${initialIcon.label} progress icon")
         compose.runOnIdle { model.openSettings() }
         progress.assertDoesNotExist()
         compose.runOnIdle { model.closeOverlay() }
-        progress.assertRangeInfoEquals(ProgressBarRangeInfo(2f / 3, 0f..1f, 2))
+        progress.assertRangeInfoEquals(ProgressBarRangeInfo(2f / 10, 0f..1f, 9))
         compose.onNodeWithTag("progress-icon").assertContentDescriptionEquals("${initialIcon.label} progress icon")
-        answer(model.game!!.problem.answer)
+        repeat(8) { answer(model.game!!.problem.answer) }
         assertEquals(initialIcon, model.progressIcon)
         progress.assertDoesNotExist()
         compose.runOnIdle { model.dismissCelebration() }
@@ -1420,7 +1419,7 @@ class MathAppTest {
         compose.onNodeWithTag("practice-game").performClick()
         compose.onNodeWithTag("submit-setup").performScrollTo().performClick()
         compose.onNodeWithTag("start-button").performClick()
-        progress.assertRangeInfoEquals(ProgressBarRangeInfo(0f, 0f..1f, 2))
+        progress.assertRangeInfoEquals(ProgressBarRangeInfo(0f, 0f..1f, 9))
         compose.onNodeWithTag("progress-icon").assertContentDescriptionEquals("${model.progressIcon.label} progress icon")
     }
 
@@ -1568,12 +1567,13 @@ class MathAppTest {
     @Test fun reachingQuestionCountWithMistakesCelebratesAndShowsResults() {
         val model = model(Dispatchers.Unconfined)
         model.selectOperation(Operation.DIVISION)
-        model.updateQuestionCount("2")
+        model.updateQuestionCount("10")
         model.submitSetup()
         compose.setContent { MathAppContent(model) }
         compose.onNodeWithTag("start-button").performClick()
         answer(model.game!!.problem.answer + 1)
-        compose.onNodeWithTag("question-progress").assertTextEquals("Question 2 of 2")
+        compose.onNodeWithTag("question-progress").assertTextEquals("Question 2 of 10")
+        repeat(8) { answer(model.game!!.problem.answer) }
         assertNull(model.celebration)
         compose.onNodeWithTag("answer-input").performTextReplacement(model.game!!.problem.answer.toString())
         compose.mainClock.autoAdvance = false
@@ -1586,24 +1586,23 @@ class MathAppTest {
         compose.onNodeWithText("You answered every question correctly!").assertDoesNotExist()
         compose.onNodeWithTag("view-results").performClick()
         compose.mainClock.autoAdvance = true
-        compose.onNodeWithTag("result-correct").assertTextEquals("You got 1 right!")
+        compose.onNodeWithTag("result-correct").assertTextEquals("You got 9 right!")
         compose.onNodeWithText("Congratulations!").assertDoesNotExist()
         assertNull(model.celebration)
-        assertEquals(2, model.lastResult!!.attempts.size)
+        assertEquals(10, model.lastResult!!.attempts.size)
         assertEquals(1, model.lastResult!!.wrong)
         compose.waitUntil(5_000) { model.history.size == 1 && model.lastResult?.pokemonReward != null }
         assertEquals(model.lastResult, HistoryStore(File(application.filesDir, "practice_history.json")).load().single())
     }
 
-    @Test fun fifthWrongAnswerOnTheLastQuestionCelebratesInsteadOfStoppingEarly() {
+    @Test fun exceedingTenPercentWrongOnTheLastQuestionCelebratesInsteadOfStoppingEarly() {
         val model = model(Dispatchers.Unconfined)
         model.selectOperation(Operation.ADDITION)
         model.updateQuestionCount("6")
         model.submitSetup()
         compose.setContent { MathAppContent(model) }
         compose.onNodeWithTag("start-button").performClick()
-        answer(model.game!!.problem.answer)
-        repeat(MAX_WRONG_ANSWERS - 1) { answer(model.game!!.problem.answer + 1) }
+        repeat(5) { answer(model.game!!.problem.answer) }
         compose.onNodeWithTag("question-progress").assertTextEquals("Question 6 of 6")
         assertNull(model.celebration)
         assertNull(model.earlyFinishMessage)
@@ -1617,25 +1616,25 @@ class MathAppTest {
         compose.onNodeWithText("Congratulations!").assertIsDisplayed()
         compose.onNodeWithText("Nice try!", substring = true).assertDoesNotExist()
         assertEquals(6, model.lastResult!!.attempts.size)
-        assertEquals(MAX_WRONG_ANSWERS, model.lastResult!!.wrong)
+        assertEquals(1, model.lastResult!!.wrong)
         compose.waitUntil(5_000) { model.history.size == 1 && model.lastResult?.pokemonReward != null }
         assertEquals(model.lastResult, HistoryStore(File(application.filesDir, "practice_history.json")).load().single())
         compose.onNodeWithTag("view-results").performClick()
         compose.mainClock.autoAdvance = true
-        compose.onNodeWithTag("result-correct").assertTextEquals("You got 1 right!")
+        compose.onNodeWithTag("result-correct").assertTextEquals("You got 5 right!")
     }
 
-    @Test fun fifthWrongAnswerBeforeTheLastQuestionShowsZeroScoreAndDoesNotReplay() {
+    @Test fun exceedingTenPercentWrongBeforeTheLastQuestionShowsZeroScoreAndDoesNotReplay() {
         val model = model()
         model.selectOperation(Operation.ADDITION)
         model.updateQuestionCount("6")
         model.submitSetup()
         compose.setContent { MathAppContent(model) }
         compose.onNodeWithTag("start-button").performClick()
-        repeat(MAX_WRONG_ANSWERS) { answer(model.game!!.problem.answer + 1) }
+        answer(model.game!!.problem.answer + 1)
 
         assertNull(model.celebration)
-        assertEquals(5, model.lastResult!!.attempts.size)
+        assertEquals(1, model.lastResult!!.attempts.size)
         compose.onNode(isDialog()).assertIsDisplayed()
         compose.onNodeWithText("Nice try! You got 0 right out of 6").assertIsDisplayed()
         compose.onNodeWithTag("view-results").performClick()

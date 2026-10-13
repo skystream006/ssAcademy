@@ -303,8 +303,10 @@ class RewardsModelTest {
         assertNull(model.lastResult!!.prizeType)
         start(model, count = 100)
         repeat(10) { answer(model, correct = false) }
+        assertEquals(Screen.PLAYING, model.screen)
+        answer(model, correct = false)
         assertEquals(Screen.RESULTS, model.screen)
-        assertEquals(10, model.lastResult!!.attempts.size)
+        assertEquals(11, model.lastResult!!.attempts.size)
         assertNull(model.lastResult!!.prizeType)
     }
 

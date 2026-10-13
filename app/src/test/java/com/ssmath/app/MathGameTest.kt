@@ -197,19 +197,22 @@ class MathGameTest {
     }
 
     @Test fun wrongAnswersAlsoCountTowardsTheQuestionLimit() {
-        var game = GameState.start(Operation.ADDITION, 12, generator, 3)
+        var game = GameState.start(Operation.ADDITION, 12, generator, 20)
         game = game.answer(game.problem.answer + 1, generator)
-        game = game.answer(game.problem.answer, generator)
+        repeat(18) {
+            assertFalse(game.finished)
+            game = game.answer(game.problem.answer, generator)
+        }
         assertFalse(game.finished)
         game = game.answer(game.problem.answer + 1, generator)
         assertTrue(game.finished)
         assertFalse(game.perfect)
-        assertEquals(1, game.correct)
+        assertEquals(18, game.correct)
         assertEquals(2, game.wrong)
-        assertEquals(3, game.attempts.size)
+        assertEquals(20, game.attempts.size)
     }
 
-    @Test fun correctAnswersScoreAndWrongAnswersAreTalliedUntilFive() {
+    @Test fun correctAnswersScoreAndWrongAnswersAreTalliedUntilAboveTenPercent() {
         var game = GameState.start(Operation.MULTIPLICATION, 12, generator)
         repeat(3) {
             val problem = game.problem
@@ -219,18 +222,16 @@ class MathGameTest {
         }
         assertEquals(3, game.correct)
         assertEquals(0, game.wrong)
-        repeat(MAX_WRONG_ANSWERS - 1) {
-            game = game.answer(game.problem.answer + 1, generator)
-            assertFalse(game.finished)
-        }
-        assertEquals(MAX_WRONG_ANSWERS - 1, game.wrong)
+        game = game.answer(game.problem.answer + 1, generator)
+        assertFalse(game.finished)
+        assertEquals(1, game.wrong)
         val last = game.problem
         game = game.answer(last.answer + 1, generator)
         assertTrue(game.finished)
         assertFalse(game.perfect)
-        assertEquals(MAX_WRONG_ANSWERS, game.wrong)
+        assertEquals(2, game.wrong)
         assertEquals(3, game.correct)
-        assertEquals(3 + MAX_WRONG_ANSWERS, game.attempts.size)
+        assertEquals(5, game.attempts.size)
         assertEquals(last, game.attempts.last().problem)
         assertFalse(game.attempts.last().correct)
         val finished = game
@@ -244,18 +245,24 @@ class MathGameTest {
         assertEquals("1:00:01", formatDuration(3_601_000))
     }
 
-    @Test fun largerGamesRoundTheirWrongAnswerLimitUpToTenPercent() {
-        mapOf(25 to 5, 26 to 5, 49 to 5, 50 to 5, 51 to 6, 59 to 6, 60 to 6, 100 to 10).forEach { (count, limit) ->
-            var game = GameState.start(Operation.ADDITION, 10, generator, count)
-            assertEquals(limit, game.maxWrongAnswers)
-            repeat(limit - 1) {
-                game = game.answer(game.problem.answer + 1, generator)
+    @Test fun everyGameEndsOnlyWhenWrongAnswersExceedTenPercentOfTheTotal() {
+        Operation.entries.forEach { operation ->
+            mapOf(1 to 1, 2 to 1, 9 to 1, 10 to 2, 11 to 2, 15 to 2, 19 to 2, 20 to 3,
+                25 to 3, 26 to 3, 49 to 5, 50 to 6, 51 to 6, 59 to 6, 60 to 7,
+                99 to 10, 100 to 11, 101 to 11, 999 to 100, 1_000 to 101).forEach { (count, limit) ->
+                var game = GameState.start(operation, 10, generator, count)
+                assertEquals(limit, game.maxWrongAnswers)
                 assertFalse(game.finished)
+                repeat(limit - 1) {
+                    game = game.answer(game.problem.answer + 1, generator)
+                    assertFalse("Game with $count questions ended at ${game.wrong} wrong", game.finished)
+                }
+                game = game.answer(game.problem.answer + 1, generator)
+                assertTrue(game.finished)
+                assertEquals(limit, game.wrong)
+                assertEquals(limit, game.attempts.size)
+                assertThrows(IllegalStateException::class.java) { game.answer(0, generator) }
             }
-            game = game.answer(game.problem.answer + 1, generator)
-            assertTrue(game.finished)
-            assertEquals(limit, game.wrong)
-            assertThrows(IllegalStateException::class.java) { game.answer(0, generator) }
         }
     }
 }
