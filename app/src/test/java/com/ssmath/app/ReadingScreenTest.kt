@@ -47,10 +47,11 @@ class ReadingScreenTest {
     private val textSize = mutableIntStateOf(100)
 
     @Before fun clean() {
+        application.getSharedPreferences("settings", 0).edit().clear().commit()
         listOf(file, File(file.path + ".bak"), File(file.path + ".new")).forEach { it.delete() }
     }
 
-    private fun show(data: ReadingData, speech: Boolean = false, percent: Int = 100) {
+    private fun show(data: ReadingData, speech: Boolean = false, percent: Int = 100, history: Boolean = false) {
         val store = ReadingStore(file)
         store.load()
         store.save(data)
@@ -66,7 +67,8 @@ class ReadingScreenTest {
         })
         compose.setContent {
             MathTheme(textSizePercent = textSize.intValue) {
-                ReadingModule(model, { exited++ }, textSize.intValue, { textSize.intValue = it },
+                if (history) ReadingHistoryContent(model)
+                else ReadingModule(model, { exited++ }, textSize.intValue, { textSize.intValue = it },
                     narrationAvailable = speech, speak = { lastSpoken = it; speechWorks }, stop = { stopped++ })
             }
         }
@@ -148,6 +150,42 @@ class ReadingScreenTest {
         assertEquals(1, ReadingStore(file).load().points("reader-a"))
     }
 
+    @Test fun disablingReadingRewardsStillSavesCompletionWithoutShowingPointAwards() {
+        application.getSharedPreferences("settings", 0).edit().putBoolean("reading_rewards_enabled", false).commit()
+        show(readingFixture())
+        chooseCorrectAnswer()
+        click("reading-check-answer")
+        waitFor { it.active?.earned("answer") == true }
+        compose.onNodeWithText("Answer checkpoint saved").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Answer checkpoint earned · +1").assertDoesNotExist()
+        click("reading-finish")
+        waitFor { it.active?.finishedAt != null }
+        compose.onNodeWithText("Individual points this attempt: 0").performScrollTo().assertIsDisplayed()
+        assertEquals(0, ReadingStore(file).load().points("reader-a"))
+        assertEquals(1, model.data?.accuracy("reader-a")?.firstIndependent)
+    }
+
+    @Test fun settingsHistoryFiltersReadersWithoutChangingDraftOrSelectedProfile() {
+        val data = readingFixture()
+        show(data, history = true)
+        compose.onNodeWithTag("reading-history-entry-attempt-a").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("In progress · resumable").assertIsDisplayed()
+        click("reading-history-reader-reader-b")
+        compose.onNodeWithTag("reading-history-entry-attempt-a").assertDoesNotExist()
+        compose.onNodeWithText("No reading practice results yet for this reader.").performScrollTo().assertIsDisplayed()
+        click("reading-history-reader-reader-a")
+        compose.onNodeWithTag("reading-history-entry-attempt-a").performScrollTo().assertIsDisplayed()
+        assertEquals(data, model.data)
+        assertEquals(data, ReadingStore(file).load())
+    }
+
+    @Test fun settingsHistoryShowsClearEmptyStateWithoutCreatingAReader() {
+        show(ReadingData(), history = true)
+        compose.onNodeWithText("No reading practice results yet. Add a reader in Reading to get started.")
+            .assertIsDisplayed()
+        assertTrue(requireNotNull(model.data).profiles.isEmpty())
+    }
+
     @Test fun recommendedGamesAppearFirstInTheRequestedOrder() {
         show(readingFixture().copy(page = ReadingPage.MENU))
         val recommended = listOf("reading-game-MISSING", "reading-game-SEQUENCE", "reading-game-STUDIO")
@@ -195,6 +233,23 @@ class ReadingScreenTest {
         assertEquals(0, model.data?.accuracy("reader-a")?.attempted)
         assertTrue(requireNotNull(model.data).stories.single().text.contains("A kind fox"))
         assertEquals(model.data?.stories, ReadingStore(file).load().stories)
+    }
+
+    @Test fun storyStudioSavesEachPartWithoutClaimingDisabledPoints() {
+        application.getSharedPreferences("settings", 0).edit().putBoolean("reading_rewards_enabled", false).commit()
+        show(readingFixture(ReadingContent.forGame(ReadingGame.STUDIO, ReadingLevel.SPROUT).first()))
+        ReadingEngine.studioKeys.forEach { key ->
+            click("reading-studio-$key-0")
+            waitFor { !it.active?.fields?.get(key).isNullOrBlank() }
+            click("reading-save-$key")
+            waitFor { it.active?.earned(key) == true }
+            compose.onNodeWithText("$key saved").performScrollTo().assertIsDisplayed()
+            compose.onNodeWithText("$key saved · +1").assertDoesNotExist()
+        }
+        click("reading-finish")
+        waitFor { it.stories.size == 1 }
+        compose.onNodeWithText("Individual points this attempt: 0").performScrollTo().assertIsDisplayed()
+        assertEquals(0, ReadingStore(file).load().points("reader-a"))
     }
 
     @Test fun typedStoryDraftKeepsRapidCharactersAndRestoresAfterLeavingActivity() {

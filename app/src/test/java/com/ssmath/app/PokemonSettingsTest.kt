@@ -53,7 +53,7 @@ class PokemonSettingsTest {
         compose.onNodeWithText("Rewards").performClick()
         val rewards = compose.onNodeWithTag("my-rewards").fetchSemanticsNode().boundsInRoot
         val pokemons = compose.onNodeWithTag("my-pokemons").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
-        val history = compose.onNodeWithTag("practice-history").fetchSemanticsNode().boundsInRoot
+        val history = compose.onNodeWithText("Math Settings").fetchSemanticsNode().boundsInRoot
         assertTrue(rewards.bottom <= pokemons.top)
         assertTrue(pokemons.bottom <= history.top)
         compose.onNodeWithTag("my-pokemons").performClick()

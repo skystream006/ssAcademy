@@ -118,6 +118,7 @@ class EquationTest {
 
         compose.onNodeWithTag("done-button").performClick()
         compose.onNodeWithContentDescription("Settings").performClick()
+        compose.onNodeWithText("Math Settings").performScrollTo().performClick()
         compose.onNodeWithTag("practice-history").performClick()
         compose.onNodeWithText("Multiplication · 1 to 10").performClick()
         compose.onNodeWithContentDescription(description).performScrollTo().assertIsDisplayed()

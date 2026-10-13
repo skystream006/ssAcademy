@@ -41,19 +41,20 @@ class RewardsSettingsTest {
         math.assertHasClickAction().assert(collapsed)
         compose.onNodeWithTag("my-rewards").assertDoesNotExist()
         compose.onNodeWithTag("my-pokemons").assertDoesNotExist()
-        compose.onNodeWithContentDescription("Rewards system").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Math Rewards System").assertDoesNotExist()
         compose.onNodeWithContentDescription("Show timer").assertDoesNotExist()
         compose.onNodeWithContentDescription("Show correct answers").assertDoesNotExist()
         compose.onNodeWithContentDescription("Vertical equations").assertDoesNotExist()
         compose.onNodeWithTag("rewards-setup").assertDoesNotExist()
-        compose.onNodeWithTag("practice-history").assertIsDisplayed()
+        compose.onNodeWithTag("practice-history").assertDoesNotExist()
 
         rewards.performClick().assert(expanded)
         compose.onNodeWithTag("my-rewards").assertIsDisplayed()
         compose.onNodeWithTag("my-pokemons").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Rewards system").performScrollTo()
-            .assertIsOn().performClick().assertIsOff()
         math.assert(collapsed).performScrollTo().performClick().assert(expanded)
+        compose.onNodeWithContentDescription("Math Rewards System").performScrollTo()
+            .assertIsOn().performClick().assertIsOff()
+        compose.onNodeWithTag("practice-history").performScrollTo().assert(hasText("Math Practice History"))
         compose.onNodeWithContentDescription("Show timer").performScrollTo().assertIsOff()
         compose.onNodeWithContentDescription("Show correct answers").performScrollTo()
             .assertIsOn().performClick().assertIsOff()
@@ -66,16 +67,18 @@ class RewardsSettingsTest {
         rewards.performScrollTo().performClick().assert(collapsed)
         compose.onNodeWithTag("my-rewards").assertDoesNotExist()
         compose.onNodeWithTag("my-pokemons").assertDoesNotExist()
-        compose.onNodeWithContentDescription("Rewards system").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Math Rewards System").assertExists()
         math.assert(expanded).performScrollTo().performClick().assert(collapsed)
+        compose.onNodeWithContentDescription("Math Rewards System").assertDoesNotExist()
+        compose.onNodeWithTag("practice-history").assertDoesNotExist()
         compose.onNodeWithContentDescription("Show timer").assertDoesNotExist()
         compose.onNodeWithContentDescription("Show correct answers").assertDoesNotExist()
         compose.onNodeWithContentDescription("Vertical equations").assertDoesNotExist()
         compose.onNodeWithTag("rewards-setup").assertDoesNotExist()
 
         rewards.performScrollTo().performClick()
-        compose.onNodeWithContentDescription("Rewards system").performScrollTo().assertIsOff()
         math.performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Math Rewards System").performScrollTo().assertIsOff()
         compose.onNodeWithContentDescription("Show correct answers").performScrollTo().assertIsOff()
         compose.onNodeWithContentDescription("Vertical equations").performScrollTo().assertIsOff()
         val restored = MathViewModel(application)
@@ -117,6 +120,51 @@ class RewardsSettingsTest {
         assertFalse(model.verticalEquations)
     }
 
+    @Test fun subjectRewardPreferencesAreIndependentAndPreserveLegacyMathChoice() {
+        application.getSharedPreferences("settings", 0).edit().putBoolean("rewards_enabled", false).commit()
+        val model = MathViewModel(application)
+        assertFalse(model.rewardsEnabled)
+        Subject.entries.filter { it != Subject.MATH }.forEach { assertTrue(model.rewardsEnabled(it)) }
+        Subject.entries.forEach { subject ->
+            model.chooseSubjectRewardsEnabled(subject, false)
+            val before = Subject.entries.associateWith { model.rewardsEnabled(it) }
+            model.chooseSubjectRewardsEnabled(subject, true)
+            Subject.entries.forEach { other ->
+                assertEquals(other == subject || before.getValue(other), model.rewardsEnabled(other))
+            }
+            model.chooseSubjectRewardsEnabled(subject, false)
+        }
+        val restored = MathViewModel(application)
+        Subject.entries.forEach { assertFalse(restored.rewardsEnabled(it)) }
+        restored.chooseRewardsEnabled(true)
+        assertTrue(restored.rewardsEnabled)
+        assertFalse(restored.rewardsEnabled(Subject.READING))
+    }
+
+    @Test fun eachSubjectHasItsOwnCollapsibleRewardsAndHistorySettings() {
+        val model = MathViewModel(application)
+        compose.setContent { MathTheme { SettingsScreen(model) } }
+        Subject.entries.forEach { subject ->
+            val section = compose.onNodeWithText("${subject.label} Settings")
+            val toggle = compose.onNodeWithContentDescription("${subject.label} Rewards System")
+            val history = compose.onNodeWithText("${subject.label} Practice History")
+            toggle.assertDoesNotExist()
+            history.assertDoesNotExist()
+            section.performScrollTo().performClick()
+            toggle.performScrollTo().assertIsOn().performClick().assertIsOff()
+            history.performScrollTo().assertIsDisplayed().assertHasClickAction()
+            Subject.entries.filter { it != subject }.forEach { other ->
+                assertTrue(model.rewardsEnabled(other))
+            }
+            toggle.performScrollTo().performClick().assertIsOn()
+            section.performScrollTo().performClick()
+            toggle.assertDoesNotExist()
+            history.assertDoesNotExist()
+        }
+        compose.onNodeWithContentDescription("Rewards system").assertDoesNotExist()
+        compose.onNodeWithText("Practice History").assertDoesNotExist()
+    }
+
     @Test fun myRewardsIsBelowUpdatesAndReturnsToSettings() {
         val model = MathViewModel(application)
         model.openSettings()
@@ -124,7 +172,7 @@ class RewardsSettingsTest {
         compose.onNodeWithText("Rewards").performClick()
         val updates = compose.onNodeWithText("App updates").fetchSemanticsNode().boundsInRoot
         val rewards = compose.onNodeWithTag("my-rewards").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
-        val history = compose.onNodeWithTag("practice-history").fetchSemanticsNode().boundsInRoot
+        val history = compose.onNodeWithText("Math Settings").fetchSemanticsNode().boundsInRoot
         assertTrue(updates.bottom <= rewards.top)
         assertTrue(rewards.bottom <= history.top)
         compose.onNodeWithTag("my-rewards").performClick()
@@ -138,11 +186,10 @@ class RewardsSettingsTest {
     @Test fun timeLimitRequiresBothSwitchesAndRemembersSelection() {
         val model = MathViewModel(application)
         compose.setContent { MathTheme { SettingsScreen(model) } }
-        compose.onNodeWithText("Rewards").performClick()
+        compose.onNodeWithText("Math Settings").performScrollTo().performClick()
         compose.onNodeWithText("Earn prize fragments in Rewards Game by completing 25 or more questions with over 90% correct")
             .performScrollTo().assertIsDisplayed()
-        compose.onNodeWithContentDescription("Rewards system").assertIsOn()
-        compose.onNodeWithText("Math Settings").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Math Rewards System").performScrollTo().assertIsOn()
         compose.onNodeWithContentDescription("Show correct answers").performScrollTo().assertIsOn()
         compose.onNodeWithTag("time-limit").assertDoesNotExist()
         compose.onNodeWithContentDescription("Show timer").performScrollTo().assertIsOff().performClick()
@@ -153,7 +200,7 @@ class RewardsSettingsTest {
         compose.onNodeWithTag("time-limit").assertDoesNotExist()
         compose.onNodeWithContentDescription("Show timer").performClick()
         compose.onNodeWithTag("time-limit").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithContentDescription("Rewards system").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Math Rewards System").performScrollTo().performClick()
         compose.onNodeWithTag("time-limit").assertDoesNotExist()
         val restored = MathViewModel(application)
         assertFalse(restored.rewardsEnabled)

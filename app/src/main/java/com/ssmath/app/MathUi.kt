@@ -151,6 +151,7 @@ internal fun MathAppContent(model: MathViewModel) {
                         Overlay.SETTINGS -> SettingsScreen(model)
                         Overlay.REWARDS_SETUP -> RewardsSetupScreen(model)
                         Overlay.HISTORY -> HistoryScreen(model)
+                        Overlay.SUBJECT_HISTORY -> SubjectHistoryScreen(model)
                         Overlay.REWARDS -> RewardsScreen(model)
                         Overlay.POKEMONS -> PokemonsScreen(model)
                         Overlay.READING -> ReadingScreen(
@@ -277,7 +278,7 @@ private fun HomeScreen(model: MathViewModel) {
             Column(Modifier.weight(1f).widthIn(max = 440.dp).fillMaxWidth().testTag("math-games-screen")
                 .padding(bottom = 64.dp).verticalScroll(rememberScrollState()).padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)) {
-                TextButton(onClick = model::closeMathGames, modifier = Modifier.testTag("subjects-back")) {
+                Button(onClick = model::closeMathGames, modifier = Modifier.testTag("subjects-back")) {
                     Text("Back to subjects")
                 }
                 Text("Math", style = MaterialTheme.typography.headlineMedium)
@@ -404,13 +405,13 @@ private fun RewardsCriteria(model: MathViewModel) {
         Text("Obtainable rewards (requires 90% correct)", style = MaterialTheme.typography.titleMedium)
         Text("• Pokémon: 15 or more questions.")
         if (!model.rewardsEnabled) {
-            Text("Prize fragments are unavailable while the Rewards system is OFF.")
+            Text("Prize fragments are unavailable while Math Rewards System is OFF.")
         }
         RewardTier.entries.forEach { tier ->
             val available = RewardType.entries.filter { it.tier == tier && it !in model.disabledRewards }
             Text("• ${tier.label}: ${tier.questionCountLabel}", style = MaterialTheme.typography.titleSmall)
             if (!model.rewardsEnabled) {
-                Text("Unavailable: Rewards system is OFF.")
+                Text("Unavailable: Math Rewards System is OFF.")
             }
             if (available.isEmpty()) {
                 Text("Unavailable: no rewards enabled in this tier.")

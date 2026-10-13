@@ -6,6 +6,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
@@ -26,6 +28,7 @@ class SubjectNavigationTest {
     private val application get() = ApplicationProvider.getApplicationContext<Application>()
 
     @Before fun setup() {
+        DebugLog.initialize(application)
         application.getSharedPreferences("settings", 0).edit().clear().commit()
         File(application.filesDir, "practice_history.json").delete()
         listOf("reading_private.json", "reading_private.json.bak", "reading_private.json.new").forEach {
@@ -34,6 +37,52 @@ class SubjectNavigationTest {
     }
 
     private fun model() = MathViewModel(application, ioDispatcher = Dispatchers.Unconfined)
+
+    @Test fun subjectHistoriesReturnToSettingsAndNeverShowMathResults() {
+        val model = model()
+        model.openSettings()
+        compose.setContent { MathAppContent(model) }
+        Subject.entries.forEach { subject ->
+            compose.onNodeWithText("${subject.label} Settings").performScrollTo().performClick()
+            compose.onNodeWithText("${subject.label} Practice History").performScrollTo().performClick()
+            compose.onNodeWithText("${subject.label} Practice History").assertIsDisplayed()
+            if (subject == Subject.READING) {
+                compose.waitUntil(5_000) {
+                    compose.onAllNodesWithTag("reading-practice-history-screen").fetchSemanticsNodes().isNotEmpty()
+                }
+            }
+            assertEquals(if (subject == Subject.MATH) Overlay.HISTORY else Overlay.SUBJECT_HISTORY, model.overlay)
+            if (subject == Subject.SCIENCE || subject == Subject.ADVANCED) {
+                compose.onNodeWithText("No ${subject.label.lowercase()} practice results yet. More activities are coming soon.")
+                    .assertIsDisplayed()
+            }
+            compose.onNodeWithContentDescription("Back").performClick()
+            assertEquals(Overlay.SETTINGS, model.overlay)
+        }
+    }
+
+    @Test fun subjectHistoryDoesNotResumeOrResetAnActiveMathGame() {
+        var now = 0L
+        val model = MathViewModel(application, clock = { now }, ioDispatcher = Dispatchers.Unconfined)
+        model.selectOperation(Operation.ADDITION)
+        model.submitSetup()
+        model.start()
+        now = 1_000
+        model.openSettings()
+        val game = model.game
+        val elapsed = model.elapsedMs()
+        Subject.entries.forEach {
+            model.openSubjectHistory(it)
+            now += 1_000
+            assertEquals(elapsed, model.elapsedMs())
+            assertEquals(game, model.game)
+            model.closeOverlay()
+            assertEquals(Overlay.SETTINGS, model.overlay)
+        }
+        model.closeOverlay()
+        now += 1_000
+        assertEquals(elapsed + 1_000, model.elapsedMs())
+    }
 
     @Test fun readingReturnsHomeWithoutChangingMathSetupOrRewards() {
         val model = model()

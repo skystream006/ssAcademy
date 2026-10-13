@@ -57,6 +57,41 @@ fun ReadingScreen(onExit: () -> Unit, textSizePercent: Int, onTextSizeChange: (I
 }
 
 @Composable
+fun ReadingHistoryScreen() {
+    val activity = requireNotNull(LocalContext.current.readingActivity())
+    val model: ReadingViewModel = viewModel(viewModelStoreOwner = activity)
+    ReadingHistoryContent(model)
+}
+
+@Composable
+internal fun ReadingHistoryContent(model: ReadingViewModel) {
+    val data = model.data
+    var readerId by rememberSaveable { mutableStateOf<String?>(null) }
+    ReadingColumn("reading-practice-history-screen") {
+        if (model.storageError != null) {
+            Text(requireNotNull(model.storageError), Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+            ReadingButton("Retry storage", "reading-retry", action = model::retry)
+        } else if (data == null) {
+            CircularProgressIndicator()
+            Text("Opening your private reading shelf…")
+        } else if (data.profiles.isEmpty()) {
+            Text("No reading practice results yet. Add a reader in Reading to get started.")
+        } else {
+            val profile = data.profiles.find { it.id == readerId } ?: data.profile ?: data.profiles.first()
+            Text("Choose a reader")
+            data.profiles.forEach { reader ->
+                ReadingChoice(reader.name, "reading-history-reader-${reader.id}", reader.id == profile.id) {
+                    readerId = reader.id
+                }
+            }
+            Text("Reader: ${profile.name}. Only this reader's history and shared participation are shown.")
+            Text("Individual points: ${data.points(profile.id)} · Finished activities: ${data.completions(profile.id)}")
+            ReadingHistoryEntries(data, profile.id)
+        }
+    }
+}
+
+@Composable
 internal fun ReadingModule(
     model: ReadingViewModel,
     onExit: () -> Unit,
@@ -264,7 +299,7 @@ private fun ReadingActivityScreen(data: ReadingData, model: ReadingViewModel, a:
         }
         if (instructionsUnavailable) Text("Instruction audio is unavailable. You can still read the instructions above.")
         Text("Instruction audio does not count as passage narration.")
-        Text("Draft saved automatically. +1 per checkpoint; hints and retries never remove points.")
+        Text("Draft saved automatically. +1 per checkpoint when Reading Rewards System is on; hints and retries never remove points.")
         when (content.game) {
             ReadingGame.MISSING, ReadingGame.CAPTION -> {
                 content.passage.forEach { Text(it, style = MaterialTheme.typography.headlineSmall) }
@@ -273,11 +308,12 @@ private fun ReadingActivityScreen(data: ReadingData, model: ReadingViewModel, a:
             ReadingGame.SCRAMBLE, ReadingGame.SEQUENCE -> {
                 ReadingTiles(a, model, content.tiles, content.eventPictures)
                 ReadingButton("Check order", "reading-check-order", !a.earned("order") && a.order.size == content.tiles.size) {
-                    model.act { ReadingEngine.submit(it, "order") }
+                    model.submit("order")
                 }
                 if (a.earned("order")) {
-                    Text("Order checkpoint earned · +1")
-                    if (content.game == ReadingGame.SCRAMBLE) Text("Optional bonus · answer for +1, or finish now.")
+                    Text(if (a.checkpoints["order"]?.awardedPoint == true)
+                        "Order checkpoint earned · +1" else "Order checkpoint saved")
+                    if (content.game == ReadingGame.SCRAMBLE) Text("Optional bonus · answer for an extra checkpoint, or finish now.")
                     ReadingQuestionView(a, model, if (content.game == ReadingGame.SCRAMBLE) "bonus" else "answer")
                 }
             }
@@ -294,7 +330,7 @@ private fun ReadingActivityScreen(data: ReadingData, model: ReadingViewModel, a:
                     Text("Now tap the sentence that proves your answer.")
                     ReadingButton("Check evidence", "reading-check-evidence",
                         !a.earned("evidence") && a.fields["evidence"] != null) {
-                        model.act { ReadingEngine.submit(it, "evidence") }
+                        model.submit("evidence")
                     }
                 }
             }
@@ -351,9 +387,10 @@ private fun ReadingQuestionView(a: ReadingAttempt, model: ReadingViewModel, key:
     }
     ReadingButton(if (key == "bonus") "Check bonus" else "Check answer", "reading-check-$key",
         !a.earned(key) && a.fields["answer"] != null) {
-        model.act { ReadingEngine.submit(it, key) }
+        model.submit(key)
     }
-    if (a.earned(key)) Text("Answer checkpoint earned · +1")
+    if (a.earned(key)) Text(if (a.checkpoints[key]?.awardedPoint == true)
+        "Answer checkpoint earned · +1" else "Answer checkpoint saved")
 }
 
 @Composable
@@ -421,9 +458,10 @@ private fun ReadingStudio(a: ReadingAttempt, model: ReadingViewModel) {
             }
             ReadingDraftText(editor, key, "Your $key idea", !a.earned(key))
             ReadingButton("Save $key", "reading-save-$key", !a.earned(key) && !a.fields[key].isNullOrBlank()) {
-                model.act { ReadingEngine.submit(it, key) }
+                model.submit(key)
             }
-            if (a.earned(key)) Text("$key saved · +1")
+            if (a.earned(key)) Text(if (a.checkpoints[key]?.awardedPoint == true)
+                "$key saved · +1" else "$key saved")
         } else Text("Save the previous part to unlock this checkpoint.")
     }
     if (ReadingEngine.ready(a)) {
@@ -447,7 +485,7 @@ private fun ReadingPartners(data: ReadingData, a: ReadingAttempt, model: Reading
         return
     }
     Text("Reader 2: ${data.name(a.partnerId)}")
-    Text("Each reader earns 1 individual participation point, once. Finishing earns 1 shared point, " +
+    Text("When Reading Rewards System is on, each reader earns 1 individual participation point, once. Finishing earns 1 shared point, " +
         "recorded once for the team and never added to either individual's points.")
     a.turns.forEachIndexed { index, turn ->
         Text("${index + 1}. ${data.name(turn.readerId)}: ${turn.text}")
@@ -475,7 +513,7 @@ private fun ReadingPartners(data: ReadingData, a: ReadingAttempt, model: Reading
             ReadingDraftText(editor, "turn", "Your sentence", true)
         }
         ReadingButton("Save sentence and pass turn", "reading-save-turn", !a.fields["turn"].isNullOrBlank()) {
-            stop(); model.act { ReadingEngine.submit(it, "turn", expectedTurn = a.turns.size) }
+            stop(); model.submit("turn", expectedTurn = a.turns.size)
         }
     } else {
         Text("Arrange your four sentences and reread them together.")
@@ -486,7 +524,7 @@ private fun ReadingPartners(data: ReadingData, a: ReadingAttempt, model: Reading
                 model.act { ReadingEngine.reread(it) }
             }
             ReadingButton("Complete our shared story", "reading-shared", a.reread && !a.earned("shared")) {
-                model.act { ReadingEngine.submit(it, "shared") }
+                model.submit("shared")
             }
         }
     }
@@ -499,8 +537,8 @@ private fun ReadingSummary(data: ReadingData, model: ReadingViewModel, a: Readin
         ReadingPictureView(ReadingPicture("📖 🌱 ✨", "An open book with a growing shoot and sparkling stars"))
         ReadingHeading("Your reading is growing!")
         Text("Congratulations on finishing ${a.content.game.title}.")
-        Text("Individual points this attempt: ${a.checkpoints.values.count { it.earned && !it.shared }}")
-        if (a.partnerId != null) Text("Shared completion points: 1, stored once for the team. " +
+        Text("Individual points this attempt: ${a.checkpoints.values.count { it.awardedPoint && !it.shared }}")
+        if (a.partnerId != null) Text("Shared completion points: ${a.checkpoints.values.count { it.awardedPoint && it.shared }}, stored once for the team. " +
             "Each reader's participation is credited only to that reader.")
         val checks = a.checkpoints.values.filter { it.objective && it.tries > 0 }
         if (checks.isNotEmpty()) {
@@ -534,10 +572,11 @@ private fun ReadingProgress(data: ReadingData, model: ReadingViewModel, textSize
         Text("Reader: ${profile.name}. Only this reader's history and shared participation are shown.")
         Text("Individual points: ${data.points(profile.id)} · Finished activities: ${data.completions(profile.id)}")
         Text("Shared team completions: ${data.sharedCompletions(profile.id)} (not individual points)")
+        Text("Shared completion points: ${data.sharedPoints(profile.id)}")
         val accuracy = data.accuracy(profile.id)
         Text("First-try independent accuracy: ${accuracy.firstIndependent} / ${accuracy.attempted}")
         Text("A first incorrect try counts immediately, even before completion. Hints or successful passage narration " +
-            "before a first answer prevent independent credit. Retries and supported completions still earn points. " +
+            "before a first answer prevent independent credit. Retries and supported completions earn points when Reading Rewards System is on. " +
             "Creative writing and partner participation are not accuracy questions.")
         Text("Supported completions: ${accuracy.supportedCompletions} · Retried completions: ${accuracy.retriedCompletions}")
         Text("Support and retry counts can overlap. Eventual success is not called mastery.")
@@ -565,26 +604,10 @@ private fun ReadingProgress(data: ReadingData, model: ReadingViewModel, textSize
         if (data.milestones(profile.id).isEmpty()) Text("Your first completed activity will begin this collection.")
         data.milestones(profile.id).forEach { Text("✦ $it") }
         HorizontalDivider()
-        Text("Dated activity history", style = MaterialTheme.typography.titleLarge)
-        data.attemptsFor(profile.id).asReversed().forEach { a ->
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("${a.content.game.title} · ${a.content.title} · ${a.content.level.name.lowercase()}")
-                    Text("Started ${formatFinishedAt(a.startedAt)}")
-                    Text(a.finishedAt?.let { "Finished ${formatFinishedAt(it)}" } ?:
-                        if (a.abandoned) "Archived draft" else "In progress · resumable")
-                    val checks = a.checkpoints.values.filter { it.readerId == profile.id }
-                    Text("${checks.count { it.earned }} individual points · ${a.hints} hints · ${a.narrations} narrations")
-                    val objective = checks.filter { it.objective && it.tries > 0 }
-                    if (objective.isNotEmpty()) Text("${objective.count { it.independent }}/${objective.size} first-try independent · " +
-                        "${objective.count { it.earned && it.supportedAtCompletion }} supported · ${objective.count { it.retried }} retried")
-                    if (!a.abandoned) ReadingChoice(if (a.finishedAt != null) "Read summary" else "Resume draft",
-                        "reading-history-${a.id}") {
-                        stop(); model.act { ReadingEngine.resume(it, a.id) }
-                    }
-                }
-            }
+        ReadingHistoryEntries(data, profile.id) { attempt ->
+            stop(); model.act { ReadingEngine.resume(it, attempt.id) }
         }
+
         HorizontalDivider()
         Text("Saved story shelf", style = MaterialTheme.typography.titleLarge)
         val stories = data.stories.filter { profile.id in it.readerIds }
@@ -598,5 +621,30 @@ private fun ReadingProgress(data: ReadingData, model: ReadingViewModel, textSize
             ReadingListen(story.text, available, speak, stop) {}
         }
         ReadingButton("Back to reading menu", "reading-back", action = back)
+    }
+}
+
+@Composable
+private fun ReadingHistoryEntries(data: ReadingData, readerId: String, onOpen: ((ReadingAttempt) -> Unit)? = null) {
+    Text("Dated activity history", style = MaterialTheme.typography.titleLarge)
+    val attempts = data.attemptsFor(readerId).asReversed()
+    if (attempts.isEmpty()) Text("No reading practice results yet for this reader.")
+    attempts.forEach { a ->
+        Card(Modifier.fillMaxWidth().testTag("reading-history-entry-${a.id}")) {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("${a.content.game.title} · ${a.content.title} · ${a.content.level.name.lowercase()}")
+                Text("Started ${formatFinishedAt(a.startedAt)}")
+                Text(a.finishedAt?.let { "Finished ${formatFinishedAt(it)}" } ?:
+                    if (a.abandoned) "Archived draft" else "In progress · resumable")
+                val checks = a.checkpoints.values.filter { it.readerId == readerId }
+                Text("${checks.count { it.awardedPoint }} individual points · ${a.hints} hints · ${a.narrations} narrations")
+                val objective = checks.filter { it.objective && it.tries > 0 }
+                if (objective.isNotEmpty()) Text("${objective.count { it.independent }}/${objective.size} first-try independent · " +
+                    "${objective.count { it.earned && it.supportedAtCompletion }} supported · ${objective.count { it.retried }} retried")
+                if (onOpen != null && !a.abandoned) ReadingChoice(
+                    if (a.finishedAt != null) "Read summary" else "Resume draft", "reading-history-${a.id}"
+                ) { onOpen(a) }
+            }
+        }
     }
 }
