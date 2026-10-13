@@ -169,10 +169,8 @@ class ReadingScreenTest {
         assertEquals(1, ReadingStore(file).load().points("reader-a"))
     }
 
-    @Test fun missingWordHasInstructionsBelowTitleWithSpeakerOnRightAndBackAtTopLeft() {
-        val data = readingFixture()
+    private fun assertSimplifiedActivityHeader(data: ReadingData) {
         val content = requireNotNull(data.active).content
-        show(data, speech = true)
         val back = compose.onNodeWithTag("reading-back").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
         val title = compose.onNodeWithText(content.game.title).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
         val instructions = compose.onNodeWithText(content.game.guidance).assertIsDisplayed()
@@ -195,11 +193,24 @@ class ReadingScreenTest {
         compose.onNodeWithText("Listening is support, not independent reading.", substring = true).assertDoesNotExist()
         compose.onNodeWithTag("reading-listen").assertDoesNotExist()
         compose.onNodeWithTag("reading-stop").assertDoesNotExist()
-        val previousStops = stopped
-        compose.onNodeWithTag("reading-back").performClick()
-        waitFor { it.page == ReadingPage.MENU }
-        assertTrue(stopped > previousStops)
-        assertEquals(data.attempts, ReadingStore(file).load().attempts)
+    }
+
+    @Test fun allReadingGamesHaveInstructionsBelowTitleWithSpeakerOnRightAndBackAtTopLeft() {
+        show(readingFixture(), speech = true)
+        ReadingGame.entries.forEach { game ->
+            compose.runOnIdle { model.act { ReadingEngine.start(it, game, ReadingLevel.SPROUT) } }
+            waitFor { it.page == ReadingPage.ACTIVITY && it.active?.content?.game == game }
+            val data = requireNotNull(model.data)
+            assertSimplifiedActivityHeader(data)
+            click("reading-instructions")
+            assertEquals(game.guidance, lastSpoken)
+            assertEquals(data, model.data)
+            val previousStops = stopped
+            click("reading-back")
+            waitFor { it.page == ReadingPage.MENU }
+            assertTrue(stopped > previousStops)
+            assertEquals(data.attempts, ReadingStore(file).load().attempts)
+        }
     }
 
     @Test fun missingWordInstructionFailureCanBeRetriedWithoutRecordingPassageNarration() {
@@ -301,6 +312,147 @@ class ReadingScreenTest {
         click("reading-check-answer")
         waitFor { it.active?.earned("answer") == true }
         choices.indices.forEach { compose.onNodeWithTag("reading-answer-$it").assertIsNotEnabled() }
+    }
+
+    private fun choiceColor(tag: String): Int {
+        val bounds = compose.onNodeWithTag(tag).performScrollTo().assertIsDisplayed()
+            .fetchSemanticsNode().boundsInRoot
+        return compose.runOnIdle {
+            val view = compose.activity.findViewById<View>(android.R.id.content)
+            val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+            try {
+                view.draw(Canvas(bitmap))
+                bitmap.getPixel(bounds.center.x.toInt(),
+                    (bounds.top + 4 * view.resources.displayMetrics.density).toInt())
+            } finally {
+                bitmap.recycle()
+            }
+        }
+    }
+
+    private fun assertChoiceGrid(prefix: String, choices: List<String>, pictured: Boolean = false) {
+        choices.indices.chunked(2).forEach { row ->
+            compose.onNodeWithTag("$prefix-${row.first()}").performScrollTo()
+            val nodes = row.map { index ->
+                val node = compose.onNodeWithTag("$prefix-$index").assertIsEnabled().fetchSemanticsNode()
+                val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+                compose.onNodeWithText(choices[index], useUnmergedTree = true).performSemanticsAction(
+                    androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult
+                ) { it(layouts) }
+                val layout = layouts.single()
+                assertFalse("$prefix-$index", layout.didOverflowHeight)
+                repeat(layout.lineCount) { line ->
+                    assertFalse(layout.isLineEllipsized(line))
+                    assertTrue("$prefix-$index line $line",
+                        layout.getLineLeft(line) >= 0 && layout.getLineRight(line) <= layout.size.width + 1)
+                }
+                node
+            }
+            if (nodes.size == 2) {
+                assertEquals(nodes[0].size.width.toFloat(), nodes[1].size.width.toFloat(), 1f)
+                assertTrue(nodes[0].positionInRoot.x + nodes[0].size.width < nodes[1].positionInRoot.x)
+                if (!pictured) assertEquals(nodes[0].positionInRoot.y, nodes[1].positionInRoot.y, 1f)
+            } else {
+                val first = compose.onNodeWithTag("$prefix-0").fetchSemanticsNode()
+                assertEquals(first.size.width.toFloat(), nodes.single().size.width.toFloat(), 1f)
+                assertEquals(first.positionInRoot.x, nodes.single().positionInRoot.x, 1f)
+            }
+        }
+    }
+
+    @Test
+    @Config(qualifiers = "w320dp-h800dp")
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun everyReadingGameUsesColoredTwoColumnChoicesThatFitAtLargeTextSizes() {
+        show(readingFixture(), speech = true)
+        for (level in ReadingLevel.entries) {
+            ReadingGame.entries.forEach { game ->
+                compose.runOnIdle { model.act { ReadingEngine.start(it, game, level) } }
+                waitFor { it.active?.content?.game == game && it.active?.content?.level == level }
+                val content = requireNotNull(model.data?.active).content
+                val (prefix, choices) = when (game) {
+                    ReadingGame.MISSING, ReadingGame.CAPTION, ReadingGame.DETECTIVE ->
+                        "reading-answer" to requireNotNull(content.question).choices
+                    ReadingGame.SCRAMBLE, ReadingGame.SEQUENCE -> "reading-tile" to content.tiles
+                    ReadingGame.CHAPTER -> "reading-branch" to content.branches.map { it.label }
+                    ReadingGame.STUDIO -> "reading-studio-character" to content.writingChoices.first()
+                    ReadingGame.PARTNERS -> "reading-turn-choice" to content.writingChoices.first().map {
+                        "$it began an adventure."
+                    }
+                }
+                compose.runOnIdle { textSize.intValue = 100 }
+                assertEquals(choices.size.coerceAtMost(4),
+                    choices.indices.map { choiceColor("$prefix-$it") }.toSet().size)
+                for (percent in listOf(100, 200)) {
+                    compose.runOnIdle { textSize.intValue = percent }
+                    compose.onNodeWithTag("reading-instructions").performScrollTo().assertIsDisplayed()
+                    val instructions = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+                    compose.onNodeWithText(game.guidance).performSemanticsAction(
+                        androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult
+                    ) { it(instructions) }
+                    assertFalse("$game instructions at $percent%", instructions.single().hasVisualOverflow)
+                    assertChoiceGrid(prefix, choices, pictured = content.eventPictures.isNotEmpty())
+                }
+            }
+        }
+    }
+
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun sequencingTilesKeepTheirPictureAndColorWhenChoicesReflow() {
+        val content = ReadingContent.find("sequence-seed")
+        show(readingFixture(content))
+        val color = choiceColor("reading-tile-2")
+        click("reading-tile-0")
+        waitFor { it.active?.order == listOf(0) }
+        compose.onNodeWithTag("reading-tile-0").assertDoesNotExist()
+        compose.onNodeWithContentDescription(content.eventPictures[0].description).assertDoesNotExist()
+        assertEquals(color, choiceColor("reading-tile-2"))
+        val picture = compose.onNodeWithContentDescription(content.eventPictures[2].description)
+            .fetchSemanticsNode()
+        val tile = compose.onNodeWithTag("reading-tile-2").fetchSemanticsNode()
+        assertTrue(picture.positionInRoot.y < tile.positionInRoot.y)
+        assertEquals(picture.positionInRoot.x, tile.positionInRoot.x, 1f)
+        click("reading-placed-0")
+        waitFor { it.active?.order?.isEmpty() == true }
+        compose.onNodeWithTag("reading-tile-0").assertExists()
+        assertEquals(color, choiceColor("reading-tile-2"))
+    }
+
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun stagedAnswerGridsKeepChapterAndOrderCheckpointsLocked() {
+        show(readingFixture())
+        for (game in listOf(ReadingGame.CHAPTER, ReadingGame.SCRAMBLE, ReadingGame.SEQUENCE)) {
+            compose.runOnIdle { model.act { ReadingEngine.start(it, game, ReadingLevel.TRAIL) } }
+            waitFor { it.active?.content?.game == game }
+            val content = requireNotNull(model.data?.active).content
+            compose.onNodeWithTag("reading-answer-0").assertDoesNotExist()
+            if (game == ReadingGame.CHAPTER) {
+                click("reading-branch-1")
+                waitFor { it.active?.branch == 1 }
+                content.branches.indices.forEach {
+                    compose.onNodeWithTag("reading-branch-$it").assertIsNotEnabled()
+                }
+            } else {
+                content.validOrders.first().forEachIndexed { position, tile ->
+                    click("reading-tile-$tile")
+                    waitFor { it.active?.order?.size == position + 1 }
+                }
+                click("reading-check-order")
+                waitFor { it.active?.earned("order") == true }
+                compose.onNodeWithTag("reading-placed-0").assertIsNotEnabled()
+            }
+            val question = requireNotNull(ReadingEngine.question(requireNotNull(model.data?.active)))
+            assertChoiceGrid("reading-answer", question.choices)
+            chooseCorrectAnswer()
+            val key = if (game == ReadingGame.SCRAMBLE) "bonus" else "answer"
+            click("reading-check-$key")
+            waitFor { it.active?.earned(key) == true }
+            question.choices.indices.forEach { compose.onNodeWithTag("reading-answer-$it").assertIsNotEnabled() }
+            click("reading-finish")
+            waitFor { it.active?.finishedAt != null }
+        }
     }
 
     @Test fun disablingReadingRewardsStillSavesCompletionWithoutShowingPointAwards() {
@@ -736,31 +888,44 @@ class ReadingScreenTest {
         }
     }
 
-    @Test fun otherReadingGamesRetainNarrationSupportAndStopControls() {
+    @Test fun captionInstructionsDoNotAffectIndependentCreditAndUnavailableAudioCanBeRetried() {
         show(readingFixture(ReadingContent.forGame(ReadingGame.CAPTION, ReadingLevel.SPROUT).first()), speech = true)
-        compose.onNodeWithText("Listen to instructions").performScrollTo().assertIsDisplayed()
-        click("reading-listen")
-        waitFor { it.active?.narrations == 1 }
-        val previousStops = stopped
-        click("reading-stop")
-        assertTrue(stopped > previousStops)
+        click("reading-instructions")
+        assertEquals(ReadingGame.CAPTION.guidance, lastSpoken)
+        assertEquals(0, model.data?.active?.narrations)
         chooseCorrectAnswer()
         click("reading-check-answer")
         waitFor { it.points("reader-a") == 1 }
-        assertEquals(ReadingAccuracy(0, 1, 1, 0), model.data?.accuracy("reader-a"))
+        assertEquals(ReadingAccuracy(1, 1, 0, 0), model.data?.accuracy("reader-a"))
 
         compose.runOnIdle {
             speechWorks = false
             model.act { ReadingEngine.start(it, ReadingGame.CAPTION, ReadingLevel.SPROUT, true, "fresh") }
         }
         waitFor { it.active?.id == "fresh" }
-        click("reading-listen")
-        compose.onNodeWithText("Offline narration is unavailable. Reading and every activity still work without it.")
+        click("reading-instructions")
+        compose.onNodeWithText("Instruction audio is unavailable. You can still read the instructions above.")
             .performScrollTo().assertIsDisplayed()
+        speechWorks = true
+        click("reading-instructions")
+        compose.onNodeWithText("Instruction audio is unavailable.", substring = true).assertDoesNotExist()
         assertEquals(0, model.data?.active?.narrations)
     }
 
-    @Test fun partnerNarrationFollowsTheArrangedOrderNotTheAuthoredTurnOrder() {
+    @Test fun previouslyNarratedDraftRetainsItsSupportHistoryWithoutNarrationControls() {
+        val content = ReadingContent.forGame(ReadingGame.CAPTION, ReadingLevel.SPROUT).first()
+        show(ReadingEngine.narration(readingFixture(content), queued = true), speech = true)
+        compose.onNodeWithTag("reading-listen").assertDoesNotExist()
+        compose.onNodeWithTag("reading-stop").assertDoesNotExist()
+        click("reading-instructions")
+        chooseCorrectAnswer()
+        click("reading-check-answer")
+        waitFor { it.active?.earned("answer") == true }
+        assertEquals(ReadingAccuracy(0, 1, 1, 0), model.data?.accuracy("reader-a"))
+        assertEquals(1, ReadingStore(file).load().active?.narrations)
+    }
+
+    @Test fun partnerActivityHasOnlyInstructionsButSavedStoryStillReadsInArrangedOrder() {
         var data = readingFixture(ReadingContent.forGame(ReadingGame.PARTNERS, ReadingLevel.SPROUT).first())
         data = ReadingEngine.partner(data, "reader-b")
         repeat(4) { index ->
@@ -769,9 +934,25 @@ class ReadingScreenTest {
         }
         data = readingOrder(data, listOf(3, 1, 0, 2))
         show(data, speech = true)
+        compose.onNodeWithTag("reading-listen").assertDoesNotExist()
+        compose.onNodeWithTag("reading-stop").assertDoesNotExist()
+        click("reading-instructions")
+        assertEquals(ReadingGame.PARTNERS.guidance, lastSpoken)
+        assertEquals(0, model.data?.active?.narrations)
+        click("reading-reread")
+        waitFor { it.active?.reread == true }
+        click("reading-shared")
+        waitFor { it.active?.earned("shared") == true }
+        click("reading-finish")
+        waitFor { it.active?.finishedAt != null }
+        val completed = model.data
         click("reading-listen")
-        waitFor { it.active?.narrations == 1 }
         assertEquals("Sentence 3. Sentence 1. Sentence 0. Sentence 2.", lastSpoken)
+        val previousStops = stopped
+        click("reading-stop")
+        assertTrue(stopped > previousStops)
+        assertEquals(completed, model.data)
+        assertEquals(completed, ReadingStore(file).load())
     }
 
     @Test fun twoHundredPercentTextHasReachableControlsAndLargeTouchTargets() {

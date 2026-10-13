@@ -244,13 +244,17 @@ are retained to preserve existing history, not exposed as switchable accounts. A
 and device transfer are disabled; uninstalling the app removes its local data.
 The existing app updater may still contact GitHub independently of reading.
 
-Text size can be adjusted from 80% to 200%. Optional instruction and passage
+Text size can be adjusted from 80% to 200%. Optional instruction and saved-story
 read-aloud uses an **installed offline English Android text-to-speech voice**.
 If one is unavailable, reading still works without audio; install an offline
 English voice using the device's text-to-speech settings to enable narration.
-Passage narration is recorded as support; reading instructions aloud is not.
-Missing Word Mission offers instruction audio only, via the speaker icon beside
-the instructions, and displays its colored answer choices in two columns.
+All reading activities offer instruction audio only, via the speaker icon beside
+the instructions below the title, with back navigation at the upper left.
+Answers, available tiles, chapter choices, and writing prompts use colored
+two-column layouts. Ordered tiles and evidence passages remain in reading order.
+Saved stories can still be read aloud from their summary or the story shelf.
+Previously recorded passage narration remains in progress as support;
+reading instructions aloud does not affect independent-reading credit.
 Speech stops when leaving the activity or putting the app in the background.
 
 ## Build and Install
