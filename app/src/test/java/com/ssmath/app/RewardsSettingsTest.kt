@@ -2,6 +2,7 @@ package com.ssmath.app
 
 import android.app.Application
 import androidx.activity.ComponentActivity
+import androidx.activity.ComponentDialog
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
@@ -17,6 +18,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowDialog
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class, qualifiers = "w360dp-h800dp")
@@ -163,6 +165,61 @@ class RewardsSettingsTest {
         }
         compose.onNodeWithContentDescription("Rewards system").assertDoesNotExist()
         compose.onNodeWithText("Practice History").assertDoesNotExist()
+    }
+
+    @Test fun activeReadingGamesDialogSavesIndependentChoicesAndAllowsAllGamesToBeDisabled() {
+        val model = MathViewModel(application)
+        compose.setContent { MathTheme { SettingsScreen(model) } }
+        compose.onNodeWithTag("active-reading-games").assertDoesNotExist()
+        compose.onNodeWithText("Reading Settings").performScrollTo().performClick()
+        compose.onNodeWithTag("active-reading-games").performScrollTo().performClick()
+        compose.onNodeWithTag("active-reading-games-dialog").assertIsDisplayed()
+        ReadingGame.entries.forEach { game ->
+            compose.onNodeWithContentDescription(game.title).performScrollTo().assertIsOn()
+                .performClick().assertIsOff()
+        }
+        assertEquals(ReadingGame.entries.toSet(), model.disabledReadingGames)
+        compose.onNodeWithText("Close").performClick()
+        compose.onNodeWithTag("active-reading-games-dialog").assertDoesNotExist()
+        compose.onNodeWithTag("active-reading-games").performClick()
+        ReadingGame.entries.forEach { game ->
+            compose.onNodeWithContentDescription(game.title).performScrollTo().assertIsOff()
+        }
+        compose.onNodeWithContentDescription(ReadingGame.STUDIO.title).performScrollTo()
+            .performClick().assertIsOn()
+        compose.onNodeWithText("Close").performClick()
+        val restored = MathViewModel(application)
+        assertEquals(ReadingGame.entries.toSet() - ReadingGame.STUDIO, restored.disabledReadingGames)
+        Subject.entries.forEach { assertTrue(restored.rewardsEnabled(it)) }
+        assertTrue(restored.disabledRewards.isEmpty())
+    }
+
+    @Test fun activeReadingGamesDialogSurvivesStateRestorationAndBackKeepsChangesAtLargeTextSize() {
+        val model = MathViewModel(application)
+        val restoration = StateRestorationTester(compose)
+        restoration.setContent { MathTheme(textSizePercent = 200) { SettingsScreen(model) } }
+        compose.onNodeWithText("Reading Settings").performScrollTo().performClick()
+        compose.onNodeWithTag("active-reading-games").performScrollTo().performClick()
+        compose.onNodeWithContentDescription(ReadingGame.PARTNERS.title).performScrollTo()
+            .assertIsDisplayed().performClick().assertIsOff()
+        restoration.emulateSavedInstanceStateRestore()
+        compose.onNodeWithTag("active-reading-games-dialog").assertIsDisplayed()
+        compose.onNodeWithContentDescription(ReadingGame.PARTNERS.title).performScrollTo().assertIsOff()
+        compose.runOnIdle {
+            (ShadowDialog.getLatestDialog() as ComponentDialog).onBackPressedDispatcher.onBackPressed()
+        }
+        compose.onNodeWithTag("active-reading-games-dialog").assertDoesNotExist()
+        compose.onNodeWithText("Settings").assertIsDisplayed()
+        assertEquals(setOf(ReadingGame.PARTNERS), MathViewModel(application).disabledReadingGames)
+    }
+
+    @Test fun readingGamePreferencesIgnoreUnknownNamesAndCanRestoreAllDefaults() {
+        application.getSharedPreferences("settings", 0).edit()
+            .putStringSet("disabled_reading_games", setOf("MISSING", "UNKNOWN_GAME")).commit()
+        val model = MathViewModel(application)
+        assertEquals(setOf(ReadingGame.MISSING), model.disabledReadingGames)
+        model.chooseReadingGameEnabled(ReadingGame.MISSING, true)
+        assertTrue(MathViewModel(application).disabledReadingGames.isEmpty())
     }
 
     @Test fun myRewardsIsBelowUpdatesAndReturnsToSettings() {

@@ -96,7 +96,12 @@ expand or collapse it without changing your choices. **Rewards** contains
 **Math Rewards System**, **Math Practice History**,
 **Show timer** (and its conditional **Time limit**), **Show correct answers**,
 **Vertical equations**, and **Default Math Reward Game Settings**.
-**Reading Settings** contains **Reading Rewards System** and **Reading Practice History**,
+**Reading Settings** contains **Active Reading Games**, **Reading Rewards System**, and **Reading Practice History**.
+**Active Reading Games** opens a dialog with a switch for each reading game, all enabled by default.
+Changes are saved automatically for all readers on this device. Disabled games cannot be started or resumed,
+but their drafts, history, stories, and earned points are kept; re-enable a game to resume its drafts.
+You can disable every game; the reading menu will explain where to enable them again.
+**Reading Practice History** opens
 with a reader selector for each reader's dated activity records. Viewing this history
 does not change the active reader or interrupt a saved reading draft.
 **Science Settings** and **Advanced Settings** each have their own rewards switch
