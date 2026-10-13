@@ -77,23 +77,34 @@ fun SettingsScreen(model: MathViewModel) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             UpdateSettings()
-            ListItem(headlineContent = { Text("My Rewards") },
-                supportingContent = { Text("Your prizes and fragments") },
-                leadingContent = { Icon(Icons.Rounded.CardGiftcard, null) },
-                trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null) },
-                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                modifier = Modifier.clickable(onClick = model::openRewards).testTag("my-rewards"))
-            ListItem(headlineContent = { Text("My Pokémons") },
-                supportingContent = { Text("Your collected Pokémon and other celebrations") },
-                leadingContent = { Icon(Icons.Rounded.Collections, null) },
-                trailingContent = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("${model.pokemons.size}/${Celebration.entries.size}")
-                        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null)
+            CollapsibleSettingsSection("Rewards", defaultExpanded = false) {
+                ListItem(headlineContent = { Text("My Rewards") },
+                    supportingContent = { Text("Your prizes and fragments") },
+                    leadingContent = { Icon(Icons.Rounded.CardGiftcard, null) },
+                    trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null) },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    modifier = Modifier.clickable(onClick = model::openRewards).testTag("my-rewards"))
+                ListItem(headlineContent = { Text("My Pokémons") },
+                    supportingContent = { Text("Your collected Pokémon and other celebrations") },
+                    leadingContent = { Icon(Icons.Rounded.Collections, null) },
+                    trailingContent = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("${model.pokemons.size}/${Celebration.entries.size}")
+                            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null)
+                        }
+                    },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    modifier = Modifier.clickable(onClick = model::openPokemons).testTag("my-pokemons"))
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Rewards system")
+                        Text("Earn prize fragments in Rewards Game by completing 25 or more questions with over 90% correct",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                },
-                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                modifier = Modifier.clickable(onClick = model::openPokemons).testTag("my-pokemons"))
+                    Switch(model.rewardsEnabled, model::chooseRewardsEnabled,
+                        modifier = Modifier.semantics { contentDescription = "Rewards system" })
+                }
+            }
             HorizontalDivider()
             ListItem(headlineContent = { Text("Practice History") },
                 supportingContent = { Text("Review your previous results") },
@@ -101,50 +112,43 @@ fun SettingsScreen(model: MathViewModel) {
                 trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null) },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                 modifier = Modifier.clickable(onClick = model::openHistory).testTag("practice-history"))
-            ListItem(headlineContent = { Text("Rewards Game Setup") },
-                supportingContent = { Text("Default number limits for each math type") },
-                leadingContent = { Icon(Icons.Rounded.Settings, null) },
-                trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null) },
-                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                modifier = Modifier.clickable(onClick = model::openRewardsSetup).testTag("rewards-setup"))
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Rewards system")
-                    Text("Earn prize fragments in Rewards Game by completing 25 or more questions with over 90% correct",
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            CollapsibleSettingsSection("Math Settings", defaultExpanded = false) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Show timer")
+                        Text("Display the elapsed time while practicing", style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(model.showTimer, model::chooseShowTimer,
+                        modifier = Modifier.semantics { contentDescription = "Show timer" })
                 }
-                Switch(model.rewardsEnabled, model::chooseRewardsEnabled,
-                    modifier = Modifier.semantics { contentDescription = "Rewards system" })
-            }
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Show timer")
-                    Text("Display the elapsed time while practicing", style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (model.rewardsEnabled && model.showTimer) {
+                    TimeLimitSetting(model.timeLimitMinutes, model::chooseTimeLimitMinutes)
                 }
-                Switch(model.showTimer, model::chooseShowTimer,
-                    modifier = Modifier.semantics { contentDescription = "Show timer" })
-            }
-            if (model.rewardsEnabled && model.showTimer) {
-                TimeLimitSetting(model.timeLimitMinutes, model::chooseTimeLimitMinutes)
-            }
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Show correct answers")
-                    Text("Reveal correct answers after mistakes, including in results and history",
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Show correct answers")
+                        Text("Reveal correct answers after mistakes, including in results and history",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(model.showCorrectAnswers, model::chooseShowCorrectAnswers,
+                        modifier = Modifier.semantics { contentDescription = "Show correct answers" })
                 }
-                Switch(model.showCorrectAnswers, model::chooseShowCorrectAnswers,
-                    modifier = Modifier.semantics { contentDescription = "Show correct answers" })
-            }
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Vertical equations")
-                    Text("Stack numbers with ones, tens, and hundreds aligned in practice, results, and history",
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Vertical equations")
+                        Text("Stack numbers with ones, tens, and hundreds aligned in practice, results, and history",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(model.verticalEquations, model::chooseVerticalEquations,
+                        modifier = Modifier.semantics { contentDescription = "Vertical equations" })
                 }
-                Switch(model.verticalEquations, model::chooseVerticalEquations,
-                    modifier = Modifier.semantics { contentDescription = "Vertical equations" })
+                ListItem(headlineContent = { Text("Default Math Reward Game Settings") },
+                    supportingContent = { Text("Default number limits for each math type") },
+                    leadingContent = { Icon(Icons.Rounded.Settings, null) },
+                    trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null) },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    modifier = Modifier.clickable(onClick = model::openRewardsSetup).testTag("rewards-setup"))
             }
             HorizontalDivider()
             CollapsibleSettingsSection("Appearance", defaultExpanded = false) {

@@ -48,6 +48,7 @@ class EquationTest {
     @Test fun verticalEquationsSettingAppearsBetweenShowCorrectAnswersAndAppearance() {
         val model = model()
         compose.setContent { MathTheme { SettingsScreen(model) } }
+        compose.onNodeWithText("Math Settings").performScrollTo().performClick()
         compose.onNodeWithText("Appearance").performScrollTo()
 
         val answers = compose.onNodeWithText("Show correct answers").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
@@ -57,9 +58,9 @@ class EquationTest {
         assertTrue("Vertical equations must precede Appearance", vertical.bottom <= appearance.top)
     }
 
-    @Test fun settingDefaultsToHorizontalAndSwitchesLiveWithoutChangingPractice() {
+    @Test fun settingDefaultsToVerticalAndSwitchesLiveWithoutChangingPractice() {
         val model = model()
-        assertFalse(model.verticalEquations)
+        assertTrue(model.verticalEquations)
         model.selectOperation(Operation.ADDITION)
         model.submitSetup()
         model.start()
@@ -67,10 +68,11 @@ class EquationTest {
         val description = "${game.problem.text} = ?"
         model.updateAnswer("123")
         compose.setContent { MathAppContent(model) }
-        compose.onNodeWithTag("problem").assertTextEquals(description)
+        compose.onNodeWithTag("problem").assertContentDescriptionEquals(description)
 
-        listOf(true, false).forEach { vertical ->
+        listOf(false, true).forEach { vertical ->
             compose.onNodeWithContentDescription("Settings").performClick()
+            compose.onNodeWithText("Math Settings").performScrollTo().performClick()
             val toggle = compose.onNodeWithContentDescription("Vertical equations").performScrollTo()
             if (vertical) toggle.assertIsOff() else toggle.assertIsOn()
             toggle.performClick()
@@ -87,6 +89,7 @@ class EquationTest {
     @Test fun verticalPracticeSubmitsAnswersAndShowsResultsAndHistoryWithoutRevealingHiddenAnswers() {
         val model = model()
         model.chooseVerticalEquations(true)
+        model.chooseShowCorrectAnswers(false)
         model.selectOperation(Operation.MULTIPLICATION)
         model.updateQuestionCount("2")
         model.submitSetup()
@@ -126,9 +129,8 @@ class EquationTest {
         assertEquals(attempts, model.historyDetail!!.attempts)
     }
 
-    @Test fun revealedPracticeCorrectionAlsoUsesVerticalLayout() {
+    @Test fun practiceCorrectionUsesVerticalLayoutByDefault() {
         val model = model()
-        model.chooseVerticalEquations(true)
         model.selectOperation(Operation.SUBTRACTION)
         model.submitSetup()
         model.start()
@@ -136,12 +138,13 @@ class EquationTest {
         val problem = model.game!!.problem
         compose.onNodeWithTag("answer-input").performTextReplacement((problem.answer + 1).toString())
         compose.onNodeWithTag("submit-answer").performClick()
-        compose.onNodeWithTag("feedback-equation").assertDoesNotExist()
-        compose.runOnIdle { model.chooseShowCorrectAnswers(true) }
         compose.onNodeWithTag("feedback-equation").performScrollTo()
             .assertContentDescriptionEquals("${problem.text} = ${problem.answer}")
         compose.runOnIdle { model.chooseShowCorrectAnswers(false) }
         compose.onNodeWithTag("feedback-equation").assertDoesNotExist()
+        compose.runOnIdle { model.chooseShowCorrectAnswers(true) }
+        compose.onNodeWithTag("feedback-equation").performScrollTo()
+            .assertContentDescriptionEquals("${problem.text} = ${problem.answer}")
     }
 
     @Test

@@ -130,9 +130,9 @@ class MathViewModel(
         private set
     var activeTimeLimitMs by mutableStateOf<Long?>(null)
         private set
-    var showCorrectAnswers by mutableStateOf(settings.getBoolean("show_correct_answers", false))
+    var showCorrectAnswers by mutableStateOf(settings.getBoolean("show_correct_answers", true))
         private set
-    var verticalEquations by mutableStateOf(settings.getBoolean("vertical_equations", false))
+    var verticalEquations by mutableStateOf(settings.getBoolean("vertical_equations", true))
         private set
     var textSizePercent by mutableStateOf(settings.getInt("text_size_percent", DEFAULT_TEXT_SIZE_PERCENT)
         .coerceIn(MIN_TEXT_SIZE_PERCENT, MAX_TEXT_SIZE_PERCENT))

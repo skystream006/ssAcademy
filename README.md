@@ -33,7 +33,8 @@ A native Kotlin / Jetpack Compose Android app for practicing math. Android 8.0
    reward types; unavailable prizes are indicated when rewards are disabled.
    Question counts are chosen per game, not saved in Rewards Game defaults, and
    do not change your Practice Game choices. Change the number limits in
-   **Settings > Rewards Game Setup**. **Cancel** or Android Back closes either game dialog.
+   **Settings > Math Settings > Default Math Reward Game Settings**.
+   **Cancel** or Android Back closes either game dialog.
 2. **Press Start when Ready** – press **Start** to begin. The timer starts now.
 3. **Play** – in either mode, addition, subtraction and multiplication use two random numbers
    between the minimum and maximum, inclusive. Subtraction never goes below zero.
@@ -88,9 +89,16 @@ A native Kotlin / Jetpack Compose Android app for practicing math. Android 8.0
 The semi-transparent (50% opacity) settings button in the bottom-right corner opens
 **Settings**:
 
+**Rewards** and **Math Settings** are collapsed by default; tap either heading to
+expand or collapse it without changing your choices. **Rewards** contains
+**My Rewards**, **My Pokémons**, and **Rewards system**. **Math Settings** contains
+**Show timer** (and its conditional **Time limit**), **Show correct answers**,
+**Vertical equations**, and **Default Math Reward Game Settings**.
+Saved preferences are preserved; the defaults below apply when no choice has been saved.
+
 - **App updates** – at the top, check GitHub for a newer release using the button
   beside the installed version, then download and install it.
-- **My Rewards** – directly below App updates, view your collected prizes and
+- **My Rewards** – under Rewards, view your collected prizes and
   one-third fragments in a four-column grid grouped by **Tier 1** and **Tier 2**,
   even when the rewards system is disabled.
   Tap **Use rewards** in the upper-right corner to see whole reward pictures and
@@ -117,7 +125,7 @@ The semi-transparent (50% opacity) settings button in the bottom-right corner op
   already used. The result's My Pokémons reward is also removed unless another saved
   result earned the same celebration. Older collection entries without a linked result
   are kept, as are unrelated celebrations added through Admin.
-- **Rewards Game Setup** – set default number limits for all four math types.
+- **Default Math Reward Game Settings** – set default number limits for all four math types.
   **Save defaults** saves all four together; **Back** discards unsaved edits.
   Both return to Settings. Division's two maximums are independent. Limits are
   remembered on this device separately from Practice Game choices, and initially
@@ -150,11 +158,11 @@ The semi-transparent (50% opacity) settings button in the bottom-right corner op
   next Rewards Game, not Practice Game. A timed game shows time remaining and ends when time runs out,
   saving the partial result without a prize. Changing settings during practice does
   not remove its active time limit.
-- **Show correct answers** – off by default. Turn on to reveal correct answers after
+- **Show correct answers** – on by default. Reveal correct answers after
   mistakes during practice, in Results, and in Practice History. Wrong answers are
   still marked and counted, and saved attempts are unchanged. This choice is remembered.
-- **Vertical equations** – off by default. Below Show correct answers, switch from horizontal
-  equations to stacked numbers in practice, Results, and Practice History. Ones,
+- **Vertical equations** – on by default. Below Show correct answers, choose stacked
+  numbers instead of horizontal equations in practice, Results, and Practice History. Ones,
   tens, hundreds, and higher places line up, with the operator to the left and the
   answer (or `?` during practice) below a line. Works with all four operations;
   the choice is remembered and does not change saved answers.
