@@ -574,8 +574,17 @@ class MathAppTest {
         compose.onNode(isDialog()).assertDoesNotExist()
         assertNull(model.earlyFinishMessage)
         compose.onNodeWithTag("result-correct").assertTextEquals("You got 1 right!")
-        assertEquals(1, compose.onAllNodesWithContentDescription("Correct").fetchSemanticsNodes().size)
-        assertEquals(MAX_WRONG_ANSWERS, compose.onAllNodesWithContentDescription("Wrong").fetchSemanticsNodes().size)
+        val results = compose.onNode(hasScrollToIndexAction())
+        model.lastResult!!.attempts.forEachIndexed { index, attempt ->
+            results.performScrollToNode(hasText("${index + 1}."))
+            val row = compose.onNodeWithText("${index + 1}.").onParent()
+            row.assert(hasAnyDescendant(hasContentDescription(if (attempt.correct) "Correct" else "Wrong")))
+            row.assert(hasAnyDescendant(hasContentDescription("${attempt.problem.text} = ${attempt.given}")))
+            if (!attempt.correct) {
+                row.assert(hasAnyDescendant(hasText("Correct answer: ${attempt.problem.answer}")))
+            }
+        }
+        results.performScrollToIndex(0)
         compose.waitUntil(5_000) { model.history.size == 1 }
         assertEquals(1, HistoryStore(File(application.filesDir, "practice_history.json")).load().single().correct)
         assertEquals(4, model.lastResult!!.minimum)
