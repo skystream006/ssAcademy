@@ -5,7 +5,6 @@ import kotlinx.serialization.Serializable
 
 const val MIN_MAXIMUM = 1
 const val MAX_MAXIMUM = 10_000
-const val MAX_WRONG_ANSWERS = 5
 const val MIN_QUESTION_COUNT = 1
 const val MAX_QUESTION_COUNT = 1_000
 const val DEFAULT_QUESTION_COUNT = 10
@@ -167,7 +166,7 @@ data class GameState(
 
     val correct: Int get() = attempts.count { it.correct }
     val wrong: Int get() = attempts.count { !it.correct }
-    val maxWrongAnswers: Int get() = if (questionCount > 50) (questionCount + 9) / 10 else MAX_WRONG_ANSWERS
+    val maxWrongAnswers: Int get() = questionCount / 10 + 1
     val finished: Boolean get() = attempts.size >= questionCount || wrong >= maxWrongAnswers
     val perfect: Boolean get() = attempts.size == questionCount && wrong == 0
 

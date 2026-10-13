@@ -79,9 +79,9 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    Each scene says **Hurray!!**. These animations
    are drawn in the app and work offline. Press **View results** to
    skip the animation, or wait for it to finish.
-   The wrong-answer limit is 5 for up to 50 questions; above 50 it is 10% of the
-   chosen total, rounded up to a whole answer (51 questions allows 6 wrong;
-   100 questions ends at 10 wrong).
+   In both math modes, the game ends when wrong answers go **above 10%** of the
+   chosen total; exactly 10% is allowed. For example, 10 questions ends at 2 wrong,
+   25 at 3 wrong, 50 or 51 at 6 wrong, and 100 at 11 wrong.
    If the wrong-answer limit ends practice before the last question, a dialog says
    **Nice try! You got {XX} right out of {TOTAL}**, using the chosen number of
    questions as the total. Press **View results** to dismiss it.
