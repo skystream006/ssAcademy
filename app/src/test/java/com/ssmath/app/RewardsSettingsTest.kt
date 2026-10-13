@@ -147,7 +147,8 @@ class RewardsSettingsTest {
         val model = MathViewModel(application)
         compose.setContent { MathTheme { SettingsScreen(model) } }
         Subject.entries.forEach { subject ->
-            val section = compose.onNodeWithText("${subject.label} Settings")
+            val section = compose.onNodeWithText(
+                if (subject == Subject.ADVANCED) "Advanced Subject Settings" else "${subject.label} Settings")
             val toggle = compose.onNodeWithContentDescription("${subject.label} Rewards System")
             val history = compose.onNodeWithText("${subject.label} Practice History")
             toggle.assertDoesNotExist()

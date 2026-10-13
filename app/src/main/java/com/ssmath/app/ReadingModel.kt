@@ -135,6 +135,18 @@ object ReadingEngine {
         return data.copy(selectedProfileId = id, page = ReadingPage.MENU)
     }
 
+    fun renameProfile(data: ReadingData, rawName: String): ReadingData {
+        val profile = requireNotNull(data.profile) { "Enter your name to get started." }
+        val name = rawName.trim()
+        require(name.length in 1..40 && name.none { it.isISOControl() }) { "Use a name with 1–40 letters or symbols." }
+        require(data.profiles.none { it.id != profile.id && it.name.equals(name, ignoreCase = true) }) {
+            "Choose a different reader name."
+        }
+        return data.copy(profiles = data.profiles.map {
+            if (it.id == profile.id) it.copy(name = name) else it
+        })
+    }
+
     fun level(data: ReadingData, level: ReadingLevel) = data.copy(profiles = data.profiles.map {
         if (it.id == data.selectedProfileId) it.copy(level = level) else it
     })

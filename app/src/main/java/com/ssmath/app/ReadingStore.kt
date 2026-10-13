@@ -176,6 +176,10 @@ class ReadingViewModel(
         act { if (it.profile == null) ReadingEngine.addProfile(it, name) else it }
     }
 
+    fun updateName(name: String) {
+        act { ReadingEngine.renameProfile(it, name) }
+    }
+
     fun retry() {
         commands.trySend(Command.Retry)
     }

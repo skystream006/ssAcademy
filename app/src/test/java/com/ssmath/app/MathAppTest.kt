@@ -769,9 +769,45 @@ class MathAppTest {
         assertTrue(model().showCorrectAnswers)
     }
 
+    @Test fun settingsCanCancelValidateAndSaveTheGameNameWithoutLosingProgress() {
+        val file = File(application.filesDir, "reading_private.json")
+        val store = ReadingStore(file)
+        store.load()
+        val original = readingFixture()
+        store.save(original)
+        val model = model()
+        compose.setContent { MathAppContent(model) }
+        compose.onNodeWithContentDescription("Settings").performClick()
+        compose.onNodeWithTag("change-name").performScrollTo().performClick()
+        compose.waitUntil(5_000) { compose.onAllNodesWithTag("settings-name").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("settings-name").assertTextContains("Ari")
+        compose.onNodeWithTag("settings-save-name").assertIsNotEnabled()
+        compose.onNodeWithTag("settings-name").performTextReplacement("Not saved")
+        compose.onNodeWithText("Cancel").performClick()
+        compose.onNodeWithTag("change-name-dialog").assertDoesNotExist()
+        assertEquals(original, ReadingStore(file).load())
+
+        compose.onNodeWithTag("change-name").performClick()
+        compose.onNodeWithTag("settings-name").assertTextContains("Ari").performTextReplacement("   ")
+        compose.onNodeWithTag("settings-save-name").assertIsNotEnabled()
+        compose.onNodeWithTag("settings-name").performTextReplacement("bO")
+        compose.onNodeWithTag("settings-save-name").performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithText("Choose a different reader name.").fetchSemanticsNodes().isNotEmpty()
+        }
+        assertEquals(original, ReadingStore(file).load())
+        compose.onNodeWithTag("settings-name").performTextReplacement("  Alex  ")
+        compose.onNodeWithTag("settings-save-name").performClick()
+        compose.waitUntil(5_000) { compose.onAllNodesWithTag("change-name-dialog").fetchSemanticsNodes().isEmpty() }
+        assertEquals(ReadingEngine.renameProfile(original, "Alex"), ReadingStore(file).load())
+        compose.onNodeWithTag("change-name").performClick()
+        compose.onNodeWithTag("settings-name").assertTextContains("Alex")
+    }
+
     @Test fun appearanceStartsCollapsedAndKeepsChoicesWhenToggledOrReopened() {
         val model = model()
         model.chooseSkin(AppSkin.GALAXY)
+        model.chooseSkins(false)
         compose.setContent { MathAppContent(model) }
         compose.onNodeWithContentDescription("Settings").performClick()
         val appearance = compose.onNodeWithText("Appearance")
