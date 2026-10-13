@@ -10,6 +10,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.lifecycle.ViewModelProvider
@@ -138,7 +139,7 @@ class SubjectNavigationTest {
             }
             compose.onNodeWithTag("reading-menu").assertIsDisplayed()
             compose.onNodeWithTag("subject-grid").assertDoesNotExist()
-            compose.onNodeWithTag("settings-button").assertDoesNotExist()
+            compose.onNodeWithTag("settings-button").assertIsDisplayed()
             if (returnMethod == 0) compose.onNodeWithTag("reading-exit").performScrollTo().performClick()
             else compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }
             compose.onNodeWithTag("home-screen").assertIsDisplayed()
@@ -178,5 +179,74 @@ class SubjectNavigationTest {
         compose.onNodeWithTag("reading-game-MISSING").assertDoesNotExist()
         compose.onNodeWithTag("reading-game-SEQUENCE").performScrollTo().assertIsDisplayed()
         assertEquals(data, store.load())
+    }
+
+    @Test fun readingCollectionsReturnToReadingAndSettingsControlsPreserveDrafts() {
+        val data = readingFixture().copy(page = ReadingPage.MENU)
+        val store = ReadingStore(File(application.filesDir, "reading_private.json"))
+        store.load()
+        store.save(data)
+        val readingModel = ViewModelProvider(compose.activity,
+            ViewModelProvider.AndroidViewModelFactory(application))[ReadingViewModel::class.java]
+        val model = model()
+        model.openReading()
+        compose.setContent { MathAppContent(model) }
+        compose.waitUntil(5_000) { readingModel.data != null }
+        listOf("reading-rewards", "reading-pokemons").forEach { tag ->
+            compose.onNodeWithTag(tag).assertIsDisplayed().performClick()
+            assertEquals(if (tag.endsWith("rewards")) Overlay.REWARDS else Overlay.POKEMONS, model.overlay)
+            compose.onNodeWithContentDescription("Back").performClick()
+            assertEquals(Overlay.READING, model.overlay)
+            compose.onNodeWithTag("reading-menu").assertIsDisplayed()
+        }
+        compose.onNodeWithTag("settings-button").performClick()
+        compose.onNodeWithText("Reading Settings").performScrollTo().performClick()
+        compose.onNodeWithTag("set-reading-level").performScrollTo().performClick()
+        compose.onNodeWithTag("reading-level-SPROUT").assertIsSelected()
+        compose.onNodeWithTag("reading-level-TRAIL").performScrollTo().performClick()
+        compose.waitUntil(5_000) { readingModel.data?.profile?.level == ReadingLevel.TRAIL && !readingModel.saving }
+        compose.onNodeWithTag("reading-level-TRAIL").assertIsSelected()
+        compose.onNodeWithText("Done").performClick()
+        assertEquals(data.attempts, store.load().attempts)
+        assertEquals(ReadingLevel.TRAIL, store.load().profile?.level)
+        compose.onNodeWithTag("reading-progress").performScrollTo().performClick()
+        compose.onNodeWithTag("reading-dashboard").assertIsDisplayed()
+        compose.onNodeWithTag("reading-back").performScrollTo().performClick()
+        assertEquals(Overlay.SETTINGS, model.overlay)
+        compose.onNodeWithContentDescription("Back").performClick()
+        assertEquals(Overlay.READING, model.overlay)
+        compose.onNodeWithTag("reading-menu").assertIsDisplayed()
+        assertEquals(data.attempts, readingModel.data?.attempts)
+        compose.onNodeWithTag("reading-progress").assertDoesNotExist()
+        compose.onNodeWithTag("reading-level-SPROUT").assertDoesNotExist()
+    }
+
+    @Test fun progressCanResumeDraftWhileKeepingUnderlyingMathGamePaused() {
+        val data = readingFixture().copy(page = ReadingPage.MENU)
+        val store = ReadingStore(File(application.filesDir, "reading_private.json"))
+        store.load()
+        store.save(data)
+        val readingModel = ViewModelProvider(compose.activity,
+            ViewModelProvider.AndroidViewModelFactory(application))[ReadingViewModel::class.java]
+        var now = 0L
+        val model = MathViewModel(application, clock = { now }, ioDispatcher = Dispatchers.Unconfined)
+        model.selectOperation(Operation.ADDITION)
+        model.submitSetup()
+        model.start()
+        now = 1_000
+        model.openSettings()
+        val game = model.game
+        val elapsed = model.elapsedMs()
+        model.openReadingProgress()
+        compose.setContent { MathAppContent(model) }
+        compose.waitUntil(5_000) { readingModel.data != null }
+        compose.onNodeWithTag("reading-history-attempt-a").performScrollTo().performClick()
+        compose.waitUntil(5_000) { readingModel.data?.page == ReadingPage.ACTIVITY }
+        assertEquals(Overlay.READING, model.overlay)
+        compose.onNodeWithTag("reading-activity").assertIsDisplayed()
+        now += 5_000
+        assertEquals(elapsed, model.elapsedMs())
+        assertEquals(game, model.game)
+        assertEquals(data.active, readingModel.data?.active)
     }
 }

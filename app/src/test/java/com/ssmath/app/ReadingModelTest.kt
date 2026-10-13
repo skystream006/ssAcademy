@@ -372,4 +372,31 @@ class ReadingModelTest {
         assertEquals(listOf("reader-a", "reader-b"), data.stories.single().readerIds)
         ReadingEngine.validate(data)
     }
+
+    @Test fun partnerStoryNeedsOnlyOneLocalUserAndNeverDuplicatesParticipationCredit() {
+        for (rewardsEnabled in listOf(true, false)) {
+            var data = ReadingEngine.addProfile(ReadingData(), "Ari", "reader-a")
+            data = ReadingEngine.start(data, ReadingGame.PARTNERS, ReadingLevel.SPROUT, id = "partner-story")
+            repeat(4) { index ->
+                data = ReadingEngine.field(data, "turn", "Sentence $index.", expectedTurn = index)
+                data = ReadingEngine.submit(data, "turn", expectedTurn = index, rewardsEnabled = rewardsEnabled)
+                assertEquals(data, ReadingEngine.submit(data, "turn", expectedTurn = index))
+                ReadingEngine.validate(data)
+                data = ReadingEngine.resume(data, "partner-story")
+            }
+            assertEquals(listOf("reader-a", "reader-a", "reader-a", "reader-a"),
+                data.active?.turns?.map { it.readerId })
+            data = readingOrder(data, listOf(3, 1, 0, 2))
+            data = ReadingEngine.submit(ReadingEngine.reread(data), "shared", rewardsEnabled = rewardsEnabled)
+            data = ReadingEngine.finish(data)
+            assertEquals(if (rewardsEnabled) 1 else 0, data.points("reader-a"))
+            assertEquals(if (rewardsEnabled) 1 else 0, data.sharedPoints("reader-a"))
+            assertEquals(1, data.sharedCompletions("reader-a"))
+            assertEquals(1, data.profiles.size)
+            assertEquals(listOf("reader-a"), data.stories.single().readerIds)
+            assertEquals("Sentence 3. Sentence 1. Sentence 0. Sentence 2.", data.stories.single().text)
+            assertEquals(data, ReadingEngine.finish(data))
+            ReadingEngine.validate(data)
+        }
+    }
 }
