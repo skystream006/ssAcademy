@@ -44,6 +44,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowDialog
+import org.robolectric.shadows.ShadowToast
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class, qualifiers = "w360dp-h800dp")
@@ -80,7 +81,7 @@ class MathAppTest {
         }
     }
 
-    @Test fun homeShowsGameButtonsAndPracticeSetupOnlyOpensInADialog() {
+    @Test fun homeShowsSquareSubjectGridAndMathOpensExistingGames() {
         val model = model()
         compose.setContent { MathAppContent(model) }
         compose.onNodeWithTag("home-screen").assertIsDisplayed()
@@ -89,6 +90,23 @@ class MathAppTest {
             .fetchSemanticsNode().boundsInRoot
         val pokemons = compose.onNodeWithTag("home-pokemons").assertIsDisplayed().assertIsEnabled()
             .fetchSemanticsNode().boundsInRoot
+        val subjects = listOf("Math", "Reading", "Science", "Advanced").map { subject ->
+            compose.onNodeWithTag("subject-$subject").assertIsDisplayed().assertIsEnabled()
+                .assertHasClickAction().fetchSemanticsNode().boundsInRoot
+        }
+        subjects.forEach { assertEquals(it.width, it.height, 1f) }
+        assertEquals(subjects[0].top, subjects[1].top, 1f)
+        assertEquals(subjects[2].top, subjects[3].top, 1f)
+        assertEquals(subjects[0].left, subjects[2].left, 1f)
+        assertEquals(subjects[1].left, subjects[3].left, 1f)
+        assertTrue(subjects[0].right < subjects[1].left)
+        assertTrue(subjects[0].bottom < subjects[2].top)
+        assertTrue(maxOf(rewards.bottom, pokemons.bottom) <= subjects[0].top)
+        compose.onNodeWithTag("practice-game").assertDoesNotExist()
+        compose.onNodeWithTag("rewards-game").assertDoesNotExist()
+        compose.onNodeWithTag("subject-Math").performClick()
+        compose.onNodeWithTag("subject-grid").assertDoesNotExist()
+        compose.onNodeWithTag("math-games-screen").assertIsDisplayed()
         val practice = compose.onNodeWithTag("practice-game").assertIsDisplayed()
             .fetchSemanticsNode().boundsInRoot
         assertTrue(rewards.right <= pokemons.left)
@@ -110,6 +128,44 @@ class MathAppTest {
             (ShadowDialog.getLatestDialog() as ComponentDialog).onBackPressedDispatcher.onBackPressed()
         }
         compose.onNode(isDialog()).assertDoesNotExist()
+    }
+
+    @Test fun unavailableSubjectsShowExactToastWithoutLeavingHome() {
+        val model = model()
+        compose.setContent { MathAppContent(model) }
+        repeat(2) {
+            listOf("Reading", "Science", "Advanced").forEach { subject ->
+                ShadowToast.reset()
+                compose.onNodeWithTag("subject-$subject").performClick()
+                assertEquals("More Activities are coming soon!", ShadowToast.getTextOfLatestToast())
+                compose.onNodeWithTag("subject-grid").assertIsDisplayed()
+                compose.onNodeWithTag("math-games-screen").assertDoesNotExist()
+                compose.onNode(isDialog()).assertDoesNotExist()
+                assertFalse(model.mathGamesOpen)
+                assertNull(model.overlay)
+                assertNull(model.game)
+            }
+        }
+    }
+
+    @Test fun mathMenuSurvivesCollectionsAndSettingsAndBothBackActionsReturnToSubjects() {
+        val model = model()
+        compose.setContent { MathAppContent(model) }
+        repeat(2) { returnMethod ->
+            compose.onNodeWithTag("subject-Math").performClick()
+            listOf("home-rewards", "home-pokemons", "settings-button").forEach { tag ->
+                compose.onNodeWithTag(tag).performClick()
+                compose.onNodeWithTag("math-games-screen").assertDoesNotExist()
+                compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }
+                compose.onNodeWithTag("math-games-screen").assertIsDisplayed()
+                compose.onNodeWithTag("subject-grid").assertDoesNotExist()
+            }
+            if (returnMethod == 0) compose.onNodeWithTag("subjects-back").performClick()
+            else compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }
+            compose.onNodeWithTag("subject-grid").assertIsDisplayed()
+            compose.onNodeWithTag("practice-game").assertDoesNotExist()
+            assertFalse(model.mathGamesOpen)
+        }
     }
 
     @Test fun homeCollectionsReturnToTheirEntryScreenAndKeepSetupChoices() {
@@ -150,6 +206,7 @@ class MathAppTest {
                 assertNull(model.overlay)
             }
         }
+        compose.onNodeWithTag("subject-Math").performClick()
         compose.onNodeWithTag("practice-game").performClick()
         compose.onNodeWithTag("operation-DIVISION").performScrollTo().assertIsSelected()
         compose.onNodeWithTag("minimum-input").performScrollTo().assertTextContains("40")
@@ -180,6 +237,15 @@ class MathAppTest {
             assertFalse("$label overflows vertically", layout.didOverflowHeight)
             assertEquals(1, layout.lineCount)
         }
+        listOf("Math", "Reading", "Science", "Advanced").forEach { subject ->
+            val bounds = compose.onNodeWithTag("subject-$subject").performScrollTo()
+                .assertIsDisplayed().assertHasClickAction().fetchSemanticsNode().boundsInRoot
+            assertEquals(bounds.width, bounds.height, 1f)
+            val layout = textLayout(subject)
+            assertFalse("$subject overflows horizontally", layout.didOverflowWidth)
+            assertFalse("$subject overflows vertically", layout.didOverflowHeight)
+        }
+        compose.onNodeWithTag("subject-Math").performScrollTo().performClick()
         compose.onNodeWithTag("practice-game").performScrollTo().performClick()
         compose.onNodeWithTag("operation-ADDITION").performScrollTo().performClick()
         compose.onNodeWithTag("question-count-input").performScrollTo().performTextReplacement("3")
@@ -214,6 +280,7 @@ class MathAppTest {
         compose.onNodeWithText("Settings").assertIsDisplayed()
         compose.onNode(isDialog()).assertDoesNotExist()
         compose.onNodeWithContentDescription("Back").performClick()
+        compose.onNodeWithTag("subject-Math").performClick()
         compose.onNodeWithTag("rewards-game").performClick()
         compose.onNode(isDialog()).assertIsDisplayed()
         assertRewardsLaunchHeader()
@@ -271,7 +338,7 @@ class MathAppTest {
         assertEquals(Overlay.SETTINGS, model.overlay)
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNode(isDialog()).assertDoesNotExist()
-        compose.onNodeWithTag("practice-game").assertIsDisplayed()
+        compose.onNodeWithTag("subject-grid").assertIsDisplayed()
     }
 
     @Test
@@ -281,6 +348,7 @@ class MathAppTest {
         val model = model()
         model.chooseTextSize(200)
         compose.setContent { MathAppContent(model) }
+        compose.onNodeWithTag("subject-Math").performScrollTo().performClick()
         compose.onNodeWithTag("rewards-game").performScrollTo().performClick()
         assertRewardsLaunchHeader()
         val titleLayouts = mutableListOf<TextLayoutResult>()
@@ -330,6 +398,7 @@ class MathAppTest {
         val model = model()
         model.updateQuestionCount("37")
         compose.setContent { MathAppContent(model) }
+        compose.onNodeWithTag("subject-Math").performClick()
         compose.onNodeWithTag("rewards-game").performClick()
         assertRewardsLaunchHeader()
         compose.onNodeWithTag("rewards-question-count-input").assertDoesNotExist()
@@ -390,6 +459,7 @@ class MathAppTest {
     @Test fun rewardsLaunchExplainsThresholdsAndShowsIndependentAvailabilityWarnings() {
         val model = model()
         compose.setContent { MathAppContent(model) }
+        compose.onNodeWithTag("subject-Math").performClick()
         compose.onNodeWithTag("rewards-game").performClick()
         compose.onNodeWithTag("rewards-criteria").assertExists()
         compose.onNodeWithText("Obtainable rewards", substring = true).performScrollTo().assertIsDisplayed()
@@ -451,6 +521,7 @@ class MathAppTest {
     @Test fun fullPracticeShowsResultsSavesHistoryAndReturnsToSetup() {
         val model = model()
         compose.setContent { MathAppContent(model) }
+        compose.onNodeWithTag("subject-Math").performClick()
         compose.onNodeWithTag("practice-game").performClick()
         compose.onNodeWithText("What would you like to practice?").assertIsDisplayed()
         compose.onNodeWithText("What is the minimum number?").assertIsDisplayed()
@@ -643,6 +714,7 @@ class MathAppTest {
         compose.onNodeWithText("Settings").assertIsDisplayed()
         compose.onNodeWithContentDescription("Back").performClick()
 
+        compose.onNodeWithTag("subject-Math").performClick()
         compose.onNodeWithTag("practice-game").performClick()
         compose.onNodeWithTag("operation-ADDITION").performScrollTo().performClick()
         compose.onNodeWithTag("submit-setup").performScrollTo().performClick()
@@ -798,6 +870,7 @@ class MathAppTest {
         val model = model()
         model.updateQuestionCount("1")
         compose.setContent { MathAppContent(model) }
+        compose.onNodeWithTag("subject-Math").performClick()
         compose.onNodeWithTag("practice-game").performClick()
         assertEquals(Typography().titleLarge.fontSize, textLayout("What would you like to practice?").layoutInput.style.fontSize)
         compose.onNodeWithText("Cancel").performScrollTo().performClick()
