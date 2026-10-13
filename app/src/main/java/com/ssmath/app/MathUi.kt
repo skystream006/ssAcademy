@@ -157,7 +157,8 @@ internal fun MathAppContent(model: MathViewModel) {
                         Overlay.READING -> ReadingScreen(
                             onExit = model::closeOverlay,
                             textSizePercent = model.textSizePercent,
-                            onTextSizeChange = model::chooseTextSize
+                            onTextSizeChange = model::chooseTextSize,
+                            disabledGames = model.disabledReadingGames
                         )
                         null -> {
                             MainContent(model)
