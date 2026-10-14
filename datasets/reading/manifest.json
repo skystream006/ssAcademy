@@ -1,25 +1,33 @@
 {
   "schemaVersion": 1,
-  "version": "v1",
-  "file": "activities-5f006e54debdad7b6334ec5f5ec80ad50a3d5c1f011ad044f82f90c4ba41f1ea.jsonl",
-  "sha256": "5f006e54debdad7b6334ec5f5ec80ad50a3d5c1f011ad044f82f90c4ba41f1ea",
-  "bytes": 24839,
+  "version": "v2",
+  "file": "activities-94f362261369268e43127460a1caa749785068f3357cdb10fbcf844894e227e4.jsonl",
+  "sha256": "94f362261369268e43127460a1caa749785068f3357cdb10fbcf844894e227e4",
+  "bytes": 51947,
   "counts": {
     "MISSING:SPROUT": 3,
     "MISSING:TRAIL": 3,
+    "MISSING:SUMMIT": 3,
     "SCRAMBLE:SPROUT": 3,
     "SCRAMBLE:TRAIL": 3,
+    "SCRAMBLE:SUMMIT": 3,
     "SEQUENCE:SPROUT": 3,
     "SEQUENCE:TRAIL": 3,
+    "SEQUENCE:SUMMIT": 3,
     "DETECTIVE:SPROUT": 3,
     "DETECTIVE:TRAIL": 3,
+    "DETECTIVE:SUMMIT": 3,
     "CAPTION:SPROUT": 3,
     "CAPTION:TRAIL": 3,
+    "CAPTION:SUMMIT": 3,
     "CHAPTER:SPROUT": 3,
     "CHAPTER:TRAIL": 3,
+    "CHAPTER:SUMMIT": 3,
     "STUDIO:SPROUT": 3,
     "STUDIO:TRAIL": 3,
+    "STUDIO:SUMMIT": 3,
     "PARTNERS:SPROUT": 3,
-    "PARTNERS:TRAIL": 3
+    "PARTNERS:TRAIL": 3,
+    "PARTNERS:SUMMIT": 3
   }
 }

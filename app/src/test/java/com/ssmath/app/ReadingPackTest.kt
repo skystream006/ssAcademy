@@ -19,6 +19,25 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
+internal class ReadingRepositoryPack(manifestFile: String = "manifest.json") {
+    private val root = listOf(File("../datasets/reading"), File("datasets/reading")).first { it.isDirectory }
+    private val manifestBytes = File(root, manifestFile).readBytes()
+    val manifest = readingPackJson.decodeFromString<ReadingPackManifest>(manifestBytes.toString(Charsets.UTF_8))
+    val bytes = File(root, manifest.file).readBytes()
+    val activities = bytes.toString(Charsets.UTF_8).lineSequence().filter { it.isNotBlank() }
+        .map { readingPackJson.decodeFromString<ReadingActivity>(it) }.toList()
+
+    fun importer(catalog: ReadingCatalog, cache: File) = ReadingPackImporter(catalog, cache,
+        ReadingPackTransport { url, consume ->
+            requireReadingPackUrl(url)
+            val data = if (url == READING_PACK_MANIFEST_URL) manifestBytes else {
+                assertEquals(READING_PACK_MANIFEST_URL.removeSuffix("manifest.json") + manifest.file, url)
+                bytes
+            }
+            data.inputStream().use(consume)
+        })
+}
+
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class ReadingPackTest {
@@ -27,7 +46,6 @@ class ReadingPackTest {
     private lateinit var catalog: ReadingCatalog
     private lateinit var cache: File
     private val first get() = ReadingContent.activities.first()
-    private val root get() = listOf(File("../datasets/reading"), File("datasets/reading")).first { it.isDirectory }
 
     @Before fun setup() {
         application.deleteDatabase("reading-pack-test.db")
@@ -97,18 +115,27 @@ class ReadingPackTest {
         ).use { assertFalse(it.moveToFirst()) }
     }
 
-    @Test fun repositoryPackExactlyReproducesAll48BundledActivities() {
-        val manifest = readingPackJson.decodeFromString<ReadingPackManifest>(File(root, "manifest.json").readText())
-        val bytes = File(root, manifest.file).readBytes()
-        assertEquals(48, manifest.counts.values.sum())
+    @Test fun repositoryPackPreservesAll48LegacyActivitiesAndAdds24SummitActivities() {
+        val pack = ReadingRepositoryPack()
+        val manifest = pack.manifest
+        val bytes = pack.bytes
+        val activities = pack.activities
+        val legacy = ReadingRepositoryPack("manifest-v1.json")
+        assertEquals(1, manifest.schemaVersion)
+        assertEquals(72, manifest.counts.values.sum())
+        assertEquals(72, activities.size)
+        assertEquals(72, activities.map { it.id }.distinct().size)
         assertEquals(bytes.size.toLong(), manifest.bytes)
         assertEquals(readingSha256(bytes), manifest.sha256)
-        val activities = bytes.toString(Charsets.UTF_8).lineSequence().filter { it.isNotBlank() }
-            .map { readingPackJson.decodeFromString<ReadingActivity>(it) }.toList()
-        assertEquals(ReadingContent.activities, activities)
+        assertEquals("activities-${manifest.sha256}.jsonl", manifest.file)
+        assertArrayEquals(legacy.bytes, bytes.copyOfRange(0, legacy.bytes.size))
+        assertEquals(ReadingContent.activities, activities.take(48))
+        assertEquals(ReadingContent.activities, activities.filter { it.level != ReadingLevel.SUMMIT })
+        assertEquals(24, activities.count { it.level == ReadingLevel.SUMMIT })
+        assertEquals(manifest.counts, activities.groupingBy { "${it.game.name}:${it.level.name}" }.eachCount())
         activities.forEach(ReadingPackValidator::validate)
-        assertEquals(manifest.counts, install(activities, bytes, manifest).counts)
-        assertEquals("v1", catalog.status().version)
+        assertEquals(manifest.counts, runBlocking { pack.importer(catalog, cache).importPack() }.counts)
+        assertEquals("v2", catalog.status().version)
         assertEquals(manifest.sha256, storedChecksum())
         ReadingGame.entries.forEach { game -> ReadingLevel.entries.forEach { level ->
             assertEquals(3, catalog.candidates(game, level).size)
@@ -117,6 +144,28 @@ class ReadingPackTest {
             val latest = requireNotNull(catalog.latest(activity.id))
             assertEquals(activity, latest.activity)
             assertEquals(activity, catalog.find(activity.id, latest.revision))
+        }
+    }
+
+    @Test fun originalManifestAndImmutable48ActivityPackRemainImportable() {
+        val pack = ReadingRepositoryPack("manifest-v1.json")
+        assertEquals("v1", pack.manifest.version)
+        assertEquals(1, pack.manifest.schemaVersion)
+        assertEquals(24839L, pack.manifest.bytes)
+        assertEquals("5f006e54debdad7b6334ec5f5ec80ad50a3d5c1f011ad044f82f90c4ba41f1ea",
+            pack.manifest.sha256)
+        assertEquals(pack.manifest.bytes, pack.bytes.size.toLong())
+        assertEquals(pack.manifest.sha256, readingSha256(pack.bytes))
+        assertEquals(ReadingContent.activities, pack.activities)
+        assertEquals(48, pack.activities.size)
+        assertEquals(pack.manifest.counts, runBlocking { pack.importer(catalog, cache).importPack() }.counts)
+        assertEquals("v1", catalog.status().version)
+        assertEquals(pack.manifest.sha256, storedChecksum())
+        ReadingGame.entries.forEach { game ->
+            listOf(ReadingLevel.SPROUT, ReadingLevel.TRAIL).forEach { level ->
+                assertEquals(3, catalog.candidates(game, level).size)
+            }
+            assertTrue(catalog.candidates(game, ReadingLevel.SUMMIT).isEmpty())
         }
     }
 

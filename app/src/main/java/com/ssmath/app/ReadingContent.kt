@@ -17,7 +17,8 @@ enum class ReadingGame(val title: String, val guidance: String) {
 @Serializable
 enum class ReadingLevel(val label: String) {
     SPROUT("Sprout · pictures and short sentences"),
-    TRAIL("Trail · longer sentences and context clues")
+    TRAIL("Trail · longer sentences and context clues"),
+    SUMMIT("Summit · complex sentences, inference and reasoning")
 }
 
 @Serializable
@@ -266,7 +267,7 @@ object ReadingContent {
                 listOf("could not explain a strange pattern", "had to protect something fragile", "needed to unite two teams"),
                 listOf("tested an idea with friends", "discovered a clue in an ordinary place", "chose kindness over a prize"))
         )
-        ReadingLevel.entries.forEach { level ->
+        listOf(ReadingLevel.SPROUT, ReadingLevel.TRAIL).forEach { level ->
             val sets = if (level == ReadingLevel.SPROUT) sproutSets else trailSets
             sets.forEachIndexed { index, choices ->
                 listOf(ReadingGame.STUDIO, ReadingGame.PARTNERS).forEach { game ->

@@ -256,6 +256,20 @@ private fun DialogCard(content: @Composable ColumnScope.() -> Unit) {
 
 @Composable
 private fun HomeScreen(model: MathViewModel) {
+    var readingRequested by rememberSaveable { mutableStateOf(false) }
+    if (readingRequested) {
+        val reading = rememberReadingViewModel()
+        val installed = reading.packStatus?.let { it.version != null && it.counts.values.any { count -> count > 0 } } == true
+        LaunchedEffect(installed, reading.storageError) {
+            if (installed && reading.storageError == null) {
+                readingRequested = false
+                model.openReading()
+            }
+        }
+        if (!installed || reading.storageError != null) ReadingImportRequiredDialog(reading,
+            onDismiss = { readingRequested = false },
+            onSettings = { readingRequested = false; model.openSettings() })
+    }
     Column(Modifier.fillMaxSize().testTag("home-screen"), horizontalAlignment = Alignment.CenterHorizontally) {
         CollectionButtons(model::openRewards, model::openPokemons)
         if (model.mathGamesOpen) {
@@ -276,7 +290,7 @@ private fun HomeScreen(model: MathViewModel) {
                 }
             }
         } else {
-            SubjectGrid(model::openMathGames, model::openReading, Modifier.weight(1f))
+            SubjectGrid(model::openMathGames, { readingRequested = true }, Modifier.weight(1f))
         }
     }
     when (model.setupDialog) {

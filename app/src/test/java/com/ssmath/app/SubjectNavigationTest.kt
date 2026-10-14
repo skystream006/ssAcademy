@@ -18,6 +18,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ApplicationProvider
 import java.io.File
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Rule
@@ -44,6 +45,17 @@ class SubjectNavigationTest {
     }
 
     private fun model() = MathViewModel(application, ioDispatcher = Dispatchers.Unconfined)
+
+    private fun installReadingPack() {
+        val database = ReadingDatabase(application)
+        try {
+            runBlocking {
+                readingTestImporter(ReadingCatalog(database), application.cacheDir, ReadingContent.activities).importPack()
+            }
+        } finally {
+            database.close()
+        }
+    }
 
     @Test fun subjectHistoriesReturnToSettingsAndNeverShowMathResults() {
         val model = model()
@@ -135,6 +147,7 @@ class SubjectNavigationTest {
     }
 
     @Test fun readingSubjectReturnsToSubjectsBeforeOpeningMathChoices() {
+        installReadingPack()
         val model = model()
         compose.setContent { MathAppContent(model) }
         repeat(2) { returnMethod ->
@@ -165,6 +178,7 @@ class SubjectNavigationTest {
         val store = ReadingStore(File(application.filesDir, "reading_private.json"))
         store.load()
         store.save(data)
+        installReadingPack()
         val readingModel = ViewModelProvider(compose.activity,
             ViewModelProvider.AndroidViewModelFactory(application))[ReadingViewModel::class.java]
         val model = model()

@@ -12,6 +12,8 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    **Math**, **Reading**, **Science**, and **Advanced**. Tap **Math** to choose
    **Practice Game** or **Rewards Game**; the filled **Back to subjects** button or Android Back returns
    to the subject grid. Tap **Reading** for the offline reading activities described below.
+   If no activity pack has been imported, a dialog explains how to import one and offers
+   **Open Settings**; **Cancel** leaves you on Home without changing saved progress.
    **Science** and **Advanced** show the toast **More Activities are coming soon!**
    Their backgrounds are drawn with bundled vectors and work offline.
    **Practice Game** opens the question setup in a dialog. Choose **Addition**, **Subtraction**,
@@ -100,7 +102,7 @@ expand or collapse it without changing your choices. **Rewards** contains
 **Reading Rewards System**, **Reading Practice History**, and **Import / Update Reading Activities**.
 The import button shows the installed pack version, counts by game/level, and download progress.
 **Set Reading Level** opens a dialog
-with the available levels; existing drafts keep their original level.
+with **Sprout**, **Trail**, and **Summit**, in increasing difficulty; existing drafts keep their original level.
 **Active Reading Games** opens a dialog with a switch for each reading game, all enabled by default.
 Changes are saved automatically on this device. Disabled games cannot be started or resumed,
 but their drafts, history, stories, and earned points are kept; re-enable a game to resume its drafts.
@@ -214,6 +216,9 @@ reused; there is no add-reader or switch-reader screen.
 On a new installation, open **Settings → Reading Settings → Import / Update Reading Activities**
 to install the repository's reading library. Internet is required for import/update only;
 installed activities and saved drafts work offline. Empty games explain where to import.
+**Summit**, above Trail, adds more complex sentences, vocabulary in context, inference,
+multi-step cause and effect, and story planning. Import/update the activity library to
+get Summit content; merely selecting a level does not download anything.
 Open **Reading** on the home screen to choose from illustrated square game buttons.
 **Rewards** and **Pokémon** shortcuts stay at the top, as on the Math page.
 Reading progress is separate from math history and prizes. Use **Settings → Reading Settings →
@@ -262,7 +267,11 @@ use non-destructive migrations. Clearing app data, like uninstalling, removes lo
 The downloadable source is `datasets/reading/manifest.json`, with UTF-8 JSON Lines data
 in `datasets/reading/activities-<sha256>.jsonl` (one `ReadingActivity` JSON object per line).
 These files are outside Android resources/assets and are **not packaged in the APK**.
-The initial pack contains the existing 48 reviewed activities, not a generated 8,000-question bank.
+Pack **v2** contains 72 reviewed activities: the unchanged 48 Sprout/Trail activities plus
+24 new Summit activities (three for each of the eight games), not a generated 8,000-question bank.
+The original v1 checksum-named file remains available and unchanged. Existing v1 installations
+can update without losing drafts, points, or presentation cycles. Older app versions without
+Summit support reject v2 safely and retain their installed library; update the app first.
 The default HTTPS source is this repository's `main` branch on `raw.githubusercontent.com`;
 the files must be merged/published there and publicly readable before the import button works.
 Private repository access is not configured, and the APK contains no GitHub credentials.
