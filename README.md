@@ -221,7 +221,7 @@ Starting over requires confirmation before archiving a saved draft.
 | Game | Activity and completion points |
 | --- | --- |
 | Missing Word Mission | Choose the missing word: 1 point per sentence. |
-| Sentence Scramble | Tap word tiles in order: 1 point, with an optional 1-point extra challenge. More than one valid order is accepted where appropriate. |
+| Sentence Scramble | Hold and drag word tiles into empty sentence spaces, or back to Available tiles to remove them. Tapping also adds or removes tiles. Complete the order for 1 point, with an optional 1-point extra challenge. More than one valid order is accepted where appropriate. |
 | Story Sequencer | Arrange illustrated story parts: 1 point, plus 1 for a comprehension question. |
 | Reading Detective | Answer a passage question and select its evidence: 1 point each. |
 | Caption Quest | Match an illustration with a written caption: 1 point. |

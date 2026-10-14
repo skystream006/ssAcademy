@@ -8,6 +8,7 @@ import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
@@ -20,12 +21,14 @@ import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTextInputSelection
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.text.TextRange
 import androidx.test.core.app.ApplicationProvider
 import java.io.File
@@ -417,6 +420,130 @@ class ReadingScreenTest {
         waitFor { it.active?.order?.isEmpty() == true }
         compose.onNodeWithTag("reading-tile-0").assertExists()
         assertEquals(color, choiceColor("reading-tile-2"))
+    }
+
+    private fun dragTile(sourceTag: String, targetTag: String, cancelled: Boolean = false) {
+        compose.onNodeWithTag(sourceTag).performScrollTo()
+        compose.onNodeWithTag(targetTag).performScrollTo()
+        val source = compose.onNodeWithTag(sourceTag).assertIsDisplayed().fetchSemanticsNode().boundsInRoot.center
+        val target = compose.onNodeWithTag(targetTag).assertIsDisplayed().fetchSemanticsNode().boundsInRoot.center
+        val origin = compose.onRoot().fetchSemanticsNode().boundsInRoot.topLeft
+        compose.onRoot().performTouchInput {
+            down(source - origin)
+            advanceEventTime(600)
+            moveTo(source - origin)
+            repeat(12) { step ->
+                moveTo(source + (target - source) * ((step + 1) / 12f) - origin, delayMillis = 16)
+            }
+            if (cancelled) cancel() else up()
+        }
+    }
+
+    @Test fun sentenceTilesDragIntoAnyEmptySpaceBetweenSpacesAndBackOut() {
+        show(readingFixture(ReadingContent.find("scramble-cats")))
+        compose.onNodeWithTag("reading-check-order").performScrollTo().assertIsNotEnabled()
+        dragTile("reading-tile-0", "reading-space-2")
+        waitFor { it.active?.order == listOf(-1, -1, 0) }
+        compose.onNodeWithTag("reading-tile-0").assertDoesNotExist()
+        compose.onNodeWithTag("reading-check-order").assertIsNotEnabled()
+        assertEquals(listOf(-1, -1, 0), ReadingStore(file).load().active?.order)
+        dragTile("reading-tile-1", "reading-space-0")
+        waitFor { it.active?.order == listOf(1, -1, 0) }
+        dragTile("reading-placed-2", "reading-space-1")
+        waitFor { it.active?.order == listOf(1, 0) }
+        compose.onNodeWithTag("reading-placed-2").assertDoesNotExist()
+        dragTile("reading-placed-1", "reading-tile-bank")
+        waitFor { it.active?.order == listOf(1) }
+        compose.onNodeWithTag("reading-tile-0").assertExists()
+        dragTile("reading-tile-0", "reading-space-2")
+        waitFor { it.active?.order == listOf(1, -1, 0) }
+        dragTile("reading-tile-2", "reading-space-1")
+        waitFor { it.active?.order == listOf(1, 2, 0) }
+        dragTile("reading-placed-1", "reading-tile-bank")
+        waitFor { it.active?.order == listOf(1, -1, 0) }
+        dragTile("reading-tile-2", "reading-space-1")
+        waitFor { it.active?.order == listOf(1, 2, 0) }
+        click("reading-check-order")
+        waitFor { it.active?.earned("order") == true }
+        val locked = model.data
+        compose.onNodeWithTag("reading-placed-0").assertIsNotEnabled()
+        dragTile("reading-placed-0", "reading-tile-bank")
+        assertEquals(locked, model.data)
+        assertEquals(1, ReadingStore(file).load().points("reader-a"))
+    }
+
+    @Test fun invalidAndCancelledSentenceDropsLeaveTheSavedOrderUnchanged() {
+        val data = ReadingEngine.placeTileInSpace(readingFixture(ReadingContent.find("scramble-cats")), 1, 0)
+        show(data)
+        dragTile("reading-tile-0", "reading-space-0")
+        assertEquals(data, model.data)
+        dragTile("reading-tile-0", "reading-space-1", cancelled = true)
+        assertEquals(data, model.data)
+        dragTile("reading-placed-0", "reading-check-order")
+        assertEquals(data, model.data)
+        assertEquals(data, ReadingStore(file).load())
+        compose.onNodeWithTag("reading-tile-0").assertExists()
+        compose.onNodeWithTag("reading-drag-preview").assertDoesNotExist()
+    }
+
+    @Test fun sparseSentenceDraftRestoresAndTapControlsFillItsFirstEmptySpace() {
+        val data = ReadingEngine.level(ReadingEngine.placeTileInSpace(
+            readingFixture(ReadingContent.find("scramble-lantern")), 3, 3), ReadingLevel.TRAIL)
+        show(data, percent = 200)
+        compose.onNodeWithTag("reading-space-0").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("reading-placed-3").performScrollTo().assertTextContains("softly")
+        click("reading-tile-2")
+        waitFor { it.active?.order == listOf(2, -1, -1, 3) }
+        click("reading-tile-1")
+        waitFor { it.active?.order == listOf(2, 1, -1, 3) }
+        click("reading-placed-0")
+        waitFor { it.active?.order == listOf(-1, 1, -1, 3) }
+        click("reading-back")
+        waitFor { it.page == ReadingPage.MENU }
+        click("reading-game-SCRAMBLE")
+        compose.onNodeWithTag("reading-resume-SCRAMBLE").performClick()
+        waitFor { it.page == ReadingPage.ACTIVITY }
+        assertEquals(listOf(-1, 1, -1, 3), model.data?.active?.order)
+        click("reading-tile-2")
+        waitFor { it.active?.order == listOf(2, 1, -1, 3) }
+        click("reading-tile-0")
+        waitFor { it.active?.order == listOf(2, 1, 0, 3) }
+        click("reading-check-order")
+        waitFor { it.active?.earned("order") == true }
+        assertEquals(1, ReadingStore(file).load().points("reader-a"))
+    }
+
+    @Test
+    @Config(qualifiers = "w320dp-h640dp")
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun sentenceDragScrollsTowardOffscreenSpacesAndCancellationKeepsTheDraft() {
+        val data = readingFixture(ReadingContent.find("scramble-lantern"))
+        show(data, percent = 200)
+        compose.onNodeWithTag("reading-tile-3").performScrollTo()
+        val source = compose.onNodeWithTag("reading-tile-3").assertIsDisplayed()
+            .fetchSemanticsNode().boundsInRoot.center
+        val viewport = compose.onNodeWithTag("reading-activity").fetchSemanticsNode().boundsInRoot
+        fun scrollOffset() = compose.onNodeWithTag("reading-activity").fetchSemanticsNode()
+            .config[SemanticsProperties.VerticalScrollAxisRange].value()
+        val before = scrollOffset()
+        assertTrue(before > 0)
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.onRoot().performTouchInput {
+                down(source)
+                advanceEventTime(600)
+                moveTo(source)
+                moveTo(Offset(source.x, viewport.top + 1f), delayMillis = 200)
+            }
+            compose.mainClock.advanceTimeBy(1_000)
+            assertTrue("Dragging at the top should reveal earlier spaces", scrollOffset() < before)
+            compose.onRoot().performTouchInput { cancel() }
+        } finally {
+            compose.mainClock.autoAdvance = true
+        }
+        compose.waitForIdle()
+        assertEquals(data, model.data)
+        assertEquals(data, ReadingStore(file).load())
     }
 
     @Test
