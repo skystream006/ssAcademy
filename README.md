@@ -299,8 +299,8 @@ review of the generated wording.
 
 To reproduce the committed v3 pack, run
 `python3 /home/runner/work/ssAcademy/ssAcademy/datasets/reading/generate.py`;
-add `--check` to verify it without writing files. Python 3 and its standard library are the
-only requirements. Generation preserves the exact v2 file as a prefix, rejects duplicate
+add `--check` to verify it without writing files. Python 3.9 or newer and its standard library
+are the only requirements. Generation preserves the exact v2 file as a prefix, rejects duplicate
 learning tasks even when titles or answer order differ, checks importer size/count limits,
 and derives stable new IDs from task content. Editing a template requires publishing a
 new immutable pack, not replacing an already published checksum-named file.
