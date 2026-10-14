@@ -453,7 +453,7 @@ class ReadingStoreTest {
         assertFalse(requireNotNull(storage.saved.active).checkpoints.getValue("answer").rewardGranted)
     }
 
-    @Test fun sessionStartSnapshotsSettingsAndQueuedNextDoesNotSkipAssignedActivities() {
+    @Test fun sessionStartSnapshotsSettingsAndRepeatedSubmissionsAdvanceOnlyOnce() {
         settings.edit().putBoolean("reading_rewards_enabled", true).putBoolean("show_timer", true)
             .putInt("time_limit_minutes", 10).commit()
         val storage = RecordingStorage(readingFixture())
@@ -469,10 +469,9 @@ class ReadingStoreTest {
         assertFalse(storage.saved.attempts.first().abandoned)
         model.act { ReadingEngine.field(it, "answer", readingCorrect(it).toString()) }
         repeat(10) { model.submit("answer") }
-        repeat(10) { model.finishActivity() }
-        await { model.data?.active?.finishedAt != null && !model.saving }
-        assertEquals(session.attemptIds.first(), model.data?.active?.id)
+        await { model.data?.active?.id == session.attemptIds[1] && !model.saving }
         assertEquals(1, requireNotNull(model.data).sessionCorrect(session))
+        assertNotNull(storage.saved.attempts.first { it.id == session.attemptIds.first() }.finishedAt)
         repeat(10) { model.nextSessionActivity() }
         await { model.data?.active?.id == session.attemptIds[1] && !model.saving }
         assertEquals(1, requireNotNull(model.data).sessionAnswered(session))
@@ -495,6 +494,51 @@ class ReadingStoreTest {
         assertTrue(restored.sessions.isEmpty())
         assertEquals(restored, ReadingEngine.finish(restored))
         assertEquals(restored, ReadingEngine.submit(restored, "answer"))
+    }
+
+    @Test fun submittingTheLastRequiredCheckpointAutomaticallySavesAndAdvancesEveryGame() {
+        ReadingGame.entries.forEach { game ->
+            val solved = readingSolve(readingSessionFixture(game))
+            val completed = requireNotNull(solved.active)
+            val key = ReadingEngine.requiredKeys(completed).last()
+            val data = solved.copy(attempts = solved.attempts.map {
+                if (it.id == completed.id) it.copy(finishedAt = null, checkpoints = it.checkpoints - key) else it
+            }, stories = emptyList())
+            val storage = RecordingStorage(data)
+            val model = ReadingViewModel(application, storage)
+            await { model.data != null }
+            model.submit(key)
+            await { model.data?.active?.id == data.activeSession?.attemptIds?.get(1) && !model.saving }
+            val saved = storage.saved
+            assertEquals(1, saved.sessionCorrect(requireNotNull(saved.activeSession)))
+            assertNotNull(saved.attempts.first().finishedAt)
+            assertEquals(if (game in listOf(ReadingGame.STUDIO, ReadingGame.PARTNERS)) 1 else 0, saved.stories.size)
+            assertTrue(requireNotNull(saved.active).fields.isEmpty())
+            ReadingEngine.validate(saved)
+        }
+    }
+
+    @Test fun failedSubmissionRetriesTheAnswerAndAdvanceTogetherWithoutChangingTheNextQuestion() {
+        val session = readingSessionFixture()
+        val data = ReadingEngine.field(session, "answer", readingWrong(session).toString())
+        val storage = RecordingStorage(data)
+        val model = ReadingViewModel(application, storage)
+        await { model.data != null }
+        storage.failSave = true
+        model.submit("answer")
+        await { model.storageError != null && !model.saving }
+        assertEquals(data, model.data)
+        assertEquals(data, storage.saved)
+        storage.failSave = false
+        model.retry()
+        await { model.data?.active?.id == data.activeSession?.attemptIds?.get(1) && !model.saving }
+        val saved = storage.saved
+        assertEquals(1, saved.sessionWrong(requireNotNull(saved.activeSession)))
+        assertTrue(saved.attempts.first().feedback.contains("Correct answer:"))
+        assertEquals(1, saved.attempts.first().checkpoints.getValue("answer").tries)
+        assertTrue(requireNotNull(saved.active).checkpoints.isEmpty())
+        assertEquals(saved, model.data)
+        ReadingEngine.validate(saved)
     }
 
     @Test fun sessionsRoundTripWithCurrentFinishedMemberDraftAndEndedUnusedAssignments() {

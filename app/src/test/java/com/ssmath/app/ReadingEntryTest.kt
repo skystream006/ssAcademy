@@ -5,6 +5,7 @@ import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -128,15 +129,18 @@ class ReadingEntryTest {
         val assigned = requireNotNull(reading.data?.activeSession).attemptIds
         repeat(25) { index ->
             await { reading.data?.active?.id == assigned[index] && !reading.saving }
+            val question = requireNotNull(reading.data?.active?.content?.question)
             compose.runOnIdle {
                 reading.act { data -> ReadingEngine.field(data, "answer", readingCorrect(data).toString()) }
                 reading.submit("answer")
-                reading.finishActivity()
             }
-            await { reading.data?.active?.finishedAt != null && !reading.saving }
-            if (index < 24) {
-                compose.onNodeWithTag("reading-next").performScrollTo().performClick()
+            await {
+                reading.data?.let { it.sessionAnswered(requireNotNull(it.activeSession)) == index + 1 } == true &&
+                    !reading.saving
             }
+            compose.onNodeWithTag("reading-previous-answer").performScrollTo()
+                .assertTextContains("Correct answer: ${question.choices[question.answer]}", substring = true)
+            if (index < 24) assertNull(reading.data?.attempts?.get(index)?.loadedContent)
         }
         compose.onNodeWithTag("reading-session-summary").assertIsDisplayed()
         await { app.readingRewardResults.singleOrNull()?.pokemonReward != null }

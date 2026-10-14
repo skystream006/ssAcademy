@@ -77,7 +77,7 @@ class ReadingModelTest {
         assertFalse(requireNotNull(data.active).orderComplete)
         val incomplete = ReadingEngine.submit(data, "order")
         assertTrue(requireNotNull(incomplete.active).checkpoints.isEmpty())
-        assertEquals("Place every tile before checking.", incomplete.active?.feedback)
+        assertEquals("Place every tile before submitting.", incomplete.active?.feedback)
         data = ReadingEngine.placeTile(data, 1)
         assertEquals(listOf(1, -1, 0), data.active?.order)
         data = ReadingEngine.placeTileInSpace(data, 0, 1)
@@ -252,7 +252,7 @@ class ReadingModelTest {
             assertEquals(1, data.checkpointCount("reader-a"))
             assertEquals(false, data.active?.checkpoints?.get("answer")?.rewardGranted)
             assertTrue(requireNotNull(data.active).earned("answer"))
-            assertTrue(requireNotNull(data.active).feedback.contains("Checkpoint saved"))
+            assertTrue(requireNotNull(data.active).feedback.contains("Correct! Correct answer:"))
             assertFalse(requireNotNull(data.active).feedback.contains(" point"))
             repeat(5) {
                 assertEquals(data, ReadingEngine.submit(data, "answer", rewardsEnabled = !enabledAtCompletion))

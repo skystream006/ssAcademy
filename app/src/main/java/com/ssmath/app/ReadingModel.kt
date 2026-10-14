@@ -378,9 +378,15 @@ object ReadingEngine {
             earnedAt = if (correct) now else null,
             supportedAtCompletion = correct && a.supported,
             rewardGranted = false)
-        return a.copy(checkpoints = a.checkpoints + (key to check), feedback = if (correct)
-            "Checkpoint saved."
-        else "Not quite yet. Reread, try a hint, and try again.")
+        val answer = when (key) {
+            "answer", "bonus" -> question(a)?.let { it.choices[it.answer] }
+            "order" -> a.content.validOrders.first().joinToString(" ") { a.content.tiles[it] }
+            "evidence" -> a.content.passage[a.content.evidence]
+            else -> null
+        }
+        return a.copy(checkpoints = a.checkpoints + (key to check), feedback = if (answer != null)
+            "${if (correct) "Correct!" else "Not quite."} Correct answer: $answer"
+        else "Checkpoint saved.")
     }
 
     fun submit(data: ReadingData, key: String, now: Long = System.currentTimeMillis(),
@@ -390,7 +396,7 @@ object ReadingEngine {
         if (session != null && key == "bonus") return data
         val updated = submitCheckpoint(data, key, now, expectedTurn)
         if (session == null || updated == data || updated.active?.let(::wrong) != true) return updated
-        val finished = edit(updated) { it.copy(finishedAt = now, feedback = "Not quite. This activity is finished.") }
+        val finished = edit(updated) { it.copy(finishedAt = now) }
         return completeSessionIfNeeded(finished, now, rewardsEnabled, disabledRewards, random)
     }
 
@@ -399,7 +405,7 @@ object ReadingEngine {
         val game = a.game
         when {
             key == "order" && game in listOf(ReadingGame.SCRAMBLE, ReadingGame.SEQUENCE) -> {
-                if (!a.orderComplete) a.copy(feedback = "Place every tile before checking.")
+                if (!a.orderComplete) a.copy(feedback = "Place every tile before submitting.")
                 else award(a, key, a.order in a.content.validOrders, now)
             }
             (key == "answer" && game in listOf(ReadingGame.MISSING, ReadingGame.SEQUENCE, ReadingGame.DETECTIVE,
@@ -408,7 +414,7 @@ object ReadingEngine {
                 val answer = a.fields["answer"]?.toIntOrNull()
                 if ((game == ReadingGame.SEQUENCE || game == ReadingGame.SCRAMBLE) && !a.earned("order")) a
                 else if (question == null || answer == null || answer !in question.choices.indices)
-                    a.copy(feedback = "Choose an answer before checking.")
+                    a.copy(feedback = "Choose an answer before submitting.")
                 else award(a, key, answer == question.answer, now)
             }
             key == "evidence" && game == ReadingGame.DETECTIVE && a.earned("answer") -> {
@@ -451,7 +457,7 @@ object ReadingEngine {
                disabledRewards: Set<RewardType> = emptySet(), random: Random = Random.Default): ReadingData {
         val a = data.active ?: return data
         if (!a.open || !ready(a)) return data
-        val updated = edit(data) { it.copy(finishedAt = now, feedback = "Congratulations! Your reading is growing.") }
+        val updated = edit(data) { it.copy(finishedAt = now) }
         if (updated == data) return data
         if (a.game !in listOf(ReadingGame.STUDIO, ReadingGame.PARTNERS))
             return completeSessionIfNeeded(updated, now, rewardsEnabled, disabledRewards, random)
