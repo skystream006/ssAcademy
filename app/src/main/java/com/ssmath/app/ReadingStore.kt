@@ -226,8 +226,8 @@ class ReadingViewModel(
         }
     }
 
-    private suspend fun persist(next: ReadingData) {
-        saving = true
+    private suspend fun persist(next: ReadingData, blockInteraction: Boolean = true) {
+        saving = blockInteraction
         pending = next
         try {
             data = withContext(io) {
@@ -347,7 +347,8 @@ class ReadingViewModel(
         })
         if (expired)
             next = ReadingEngine.endSession(next, session.id, timedOut = true)
-        persist(next)
+        // Routine clock saves must not toggle the enabled state of answer controls.
+        persist(next, blockInteraction = expired)
     }
 
     fun importActivities() {

@@ -67,7 +67,8 @@ class ReadingScreenTest {
     }
 
     private fun show(data: ReadingData, speech: Boolean = false, percent: Int = 100, history: Boolean = false,
-                     disabled: Set<ReadingGame> = emptySet(), welcome: Boolean = false) {
+                     disabled: Set<ReadingGame> = emptySet(), welcome: Boolean = false,
+                     clock: () -> Long = android.os.SystemClock::elapsedRealtime) {
         val store = ReadingStore(file)
         store.load()
         store.save(data)
@@ -81,7 +82,7 @@ class ReadingScreenTest {
                 check(gate?.await(5, TimeUnit.SECONDS) != false)
                 store.save(data)
             }
-        })
+        }, clock = clock)
         compose.setContent {
             MathTheme(textSizePercent = textSize.intValue) {
                 if (history) ReadingHistoryContent(model)
@@ -951,6 +952,45 @@ class ReadingScreenTest {
         click("reading-game-MISSING")
         waitFor { it.activeSession?.questionCount == 15 }
         assertNull(ShadowToast.getTextOfLatestToast())
+    }
+
+    @Test fun submitStaysEnabledDuringUntimedSessionClockSaves() {
+        assertSubmitStaysEnabledDuringClockSaves(timeLimitMs = null)
+    }
+
+    @Test fun submitStaysEnabledDuringTimedSessionClockSaves() {
+        assertSubmitStaysEnabledDuringClockSaves(timeLimitMs = 300_000)
+    }
+
+    private fun assertSubmitStaysEnabledDuringClockSaves(timeLimitMs: Long?) {
+        var clock = 0L
+        show(readingSessionFixture(timeLimitMs = timeLimitMs), clock = { clock })
+        val submit = compose.onNodeWithTag("reading-submit-answer").performScrollTo()
+        submit.assertIsNotEnabled()
+        chooseCorrectAnswer()
+        val selected = requireNotNull(model.data?.active)
+        submit.performScrollTo().assertIsEnabled()
+        repeat(2) {
+            delayedWrites {
+                compose.runOnIdle {
+                    clock += 1_000
+                    shadowOf(Looper.getMainLooper()).idleFor(200, TimeUnit.MILLISECONDS)
+                }
+                waitForBlockedSave()
+                submit.assertIsDisplayed().assertIsEnabled()
+                assertEquals(selected, model.data?.active)
+            }
+            waitFor { it.activeSession?.elapsedMs == clock }
+            assertEquals(clock, ReadingStore(file).load().activeSession?.elapsedMs)
+        }
+        delayedWrites {
+            submit.performClick()
+            waitForBlockedSave()
+            submit.assertIsNotEnabled()
+        }
+        waitFor { it.active?.id != selected.id }
+        compose.onNodeWithTag("reading-submit-answer").performScrollTo().assertIsNotEnabled()
+        assertEquals(1, requireNotNull(model.data).sessionAnswered(requireNotNull(model.data?.activeSession)))
     }
 
     @Test fun submitAdvancesImmediatelyAndKeepsThePreviousCorrectionBelowTheNewProblem() {
