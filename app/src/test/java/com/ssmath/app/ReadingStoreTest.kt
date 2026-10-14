@@ -606,6 +606,72 @@ class ReadingStoreTest {
         assertEquals(1, model.data?.sessions?.size)
     }
 
+    @Test fun failedClockSavePreservesQueuedSubmissionForRetry() {
+        val data = ReadingEngine.field(readingSessionFixture(), "answer",
+            readingCorrect(readingSessionFixture()).toString())
+        val storage = RecordingStorage(data)
+        var clock = 0L
+        val model = ReadingViewModel(application, storage, clock = { clock })
+        await { model.data != null && !model.saving }
+        model.setSessionForeground(true)
+        val gate = CountDownLatch(1)
+        storage.writeGate = gate
+        storage.writeStarted = CountDownLatch(1)
+        storage.failSave = true
+        try {
+            clock += 1_000
+            shadowOf(Looper.getMainLooper()).idleFor(200, TimeUnit.MILLISECONDS)
+            await { storage.writeStarted?.count == 0L }
+            assertFalse(model.saving)
+            model.submit("answer")
+        } finally {
+            storage.writeGate = null
+            gate.countDown()
+        }
+        await { model.storageError != null && !model.saving }
+        assertEquals(data, model.data)
+        assertEquals(data, storage.saved)
+        storage.failSave = false
+        model.retry()
+        await { model.data?.active?.id != data.active?.id && model.storageError == null && !model.saving }
+        val saved = storage.saved
+        assertEquals(1_000L, saved.activeSession?.elapsedMs)
+        assertEquals(1, saved.sessionAnswered(requireNotNull(saved.activeSession)))
+        assertEquals(1, saved.attempts.first().checkpoints.getValue("answer").tries)
+        assertEquals(1, storage.maximumConcurrentWrites)
+        model.setSessionForeground(false)
+    }
+
+    @Test fun timeoutSaveStillBlocksInteractionAndRejectsQueuedSubmission() {
+        val data = ReadingEngine.field(readingSessionFixture(timeLimitMs = 300_000), "answer",
+            readingCorrect(readingSessionFixture()).toString())
+        val storage = RecordingStorage(data)
+        var clock = 0L
+        val model = ReadingViewModel(application, storage, clock = { clock })
+        await { model.data != null && !model.saving }
+        model.setSessionForeground(true)
+        val gate = CountDownLatch(1)
+        storage.writeGate = gate
+        storage.writeStarted = CountDownLatch(1)
+        try {
+            clock += 300_000
+            shadowOf(Looper.getMainLooper()).idleFor(200, TimeUnit.MILLISECONDS)
+            await { storage.writeStarted?.count == 0L }
+            assertTrue(model.saving)
+            model.submit("answer")
+        } finally {
+            storage.writeGate = null
+            gate.countDown()
+        }
+        await { model.data?.activeSession?.timedOut == true && !model.saving }
+        val saved = storage.saved
+        assertEquals(300_000L, saved.activeSession?.elapsedMs)
+        assertEquals(0, saved.sessionAnswered(requireNotNull(saved.activeSession)))
+        assertTrue(saved.attempts.all { it.abandoned })
+        assertEquals(1, storage.maximumConcurrentWrites)
+        model.setSessionForeground(false)
+    }
+
     @Test fun sessionTimerCountsVisibleTimeOnlyAndResumesPersistedElapsedBeforeTimeout() {
         val store = ReadingStore(file)
         store.load()
