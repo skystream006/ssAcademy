@@ -1165,12 +1165,12 @@ _LEVELS = ("SPROUT", "TRAIL", "SUMMIT")
 _SLOTS = ("a", "b", "c", "d", "e", "f")
 _GENERATED_COUNT = 997
 _INFERENCE_PROMPTS = (
-    "Which conclusion is supported by the detail about {detail}?",
-    "What can a careful reader infer from the sentence about {detail}?",
-    "Which claim is best supported by the information about {detail}?",
-    "What does the decision involving {detail} suggest?",
-    "Which reasoning fits the clue about {detail}?",
-    "What is justified by the evidence involving {detail}?",
+    "Which conclusion does the reason for that action support?",
+    "What can a careful reader infer from the reason for that step?",
+    "Which claim does the reason for that action support?",
+    "What does the reasoning behind that decision suggest?",
+    "Which inference fits the reason given for that step?",
+    "What conclusion is justified by the evidence for that action?",
 )
 
 
@@ -1196,29 +1196,34 @@ def _sentences(family: Family, values: dict[str, str], level: str) -> list[str]:
 def _question(family: Family, case: int, focus: int, level: str) -> dict:
     values = dict(zip(_SLOTS, family.cases[case]))
     step = family.steps[focus]
+    action = step.text.format_map(values)
+    # Keep alternatives on the same reading target, not on another true fact.
+    alternatives = [
+        step.text.format_map(dict(zip(_SLOTS, family.cases[(case + offset) % len(family.cases)])))
+        for offset in (1, 3)
+    ]
     if level == "SPROUT":
         prompt = step.prompt.format_map(values)
-        correct = family.cases[case][focus]
-        # Same-kind alternatives, drawn from the other authored projects.
-        distractors = [
-            family.cases[(case + offset) % len(family.cases)][focus]
-            for offset in (1, 3)
-        ]
+        correct = f"{action}."
+        distractors = [f"{alternative}." for alternative in alternatives]
     elif level == "TRAIL":
-        prompt = step.why.format_map(values)
-        correct = f"Because {step.reason.format_map(values)}."
+        prompt = f"{step.prompt.format_map(values)} {step.why.format_map(values)}"
+        reason = step.reason.format_map(values)
+        contrast = step.contrast.format_map(values)
+        correct = f"{action}, because {reason}."
         distractors = [
-            f"Because {family.steps[(focus + offset) % 6].reason.format_map(values)}."
-            for offset in (1, 3, 5)
+            f"{alternative}, because {reason}." for alternative in alternatives
         ]
+        distractors.append(f"{action}, because {contrast}, rather than because {reason}.")
     else:
-        detail = family.cases[case][focus]
-        prompt = _INFERENCE_PROMPTS[focus].format(detail=detail)
-        correct = step.conclusion.format_map(values)
+        prompt = f"{step.prompt.format_map(values)} {_INFERENCE_PROMPTS[focus]}"
+        conclusion = _lower_first(step.conclusion.format_map(values))
+        correct = f"{action}. This supports the conclusion that {conclusion}"
         distractors = [
-            family.steps[(focus + offset) % 6].conclusion.format_map(values)
-            for offset in (1, 3, 5)
+            f"{alternative}. This supports the conclusion that {conclusion}"
+            for alternative in alternatives
         ]
+        distractors.append(f"{action}. This gives no support for the conclusion that {conclusion}")
     return question(prompt, correct, distractors)
 
 

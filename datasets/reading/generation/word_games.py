@@ -6,12 +6,11 @@ per level; the public generators supply the first 997, leaving room for the
 three retained activities. Frames are interleaved across domains so truncation
 does not remove a domain or a language objective.
 
-The same situation supports two different reading tasks: completing a precisely
-clued word, and arranging phrase tiles before answering a vocabulary question.
-Pipes mark authored phrase boundaries, not arbitrary word splits. Capitalization,
-punctuation, and attached complements constrain the intended sentence order.
-Four-tile frames separate the subject from its predicate in the middle tiles;
-movable adverbials stay attached to that predicate rather than forming a tile.
+The original situations retain their order as stable replacement slots. New
+selection scenes require a meaningful noun phrase, not an object label appended
+to an old vocabulary answer. Each object is selected for five different reasons.
+Scramble tiles describe the selected object without quoting the answer phrase,
+so the bonus still requires understanding the description and the selection rule.
 """
 
 from dataclasses import dataclass
@@ -872,23 +871,396 @@ def _situations(level: str) -> Iterator[tuple[_Family, str, _Frame]]:
                 emitted += 1
 
 
+@dataclass(frozen=True)
+class _Selection:
+    description: str
+    variants: tuple[tuple[str, str], ...]
+
+
+def _s(
+    description: str,
+    sprout: tuple[str, str],
+    trail: tuple[str, str],
+    summit: tuple[str, str],
+) -> _Selection:
+    """Pair observable evidence with level-specific choices and selection rules."""
+    variants = (sprout, trail, summit)
+    for index, (choices, reason) in enumerate(variants):
+        words = choices.split("|")
+        if len(words) != (3 if index == 0 else 4) or len(set(words)) != len(words):
+            raise ValueError("Selection scenes need distinct, level-appropriate choices")
+        if not reason or not description:
+            raise ValueError("A selection needs both a reason and observable evidence")
+    return _Selection(description, variants)
+
+
+_SELECTIONS = {
+    "food": (
+        _s("the {item} washed under running water until no dirt remains",
+           ("clean|dirty|muddy", "I do not want dirt from the food on my hands"),
+           ("rinsed|soil-covered|dusty|mud-caked", "the shopper needs produce with the soil washed off"),
+           ("soil-free|unwashed|grimy|dirt-covered", "the cook's selection rule excludes produce with soil remaining on its surface")),
+        _s("the {item} small enough to fit inside the snack pot",
+           ("small|huge|giant", "my little snack pot has very little room"),
+           ("compact|oversized|bulky|enormous", "the snack pot cannot hold a large piece of produce"),
+           ("{item} that fits the container|{item} too large for the container|{item} wider than the container|{item} too bulky for the container",
+            "the container must close around the produce without anything being cut or crushed")),
+        _s("the {item} that has not been cut into pieces",
+           ("whole|sliced|chopped", "I want to draw the food before anyone cuts it"),
+           ("uncut|halved|diced|sliced", "the pupil needs to draw the original shape before any cutting"),
+           ("undivided|quartered|shredded|diced", "the drawing must document the original outline rather than the shape of a cut portion")),
+        _s("the {item} steamed until it can easily be mashed",
+           ("soft|hard|firm", "I need food that is easy to mash"),
+           ("tender|hard|rigid|tough", "the recipe needs produce that yields easily under the masher"),
+           ("softened|unsoftened|rock-hard|rigid", "the recipe requires produce that can be mashed without further cooking")),
+        _s("the {item} priced at one coin rather than five",
+           ("cheap|costly|expensive", "I have only one coin to spend"),
+           ("inexpensive|expensive|costly|overpriced", "the shopper has a one-coin budget and cannot afford the five-coin option"),
+           ("economical|costly|expensive|overpriced", "both options meet the recipe's requirements, but the budget permits only the lower price")),
+    ),
+    "plants": (
+        _s("the {item} held straight by a firm support",
+           ("upright|fallen|bent", "I want a plant that stands straight"),
+           ("supported|unsupported|fallen|drooping", "the gardener needs a plant held upright rather than one leaning without support"),
+           ("well-supported|unsupported|toppled|bent-over", "the display requires a plant held securely upright, not merely balanced for a moment")),
+        _s("the {item} planted only a few days ago",
+           ("newly planted|long-established|{item} planted long ago", "I want to watch a plant settle into its new spot"),
+           ("recently planted|long-established|{item} planted last year|{item} planted years ago", "the gardener is recording how plants settle in during their first week after planting"),
+           ("{item} in its first week after planting|long-established|{item} planted last year|{item} planted several seasons ago",
+            "the study concerns the first days after planting rather than years of growth in one position")),
+        _s("the {item} kept beneath a screen that blocks direct sunlight",
+           ("shaded|sunlit|sun-baked", "I need a plant kept out of direct sun"),
+           ("sheltered|sun-exposed|sun-baked|unshaded", "the gardener needs a plant protected from direct sunlight by a screen"),
+           ("{item} shielded from direct sun|{item} exposed to direct sun|{item} in full sunlight|{item} without shade",
+            "the observation requires protection from direct sunlight, although daylight can still pass through the screen")),
+        _s("the {item} growing new leaves without signs of damage",
+           ("healthy|sick|dying", "I want to draw a plant that is growing well"),
+           ("thriving|ailing|withering|dying", "the gardener needs an example of successful growth rather than a struggling plant"),
+           ("vigorous|ailing|deteriorating|withering", "new growth and the absence of damage are both required as evidence that the plant is doing well")),
+        _s("the {item} with a tag showing its name clearly",
+           ("named|unnamed|unmarked", "I need to read the plant's name on its tag"),
+           ("labeled|unlabeled|unmarked|unidentified", "the gardener must identify the plant by reading an attached name tag"),
+           ("identifiable|unidentified|unlabeled|unmarked", "the record must be linked to a readable plant name rather than an unsupported guess")),
+    ),
+    "animals": (
+        _s("the {item} where no leaves block the view",
+           ("visible|hidden|covered", "I want to see the animal without moving any leaves"),
+           ("uncovered|concealed|hidden|obscured", "the observer needs an animal that can be seen without moving its surroundings"),
+           ("unobscured|concealed|screened|hidden", "the observation requires a clear sight line without altering the animal's surroundings")),
+        _s("the {item} travelling from the path toward the fence",
+           ("moving|still|motionless", "I want to watch an animal go from place to place"),
+           ("active|motionless|stationary|still", "the observer is recording movement rather than an animal staying in one place"),
+           ("mobile|stationary|motionless|immobile", "the record must show a change of position rather than assume movement from a single still view")),
+        _s("the {item} staying in exactly the same position",
+           ("still|moving|travelling", "I want to draw an animal that is not moving"),
+           ("motionless|moving|travelling|active", "the observer needs an animal that stays in one position while being sketched"),
+           ("stationary|mobile|travelling|moving", "the sketch requires an unchanged position during observation, without assuming the animal is asleep")),
+        _s("the {item} close enough to see its details without moving nearer",
+           ("nearby|distant|faraway", "I want to watch from here without using binoculars"),
+           ("close-by|distant|faraway|remote", "the observer must see small details from the current spot without binoculars"),
+           ("{item} at close range|{item} far in the distance|{item} beyond clear viewing range|{item} too distant to examine",
+            "small details must be visible from the fixed observation point without magnification")),
+        _s("the {item} doing its usual things without anyone bothering it",
+           ("unbothered|startled|disturbed", "I want to watch without making the animal stop what it is doing"),
+           ("undisturbed|alarmed|startled|disrupted", "the observer needs to watch normal activity without interrupting it"),
+           ("{item} whose activity is uninterrupted|disturbed|startled|disrupted", "the observation should reflect ordinary behavior rather than a reaction caused by the observer")),
+    ),
+    "clothes": (
+        _s("the {item} just washed until all the dirt was removed",
+           ("clean|dirty|muddy", "I need clothing with no dirt on it"),
+           ("freshly washed|unwashed|grimy|stained", "the wearer needs clothing with the dirt removed rather than clothing awaiting a wash"),
+           ("laundered|unwashed|soiled|grimy", "the clothing must have completed washing rather than merely been set aside for it")),
+        _s("the {item} with no moisture left in its fabric",
+           ("dry|wet|damp", "I do not want water from the cloth to wet the drawer"),
+           ("dried|damp|soaked|soggy", "the clothing is going into a drawer and must contain no remaining moisture"),
+           ("moisture-free|damp|waterlogged|sodden", "the storage rule excludes even slightly damp fabric, not only garments that drip")),
+        _s("the {item} made with a thick layer that holds in body heat",
+           ("warm|{item} that lets heat escape|{item} that does not keep me warm", "I need clothing that helps keep me warm on a cold day"),
+           ("insulating|{item} that lets heat escape|{item} that does not retain heat|{item} offering no warmth",
+            "the wearer needs a layer that limits heat loss on a cold day"),
+           ("heat-retaining|uninsulated|{item} that lets body heat escape|{item} that provides no insulation",
+            "the priority is limiting body-heat loss rather than choosing clothing that offers no insulation")),
+        _s("the {item} whose tear has been closed with stitches",
+           ("mended|torn|ripped", "I need the tear to be fixed before I wear the clothing"),
+           ("repaired|torn|ripped|unrepaired", "the wearer needs clothing whose tear has already been fixed"),
+           ("restored|unrepaired|torn|damaged", "the repair must be completed before use, rather than merely planned")),
+        _s("the {item} that fits with enough space to move comfortably",
+           ("roomy|tight|small", "I need room to move without the clothing pulling tight"),
+           ("well-fitting|tight|constricting|undersized", "the wearer needs comfortable movement without tight fabric"),
+           ("{item} allowing free movement|{item} restricting movement|{item} that is too tight|{item} that is undersized",
+            "comfortable movement is required; appearance alone cannot compensate for a restrictive fit")),
+    ),
+    "creations": (
+        _s("the {item} with every part attached and nothing broken",
+           ("unbroken|broken|damaged", "I need every part to be in place"),
+           ("intact|broken|damaged|incomplete", "the child needs an object with all its parts attached and no breakage"),
+           ("structurally sound|broken|damaged|incomplete", "all parts must remain securely attached rather than only appear complete from the front")),
+        _s("the {item} decorated in red, yellow, and blue",
+           ("colorful|plain|uncolored", "I want to show several bright colors"),
+           ("multicolored|plain|uncolored|single-colored", "the display needs several different colors on the same object"),
+           ("variously colored|monochrome|uncolored|plain", "the exhibit compares several colors within one object rather than variations of a single color")),
+        _s("the {item} whose final detail has already been added",
+           ("finished|unfinished|incomplete", "I want to show work that needs no more parts"),
+           ("completed|unfinished|incomplete|half-finished", "the display opens now and the object must need no further work"),
+           ("fully finished|partially finished|incomplete|unfinished", "the submission must include its final detail, not merely be close to completion")),
+        _s("the {item} that weighs very little",
+           ("light|heavy|weighty", "I need something easy to carry because it weighs so little"),
+           ("lightweight|heavy|weighty|hefty", "the child needs to carry the object without a heavy load"),
+           ("low-mass|heavy|weighty|hefty", "the carrier has a strict weight limit, so low mass matters more than decoration")),
+        _s("the {item} lent to the child and due back today",
+           ("borrowed|{item} I own|{item} given to me to keep", "I need to give back what someone lent me"),
+           ("borrowed|{item} owned by the child|{item} bought by the child|{item} given to the child to keep",
+            "the child must return the object that still belongs to its lender"),
+           ("temporarily borrowed|{item} personally owned by the child|{item} bought for the child to keep|{item} given permanently to the child",
+            "the return obligation applies to a loan, not to property purchased or received as a gift")),
+    ),
+    "tools": (
+        _s("the {item} on a low shelf within easy reach",
+           ("nearby|distant|unreachable", "I need to get it without climbing or walking away"),
+           ("accessible|inaccessible|unreachable|remote", "the helper must retrieve the item without climbing or leaving the work spot"),
+           ("readily accessible|inaccessible|out-of-reach|remote", "the item must be retrieved from the current position without climbing or moving furniture")),
+        _s("the {item} that everyone may use in turn",
+           ("shared|{item} for one person only|{item} kept for private use", "I need the one that everyone may use"),
+           ("communal|{item} reserved for one person|{item} unavailable to the group|{item} kept for personal use only",
+            "the helper needs an item available to the whole group rather than reserved for one person"),
+           ("collectively available|{item} reserved for one individual|{item} restricted to one user|{item} unavailable for group use",
+            "the task requires access for the whole group, not permission limited to one individual")),
+        _s("the {item} with its owner's name written clearly",
+           ("named|unnamed|unmarked", "I need to read the owner's name to give it back"),
+           ("labeled|unlabeled|unmarked|unidentified", "the helper must identify the owner from readable writing on the item"),
+           ("clearly identified|unidentified|unmarked|unlabeled", "returning the item requires direct evidence of ownership rather than a guess based on appearance")),
+        _s("the {item} already tried out and found to work properly",
+           ("tested|untested|unchecked", "I need one that someone has already tried to see if it works"),
+           ("checked|untested|unchecked|untried", "the helper needs an item whose operation has already been checked"),
+           ("function-tested|untested|unverified|unchecked", "successful use must already have been demonstrated rather than inferred from an undamaged appearance")),
+        _s("the {item} that remains undamaged after many uses",
+           ("strong|fragile|broken", "I need something that does not break with normal use"),
+           ("sturdy|fragile|damaged|flimsy", "the helper needs an item that withstands repeated ordinary use without damage"),
+           ("durable|fragile|short-lived|flimsy", "the choice must withstand repeated use, not simply be inexpensive to replace")),
+    ),
+    "books": (
+        _s("the {item} with its covers apart and pages visible",
+           ("open|closed|shut", "I need to see the pages right now"),
+           ("opened|closed|shut|sealed", "the reader needs the pages already exposed rather than enclosed by the covers"),
+           ("{item} open for inspection|{item} with its covers shut|{item} sealed in wrapping|{item} closed inside a case",
+            "the pages must be visible for immediate inspection without removing a cover or wrapping")),
+        _s("the {item} containing pictures alongside the words",
+           ("illustrated|pictureless|unillustrated", "I want pictures as well as words"),
+           ("illustrated|pictureless|unillustrated|text-only", "the reader needs pictures to support the written information"),
+           ("{item} with supporting illustrations|unillustrated|text-only|pictureless", "the activity requires comparing an illustration with written information, so words alone are insufficient")),
+        _s("the {item} checked out from the library and due back today",
+           ("borrowed|{item} I own|{item} given to me to keep", "I must return the library's book today"),
+           ("borrowed|{item} purchased by the reader|{item} owned by the reader|{item} given to the reader to keep",
+            "the reader needs to return a library loan rather than a personally owned book"),
+           ("temporarily borrowed|{item} personally owned by the reader|{item} bought for the reader to keep|{item} given permanently to the reader",
+            "the due date applies to a library loan, not to a book owned by the reader")),
+        _s("the {item} containing its full original text with no sections shortened and no pages missing or torn",
+           ("complete|incomplete|{item} with missing pages", "I need all the pages, not a copy with some torn out"),
+           ("intact|incomplete|{item} with torn pages|{item} with missing pages", "the reader needs a copy with no pages removed or torn"),
+           ("unabridged and intact|abridged|incomplete|page-damaged", "the task requires the full original contents with no sections shortened or pages missing")),
+        _s("the {item} printed in letters large enough for the reader to see clearly",
+           ("large-print|tiny-print|small-print", "I need big letters that I can see clearly"),
+           ("clearly readable|illegible|tiny-print|blurred", "the reader needs lettering that can be seen clearly rather than tiny or blurred print"),
+           ("legible|illegible|unreadably blurred|unreadably faint", "the print must support accurate reading without guessing at unclear letters")),
+    ),
+    "containers": (
+        _s("the {item} with nothing inside it",
+           ("empty|full|filled", "I need one with nothing already in it"),
+           ("unfilled|full|packed|loaded", "the helper needs a container with no existing contents"),
+           ("{item} empty of contents|filled|packed|loaded", "the packing task requires all available space rather than working around existing contents")),
+        _s("the {item} filled to the top with pebbles",
+           ("full|empty|unfilled", "I need the one with pebbles right up to the top"),
+           ("filled|empty|unfilled|vacant", "the helper needs the container already filled to its upper edge"),
+           ("fully loaded|empty|partially filled|unfilled", "the comparison requires a container filled to capacity rather than only partway")),
+        _s("the {item} holding a few objects and weighing very little in total",
+           ("light|heavy|weighty", "I need something that is not heavy to carry"),
+           ("lightly loaded|heavily loaded|overloaded|weighty", "the helper needs to carry a small load rather than a heavy one"),
+           ("minimally loaded|heavily loaded|overloaded|fully packed", "the carrying limit requires very little weight from the contents, not simply a large capacity")),
+        _s("the {item} with its opening securely closed",
+           ("closed|open|uncovered", "I do not want the small things inside to spill out"),
+           ("sealed|open|uncovered|unfastened", "the helper needs the opening securely closed to keep the contents inside"),
+           ("securely closed|unfastened|open-topped|uncovered", "the contents must stay inside when moved, so an unsecured opening is unacceptable")),
+        _s("the {item} designed to be cleaned and used many times",
+           ("reusable|throwaway|single-use", "I want to use it again instead of throwing it away"),
+           ("reusable|disposable|single-use|throwaway", "the helper needs a container designed for several uses rather than disposal after one"),
+           ("{item} designed for repeated use|disposable|single-use|throwaway", "the plan depends on repeated use after cleaning, not replacing the container after each task")),
+    ),
+    "transport": (
+        _s("the {item} arriving before the time on the timetable",
+           ("early|late|delayed", "I want the service that arrives before the time on the sign"),
+           ("ahead-of-schedule|late|delayed|overdue", "the traveler is identifying the service arriving before its printed time"),
+           ("early-arriving|late-arriving|delayed|overdue", "the comparison uses the published arrival time rather than when the traveler reached the stop")),
+        _s("the {item} reaching the destination without a change of vehicle",
+           ("direct|{item} needing a change|{item} needing two changes", "I want to stay on one vehicle until I get there"),
+           ("direct|transfer-dependent|{item} requiring a connection|{item} needing a vehicle change",
+            "the traveler needs to reach the destination without switching vehicles"),
+           ("{item} requiring no transfer|{item} requiring a transfer|{item} requiring two transfers|{item} connecting to another vehicle",
+            "the journey must use one vehicle throughout, although intermediate stops are permitted")),
+        _s("the {item} with no passengers aboard yet",
+           ("empty|full|crowded", "I need the one with no passengers inside"),
+           ("unoccupied|crowded|packed|full", "the traveler is identifying a service with no passengers aboard"),
+           ("passenger-free|crowded|partly occupied|fully occupied", "the inspection must happen before any passengers board, not merely while some seats remain available")),
+        _s("the {item} that can be boarded without climbing steps",
+           ("step-free|stepped|stair-only", "I need to get on without using steps"),
+           ("accessible|inaccessible|stair-only|stepped", "the traveler needs a boarding route with no steps"),
+           ("{item} with step-free boarding|{item} reached only by stairs|{item} without a step-free entrance|{item} requiring a climb up steps",
+            "every traveler must board without using stairs, so a service reachable only by steps is unsuitable")),
+        _s("the {item} whose service runs every ten minutes",
+           ("frequent|rare|infrequent", "I want a service that comes often, not just once a day"),
+           ("frequent|infrequent|once-daily|rare", "the traveler wants short intervals between services rather than a once-daily departure"),
+           ("{item} with frequent departures|infrequent|once-daily|rare", "the plan requires short waiting intervals, not merely a predictable but infrequent departure")),
+    ),
+    "sports": (
+        _s("the {item} with all rainwater wiped away",
+           ("dry|wet|damp", "I need to put it away without getting the cupboard wet"),
+           ("dried|damp|soaked|soggy", "the coach needs equipment with no remaining rainwater before storage"),
+           ("moisture-free|damp|waterlogged|sodden", "the storage rule excludes residual moisture, not only equipment with visible puddles")),
+        _s("the {item} in clear view instead of behind the storage screen",
+           ("visible|hidden|covered", "I want the players to see the equipment from here"),
+           ("unobscured|hidden|concealed|covered", "the coach needs equipment the players can see without moving the screen"),
+           ("clearly visible|obscured|concealed|hidden", "the demonstration requires an unobstructed view from the players' position")),
+        _s("the {item} inspected and found to have no damage or faults",
+           ("undamaged|broken|damaged", "I need equipment with no damage"),
+           ("sound|broken|damaged|faulty", "the coach needs equipment that passed inspection without any damage or faults"),
+           ("{item} free of defects|defective|damaged|broken", "the selection depends on an inspection finding no faults, rather than appearance alone")),
+        _s("the {item} that both teams may use for equally long turns",
+           ("shared|{item} for one team only|{item} kept for one team", "I need the one that both teams may use"),
+           ("shared|{item} reserved for one team|{item} restricted to one team|team-exclusive",
+            "the coach needs equipment allocated to both teams rather than only one"),
+           ("equitably shared|{item} reserved for one team|team-exclusive|{item} restricted to one team",
+            "both teams must have equal access rather than one team controlling all the equipment")),
+        _s("the {item} returned to its marked place after the game",
+           ("stored|lost|misplaced", "I need the one put back in its proper place"),
+           ("properly stored|misplaced|lost|abandoned", "the coach needs equipment that was returned to its assigned storage position"),
+           ("correctly stowed|misplaced|abandoned|unaccounted-for", "the equipment must be in its designated position, not merely somewhere inside the store")),
+    ),
+    "samples": (
+        _s("the {item} left until all the water on its surface has gone",
+           ("dry|wet|damp", "I want to put it on paper without making the paper wet"),
+           ("dried|damp|soaked|wet", "the observer needs a sample that will not transfer moisture to the paper"),
+           ("moisture-free|damp|waterlogged|wet", "the drawing paper must remain dry, so even a slightly damp sample is unsuitable")),
+        _s("the {item} small enough to fit inside the tiny display space",
+           ("tiny|huge|large", "I have only a very small space in the display"),
+           ("small-sized|oversized|large|bulky", "the observer needs a sample that fits within the small marked space"),
+           ("{item} within the size limit|{item} exceeding the size limit|{item} too large for the space|{item} wider than the space",
+            "the sample must fit entirely inside the marked boundary rather than overlap the neighboring exhibit")),
+        _s("the {item} with a note saying where it was found",
+           ("labeled|unlabeled|unmarked", "I need to read where the sample was found"),
+           ("documented|undocumented|unrecorded|unlabeled", "the observer needs a sample accompanied by a record of its discovery location"),
+           ("traceable|unrecorded|undocumented|unidentified", "the sample's origin must be supported by a location record rather than a guess")),
+        _s("the {item} lying on the tray with no glue or string holding it",
+           ("loose|glued|fixed", "I need to lift the sample without pulling it off glue"),
+           ("unattached|glued|fastened|fixed", "the observer needs a sample that can be lifted without undoing a fastening"),
+           ("unsecured|glued-down|permanently attached|fixed-in-place", "the sample must be lifted without altering any attachment or damaging the display")),
+        _s("the {item} with no pieces broken off since collection",
+           ("unbroken|broken|damaged", "I need the sample just as it was when collected"),
+           ("intact|broken|fragmented|damaged", "the observer needs a sample with no pieces lost after collection"),
+           ("undamaged|fragmented|broken|deteriorated", "the comparison requires preservation of the collected sample rather than a fragment created afterward")),
+    ),
+    "places": (
+        _s("the {item} only a short walk from home",
+           ("nearby|distant|faraway", "I have time for only a short walk from home"),
+           ("close-by|distant|remote|faraway", "the visitor has enough time for a short walk but not a long journey"),
+           ("{item} within walking range|{item} beyond walking range|{item} too distant to reach on foot|{item} requiring a long journey",
+            "the visit must fit a short walk from home without relying on transport")),
+        _s("the {item} letting people in at the planned arrival time",
+           ("open|closed|shut", "I want to go in when I arrive"),
+           ("{item} open to visitors|closed|shut|closed-to-visitors", "the visitor needs entry at the planned arrival time rather than after closing"),
+           ("{item} open at the required time|{item} closed at the required time|{item} opening after the visit|{item} closing before arrival",
+            "access must coincide with the planned visit; opening at some other time is insufficient")),
+        _s("the {item} with little noise and no noisy crowd",
+           ("quiet|noisy|loud", "I want a place with very little noise"),
+           ("peaceful|noisy|clamorous|loud", "the visitor needs a low-noise setting rather than a noisy crowd"),
+           ("tranquil|clamorous|noisy|loud", "the listening activity requires low background noise, not merely a nearby location")),
+        _s("the {item} with a step-free route all the way to the entrance",
+           ("easy-to-enter|hard-to-enter|stair-only", "I need to get to the entrance without steps"),
+           ("accessible|inaccessible|stair-only|stepped", "the visitor needs a route to the entrance without stairs"),
+           ("{item} with step-free access|{item} accessible only by stairs|{item} without a step-free approach|{item} requiring steps at the entrance",
+            "every member of the group must reach the entrance without climbing steps")),
+        _s("the {item} letting people in without asking them to pay",
+           ("{item} with free entry|{item} with a ticket charge|{item} charging for entry", "I have no money to pay an entrance fee"),
+           ("{item} with no entry fee|{item} charging admission|{item} requiring a paid ticket|{item} with an entrance charge",
+            "the visitor has no money available for admission"),
+           ("{item} without an admission charge|{item} requiring a paid ticket|{item} charging admission|{item} with a compulsory entry fee",
+            "the budget allows no admission cost, regardless of whether a charged ticket might be good value")),
+    ),
+}
+
+
+_SELECTION_GROUPS = {
+    "Fruit at home": ("food", "shopper"),
+    "Vegetable patch": ("food", "cook"),
+    "Flowers in view": ("plants", "gardener"),
+    "Trees and shade": ("plants", "gardener"),
+    "Caring for pets": ("animals", "carer"),
+    "Bird observations": ("animals", "observer"),
+    "Small garden visitors": ("animals", "observer"),
+    "Clothes and care": ("clothes", "wearer"),
+    "Toy shelf": ("creations", "child"),
+    "Making marks": ("tools", "artist"),
+    "Music room": ("tools", "musician"),
+    "Reading shelves": ("books", "reader"),
+    "Kitchen helpers": ("tools", "cook"),
+    "Useful containers": ("containers", "helper"),
+    "Getting around": ("transport", "traveler"),
+    "Games on the field": ("sports", "coach"),
+    "Ready for class": ("tools", "pupil"),
+    "Handmade creations": ("creations", "maker"),
+    "Nature table": ("samples", "observer"),
+    "Places to visit": ("places", "visitor"),
+}
+
+
+def _selection_situations(level: str) -> Iterator[tuple[_Family, str, _Frame, str]]:
+    seen = set()
+    for family, item, original in _situations(level):
+        group, role = _SELECTION_GROUPS[family.title]
+        frame_index = getattr(family, level.lower()).index(original)
+        scene = _SELECTIONS[group][frame_index]
+        choice_text, reason = scene.variants[("SPROUT", "TRAIL", "SUMMIT").index(level)]
+        choices = tuple(
+            "the " + (choice if "{item}" in choice else choice + " {item}").format(item=item)
+            for choice in choice_text.split("|")
+        )
+        answer, *distractors = choices
+        if answer in seen:
+            raise ValueError(f"Repeated selection answer at {level}: {answer}")
+        seen.add(answer)
+        if level == "SPROUT":
+            parts = ("I", "choose {answer}", f"because {reason}.")
+        elif level == "TRAIL":
+            parts = (f"Because {reason},", f"the {role}", "chooses", "{answer}.")
+        else:
+            parts = (
+                "Although another {item} is available,",
+                f"the {role}",
+                "selects {answer}",
+                f"because {reason}.",
+            )
+        description = scene.description.format(item=item)
+        if answer.casefold() in description.casefold():
+            raise ValueError(f"A scramble description quotes its answer: {answer}")
+        frame = _Frame(parts, answer, tuple(distractors), f"Which phrase describes the chosen {item}?")
+        yield family, item, frame, description
+
+
 def missing(level: str) -> Iterator[dict]:
     """Yield exactly 997 clued, single-gap activities for a supported level."""
-    for family, item, frame in _situations(level):
+    for family, item, frame, _ in _selection_situations(level):
         passage = " ".join(part.format(item=item, answer="___") for part in frame.parts)
         yield {
             "title": f"{family.title}: {item}",
             "picture": picture(family.symbol, f"{family.title}; the sentence is about the {item}."),
             "passage": [passage],
             "question": question("Which word or phrase belongs in the gap?", frame.answer, frame.distractors),
-            "hint": f"Use the meaning of the whole sentence. {frame.prompt}",
+            "hint": "Read why the person is choosing. Which description meets that need?",
         }
 
 
 def scramble(level: str) -> Iterator[dict]:
     """Yield exactly 997 phrase-tile activities with text-supported bonuses."""
-    for family, item, frame in _situations(level):
-        ordered = [part.format(item=item, answer=frame.answer) for part in frame.parts]
+    for family, item, frame, description in _selection_situations(level):
+        ordered = [part.format(item=item, answer=description) for part in frame.parts]
         if len(set(ordered)) != len(ordered):
             raise ValueError(f"Repeated phrase tile in {family.title}: {item}")
         tiles, orders = scramble_tiles(ordered)
