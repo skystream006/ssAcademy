@@ -153,6 +153,7 @@ class SubjectNavigationTest {
         repeat(2) { returnMethod ->
             compose.onNodeWithTag("subject-Reading").performScrollTo().performClick()
             compose.waitUntil(5_000) {
+                shadowOf(Looper.getMainLooper()).idle()
                 compose.onAllNodesWithTag("reading-menu").fetchSemanticsNodes().isNotEmpty()
             }
             compose.onNodeWithTag("reading-menu").assertIsDisplayed()
@@ -192,6 +193,7 @@ class SubjectNavigationTest {
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithTag("subject-Reading").performScrollTo().performClick()
         compose.waitUntil(5_000) {
+            shadowOf(Looper.getMainLooper()).idle()
             compose.onAllNodesWithTag("reading-menu").fetchSemanticsNodes().isNotEmpty()
         }
         compose.runOnIdle { assertEquals(data, readingModel.data?.withoutCatalogueRefs()) }
