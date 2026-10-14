@@ -44,6 +44,7 @@ class ReadingEntryTest {
 
     @Before fun setup() {
         application.deleteDatabase("reading.db")
+        File(application.filesDir, "practice_history.json").delete()
         listOf(legacy, File(legacy.path + ".bak"), File(legacy.path + ".new")).forEach { it.delete() }
         application.getSharedPreferences("settings", 0).edit().clear().commit()
         DebugLog.initialize(application)
@@ -112,6 +113,42 @@ class ReadingEntryTest {
         compose.onNodeWithTag("reading-import-required").assertDoesNotExist()
         assertEquals(Overlay.READING, app.overlay)
         assertTrue(requireNotNull(reading.data).attempts.isEmpty())
+    }
+
+    @Test fun completedReadingBatchPresentsAndClaimsSharedRewardsWithoutMathHistory() {
+        runBlocking { readingTestImporter(store.catalog, application.cacheDir, pool).importPack() }
+        store.save(ReadingEngine.addProfile(store.load(), "Ari", "reader-a"))
+        val reading = reading()
+        val app = show()
+        await { reading.data != null && reading.packStatus != null && !reading.saving }
+        compose.onNodeWithTag("subject-Reading").performClick()
+        compose.onNodeWithTag("reading-question-count-25").performClick()
+        compose.onNodeWithTag("reading-game-MISSING").performScrollTo().performClick()
+        await { reading.data?.activeSession?.questionCount == 25 && !reading.saving }
+        val assigned = requireNotNull(reading.data?.activeSession).attemptIds
+        repeat(25) { index ->
+            await { reading.data?.active?.id == assigned[index] && !reading.saving }
+            compose.runOnIdle {
+                reading.act { data -> ReadingEngine.field(data, "answer", readingCorrect(data).toString()) }
+                reading.submit("answer")
+                reading.finishActivity()
+            }
+            await { reading.data?.active?.finishedAt != null && !reading.saving }
+            if (index < 24) {
+                compose.onNodeWithTag("reading-next").performScrollTo().performClick()
+            }
+        }
+        await { app.readingRewardResults.singleOrNull()?.pokemonReward != null }
+        compose.runOnIdle { app.dismissReadingCelebration() }
+        compose.onNodeWithTag("gift-box").assertIsDisplayed().performClick()
+        await { app.readingRewardResult?.prize != null && !app.claimingReadingReward }
+        assertEquals(1, app.rewardBalances.values.sumOf { it.totalFragments })
+        assertTrue(app.history.isEmpty())
+        assertEquals(25, reading.data?.activeSession?.questionCount)
+        val snapshot = HistoryStore(File(application.filesDir, "practice_history.json")).loadSnapshot()
+        assertEquals(1, snapshot.readingResults.size)
+        assertNotNull(snapshot.readingResults.single().prize)
+        assertEquals(1, snapshot.pokemons.size)
     }
 
     @Test fun earlyClickWaitsForCatalogueAndCancelDoesNotNavigateAfterLoading() {

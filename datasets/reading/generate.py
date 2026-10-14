@@ -92,7 +92,7 @@ def build_pack():
     data = output.getvalue()
     checksum = hashlib.sha256(data).hexdigest()
     manifest = {
-        "schemaVersion": 1, "version": "v3", "file": f"activities-{checksum}.jsonl",
+        "schemaVersion": 1, "version": "v3", "file": f"reading_activities_import-{checksum}.jsonl",
         "sha256": checksum, "bytes": len(data), "counts": dict(counts),
     }
     return data, manifest
@@ -103,20 +103,24 @@ def main():
     parser.add_argument("--check", action="store_true", help="Check reproducibility without writing files")
     args = parser.parse_args()
     data, manifest = build_pack()
-    destination = ROOT / manifest["file"]
-    if args.check:
-        if json.loads((ROOT / "manifest.json").read_text(encoding="utf-8")) != manifest:
-            raise SystemExit("The current manifest differs from the generated catalogue")
-        if not destination.exists() or destination.read_bytes() != data:
-            raise SystemExit("The published catalogue differs from its content source")
-    else:
-        if destination.exists() and destination.read_bytes() != data:
-            raise SystemExit("Refusing to modify an existing checksum-named pack")
-        if not destination.exists():
-            destination.write_bytes(data)
-        (ROOT / "manifest.json").write_text(
-            json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(f'{sum(manifest["counts"].values()):,} activities; {manifest["bytes"]:,} bytes; {destination.name}')
+    # Older apps only accept manifest.json with activities-<checksum>.jsonl.
+    legacy_manifest = {**manifest, "file": f'activities-{manifest["sha256"]}.jsonl'}
+    for manifest_name, published in (
+            ("reading_activities_import.json", manifest), ("manifest.json", legacy_manifest)):
+        destination = ROOT / published["file"]
+        if args.check:
+            if json.loads((ROOT / manifest_name).read_text(encoding="utf-8")) != published:
+                raise SystemExit(f"{manifest_name} differs from the generated catalogue")
+            if not destination.exists() or destination.read_bytes() != data:
+                raise SystemExit("The published catalogue differs from its content source")
+        else:
+            if destination.exists() and destination.read_bytes() != data:
+                raise SystemExit("Refusing to modify an existing checksum-named pack")
+            if not destination.exists():
+                destination.write_bytes(data)
+            (ROOT / manifest_name).write_text(
+                json.dumps(published, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(f'{sum(manifest["counts"].values()):,} activities; {manifest["bytes"]:,} bytes; {manifest["file"]}')
 
 
 if __name__ == "__main__":

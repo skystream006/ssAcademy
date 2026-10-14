@@ -109,7 +109,7 @@ fun interface ReadingPackTransport {
 
 private const val READING_PACK_ROOT =
     "https://raw.githubusercontent.com/skystream006/ssAcademy/main/datasets/reading/"
-const val READING_PACK_MANIFEST_URL = "${READING_PACK_ROOT}manifest.json"
+const val READING_PACK_MANIFEST_URL = "${READING_PACK_ROOT}reading_activities_import.json"
 
 internal fun requireReadingPackUrl(url: String) {
     val parsed = url.toHttpUrl()
@@ -117,7 +117,8 @@ internal fun requireReadingPackUrl(url: String) {
         parsed.username.isEmpty() && parsed.password.isEmpty() && parsed.query == null && parsed.fragment == null &&
         url.startsWith(READING_PACK_ROOT) && parsed.toString() == url) { "Reading pack URL is not allowed" }
     val filename = url.removePrefix(READING_PACK_ROOT)
-    require(filename == "manifest.json" || filename.matches(Regex("activities-[a-f0-9]{64}\\.jsonl"))) {
+    require(filename in setOf("reading_activities_import.json", "manifest.json") ||
+        filename.matches(Regex("(?:reading_activities_import|activities)-[a-f0-9]{64}\\.jsonl"))) {
         "Only the configured repository's reading pack files are allowed"
     }
 }
@@ -219,7 +220,8 @@ class ReadingPackImporter(
     private fun validateManifest(manifest: ReadingPackManifest) = with(manifest) {
         require(schemaVersion == 1) { "Unsupported reading pack schema" }
         require(version.matches(Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,79}"))) { "Invalid reading pack version" }
-        require(sha256.matches(Regex("[a-f0-9]{64}")) && file == "activities-$sha256.jsonl") {
+        require(sha256.matches(Regex("[a-f0-9]{64}")) &&
+            file in setOf("reading_activities_import-$sha256.jsonl", "activities-$sha256.jsonl")) {
             "Reading packs must use their immutable checksum as the filename"
         }
         require(bytes in 1..MAX_PACK_BYTES) { "Reading pack is too large or empty" }

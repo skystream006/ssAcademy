@@ -117,6 +117,21 @@ class MathViewModel(
         private set
     var rewardError by mutableStateOf<String?>(null)
         private set
+    var readingRewardResults by mutableStateOf<List<ReadingRewardResult>>(emptyList())
+        private set
+    var readingRewardResult by mutableStateOf<ReadingRewardResult?>(null)
+        private set
+    var readingCelebration by mutableStateOf<Celebration?>(null)
+        private set
+    var readingSelectingCelebration by mutableStateOf(false)
+        private set
+    var claimingReadingReward by mutableStateOf(false)
+        private set
+    var readingRewardError by mutableStateOf<String?>(null)
+        private set
+    private var readingRewardOverlay by mutableStateOf<Overlay?>(null)
+    val readingRewardDialogVisible: Boolean get() = readingRewardResult != null && readingCelebration == null &&
+        !readingSelectingCelebration && overlay == readingRewardOverlay
     var usingReward by mutableStateOf(false)
         private set
     var rewardUseError by mutableStateOf<String?>(null)
@@ -175,6 +190,11 @@ class MathViewModel(
     private class PendingResult(var result: PracticeResult, var saved: Boolean = false)
     private var pendingResult: PendingResult? = null
     private var collectionLoaded = false
+    private class PendingReadingResult(var result: ReadingRewardResult, var saved: Boolean = false)
+    private var pendingReadingResult: PendingReadingResult? = null
+    private var readingRewardRequestVersion = 0L
+    private var readingCelebrationDismissed = false
+    private val openedReadingSessions = mutableSetOf<String>()
 
     val maximum: Int? get() = parseMaximum(maximumText)
     val minimum: Int? get() = parseMaximum(minimumText)?.takeIf { it <= (maximum ?: MAX_MAXIMUM) }
@@ -650,6 +670,163 @@ class MathViewModel(
 
     private fun dismissOverlayReward() {
         if (rewardDialogOverlay != null) dismissReward()
+        dismissReadingSessionReward()
+    }
+
+    fun openReadingSessionReward(data: ReadingData, session: ReadingSession) {
+        if (overlay != Overlay.READING || session.id in openedReadingSessions) return
+        prepareReadingReward(data, session, automatic = true)
+    }
+
+    fun showReadingRewardForSession(data: ReadingData, session: ReadingSession) {
+        if (overlay != Overlay.READING && !(overlay == Overlay.SUBJECT_HISTORY && historySubject == Subject.READING)) return
+        prepareReadingReward(data, session, automatic = false)
+    }
+
+    private fun prepareReadingReward(data: ReadingData, session: ReadingSession, automatic: Boolean) {
+        val current = data.sessions.find { it.id == session.id } ?: return
+        val finishedAt = current.finishedAt ?: return
+        if (current.abandoned || current.attemptIds.isEmpty()) return
+        val result = ReadingRewardResult(current.id, current.ownerId, current.game, current.level, finishedAt,
+            current.attemptIds.size, data.sessionCorrect(current), data.sessionAnswered(current),
+            current.timedOut, current.rewardsEnabledAtStart, current.prizeType)
+        val pending = PendingReadingResult(result)
+        pendingReadingResult = pending
+        openedReadingSessions += current.id
+        val request = ++readingRewardRequestVersion
+        readingRewardOverlay = overlay
+        readingCelebrationDismissed = !automatic
+        readingCelebration = null
+        readingSelectingCelebration = true
+        readingRewardResult = null
+        readingRewardError = null
+        viewModelScope.launch {
+            try {
+                storeLock.withLock {
+                    val created = persistReadingResult(pending)
+                    if (request == readingRewardRequestVersion && overlay == readingRewardOverlay) {
+                        readingRewardResult = pending.result.takeIf {
+                            pending.saved && it.prizeType != null && (!automatic || created)
+                        }
+                        readingCelebration = pending.result.celebration.takeIf {
+                            created && !readingCelebrationDismissed
+                        }
+                    }
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                DebugLog.event(DebugEvent.HISTORY_FAILURE, error = error)
+                openedReadingSessions -= current.id
+                if (request == readingRewardRequestVersion) {
+                    readingRewardError = "Unable to save your reading rewards. Free device storage and try again."
+                    readingRewardResult = result.takeIf { it.prizeType != null }
+                }
+            } finally {
+                if (request == readingRewardRequestVersion) readingSelectingCelebration = false
+            }
+        }
+    }
+
+    /** Returns true only for the first durable receipt, not a resumed or retained session. */
+    private suspend fun persistReadingResult(pending: PendingReadingResult): Boolean {
+        if (pending.saved) return false
+        var snapshot = withContext(ioDispatcher) { store.loadSnapshot() }
+        val id = pending.result.sessionId
+        val existing = snapshot.readingResults.find { it.sessionId == id }
+        val created = existing == null && id !in snapshot.recordedReadingSessionIds
+        if (created) {
+            val selected = if (pending.result.completed)
+                Celebration.select(pending.result.questionCount, celebrationRandom, snapshot.pokemons, GameMode.REWARDS)
+            else null
+            snapshot = withContext(ioDispatcher) {
+                store.addReadingResult(pending.result.copy(celebration = selected))
+            }
+        }
+        snapshot.readingResults.find { it.sessionId == id }?.let {
+            pending.result = it
+            pending.saved = true
+        }
+        applySnapshot(snapshot)
+        return created
+    }
+
+    fun dismissReadingCelebration() {
+        readingCelebrationDismissed = true
+        readingCelebration = null
+    }
+
+    fun dismissReadingReward() {
+        readingRewardRequestVersion++
+        readingRewardResult = null
+        readingRewardError = null
+        readingSelectingCelebration = false
+    }
+
+    fun dismissReadingSessionReward() {
+        dismissReadingCelebration()
+        dismissReadingReward()
+        readingRewardOverlay = null
+        pendingReadingResult = null
+    }
+
+    fun collectPresentedReadingCelebration(presented: Celebration) {
+        val pending = pendingReadingResult ?: return
+        if (!foreground || overlay != Overlay.READING || overlay != readingRewardOverlay ||
+            readingSelectingCelebration || readingCelebration != presented || !pending.saved ||
+            pending.result.pokemonReward != null) return
+        viewModelScope.launch {
+            try {
+                storeLock.withLock {
+                    val snapshot = withContext(ioDispatcher) {
+                        store.collectReadingCelebration(pending.result.sessionId, presented)
+                    }
+                    applySnapshot(snapshot)
+                    snapshot.readingResults.find { it.sessionId == pending.result.sessionId }?.let {
+                        pending.result = it
+                        if (readingRewardResult?.sessionId == it.sessionId) readingRewardResult = it
+                    }
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                DebugLog.event(DebugEvent.HISTORY_FAILURE, error = error)
+                message = "Unable to save your celebrations. Free device storage and try again."
+            }
+        }
+    }
+
+    fun claimReadingReward() {
+        val target = readingRewardResult ?: return
+        if (claimingReadingReward || !readingRewardDialogVisible || target.prizeType == null || target.prize != null) return
+        val pending = pendingReadingResult?.takeIf { it.result.sessionId == target.sessionId }
+        val request = readingRewardRequestVersion
+        claimingReadingReward = true
+        readingRewardError = null
+        viewModelScope.launch {
+            try {
+                storeLock.withLock {
+                    if (pending != null && !pending.saved) persistReadingResult(pending)
+                    val snapshot = withContext(ioDispatcher) { store.claimReadingReward(target.sessionId) }
+                    applySnapshot(snapshot)
+                    val claimed = snapshot.readingResults.find { it.sessionId == target.sessionId }
+                    if (claimed?.prize != null) {
+                        if (pending != null) pending.result = claimed
+                        if (request == readingRewardRequestVersion) readingRewardResult = claimed
+                    } else if (request == readingRewardRequestVersion) {
+                        readingRewardError = "This prize is no longer available in reading history."
+                    }
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                DebugLog.event(DebugEvent.HISTORY_FAILURE, error = error)
+                if (request == readingRewardRequestVersion)
+                    readingRewardError = "Unable to save your prize. Free device storage and try again."
+            } finally {
+                claimingReadingReward = false
+            }
+        }
     }
 
     fun claimReward() {
@@ -745,6 +922,7 @@ class MathViewModel(
 
     private fun applySnapshot(snapshot: PracticeSnapshot) {
         history = snapshot.history
+        readingRewardResults = snapshot.readingResults
         rewardBalances = snapshot.rewards
         pokemons = snapshot.pokemons
         collectionLoaded = true

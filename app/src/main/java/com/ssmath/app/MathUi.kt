@@ -166,7 +166,8 @@ internal fun MathAppContent(model: MathViewModel) {
                                 onTextSizeChange = model::chooseTextSize,
                                 disabledGames = model.disabledReadingGames,
                                 onRewards = model::openRewards,
-                                onPokemons = model::openPokemons
+                                onPokemons = model::openPokemons,
+                                appModel = model
                             )
                             SettingsButton(model::openSettings, Modifier.align(Alignment.BottomEnd))
                         }
@@ -178,6 +179,14 @@ internal fun MathAppContent(model: MathViewModel) {
                     model.rewardResult?.let { result ->
                         if (model.rewardDialogVisible) RewardGiftDialog(result, model.claimingReward, model.rewardError,
                             onOpen = model::claimReward, onDismiss = model::dismissReward)
+                    }
+                    if (model.overlay == Overlay.READING) model.readingCelebration?.let { celebration ->
+                        CelebrationDialog(celebration, onFinished = model::dismissReadingCelebration,
+                            onPresented = { model.collectPresentedReadingCelebration(celebration) })
+                    }
+                    model.readingRewardResult?.let { result ->
+                        if (model.readingRewardDialogVisible) RewardGiftDialog(result, model.claimingReadingReward,
+                            model.readingRewardError, model::claimReadingReward, model::dismissReadingReward)
                     }
                 }
             }
@@ -305,7 +314,8 @@ private fun HomeScreen(model: MathViewModel) {
         SetupDialog.REWARDS -> GameSetupDialog(model::dismissSetupDialog) {
             Text("Rewards Game", style = MaterialTheme.typography.headlineSmall)
             Text("How many questions would you like?", style = MaterialTheme.typography.titleLarge)
-            RewardsQuestionCountChoices(model)
+            RewardsQuestionCountChoices(model.rewardsQuestionCount,
+                { model.updateRewardsQuestionCount(it.toString()) })
             RewardsCriteria(model)
             Text("Choose a math type to play with its saved number limits.")
             Operation.entries.forEach { operation ->
@@ -377,8 +387,8 @@ private fun SubjectGrid(onMath: () -> Unit, onReading: () -> Unit, modifier: Mod
 
 @Composable
 internal fun SubjectButton(label: String, background: Int, onClick: () -> Unit, modifier: Modifier = Modifier,
-                           tag: String = "subject-$label") {
-    Button(onClick = onClick, modifier = modifier.aspectRatio(1f).testTag(tag),
+                           tag: String = "subject-$label", enabled: Boolean = true) {
+    Button(onClick = onClick, enabled = enabled, modifier = modifier.aspectRatio(1f).testTag(tag),
         shape = RoundedCornerShape(20.dp), contentPadding = PaddingValues(0.dp)) {
         Box(Modifier.fillMaxSize()) {
             Image(painterResource(background), contentDescription = null,
@@ -392,7 +402,8 @@ internal fun SubjectButton(label: String, background: Int, onClick: () -> Unit, 
 }
 
 @Composable
-private fun RewardsQuestionCountChoices(model: MathViewModel) {
+internal fun RewardsQuestionCountChoices(questionCount: Int?, onSelect: (Int) -> Unit,
+                                        tagPrefix: String = "rewards", enabled: Boolean = true) {
     val choices = listOf(
         Triple(15, R.drawable.ic_pokeball, "Poké Ball"),
         Triple(25, R.drawable.ic_gift_box_blue, "Blue gift box"),
@@ -403,14 +414,14 @@ private fun RewardsQuestionCountChoices(model: MathViewModel) {
         textMeasurer.measure(count.toString(), MaterialTheme.typography.labelLarge, softWrap = false).size.width
     }
     val minimumButtonWidth = maxOf(64.dp, with(LocalDensity.current) { labelWidth.toDp() } + 16.dp)
-    FlowRow(Modifier.fillMaxWidth().selectableGroup().testTag("rewards-question-count-choices"),
+    FlowRow(Modifier.fillMaxWidth().selectableGroup().testTag("$tagPrefix-question-count-choices"),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp), maxItemsInEachRow = 3) {
         choices.forEach { (count, image, description) ->
-            val selected = model.rewardsQuestionCount == count
-            OutlinedButton(onClick = { model.updateRewardsQuestionCount(count.toString()) },
+            val selected = questionCount == count
+            OutlinedButton(onClick = { onSelect(count) }, enabled = enabled,
                 modifier = Modifier.weight(1f).widthIn(min = minimumButtonWidth)
-                    .testTag("rewards-question-count-$count").semantics {
+                    .testTag("$tagPrefix-question-count-$count").semantics {
                         this.selected = selected
                         role = Role.RadioButton
                         contentDescription = "$count questions"

@@ -105,7 +105,7 @@ The import button shows the installed pack version, counts by game/level, and do
 with **Sprout**, **Trail**, and **Summit**, in increasing difficulty; existing drafts keep their original level.
 **Active Reading Games** opens a dialog with a switch for each reading game, all enabled by default.
 Changes are saved automatically on this device. Disabled games cannot be started or resumed,
-but their drafts, history, stories, and earned points are kept; re-enable a game to resume its drafts.
+but their drafts, history, stories, and earned rewards are kept; re-enable a game to resume its drafts.
 You can disable every game; the reading menu will explain where to enable them again.
 **Reading Practice History** opens
 with dated activity records. Older installations with multiple readers retain a read-only
@@ -119,7 +119,7 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
 - **App updates** – at the top, check GitHub for a newer release using the button
   beside the installed version, then download and install it.
 - **Change Name** – edit the name used for all games on this device. Save a name of
-  1–40 characters, or cancel to keep the current name. Progress, stories, and points stay intact.
+  1–40 characters, or cancel to keep the current name. Progress, stories, and rewards stay intact.
 - **My Rewards** – under Rewards, view your collected prizes and
   one-third fragments in a four-column grid grouped by **Tier 1** and **Tier 2**,
   even when the rewards system is disabled.
@@ -173,17 +173,20 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   with the result; deleting a result removes its claimed fragment from your available rewards.
   A gift dismissed before opening can still be claimed from its history entry.
   All reward illustrations and animations are drawn in the app and work offline.
-- **Reading Rewards System** – under Reading Settings, controls new individual and shared
-  reading checkpoint points, independently of Math prizes. When off, checkpoints,
-  accuracy, activity completions, milestones, and stories still save normally. Existing
-  points remain; switching back on does not award points for checkpoints completed while off.
+- **Reading Rewards System** – under Reading Settings, enables the same prize fragments
+  as Math Rewards Game, using the shared Rewards inventory. Complete at least 25 activities
+  with **more than 90% correct** to qualify; rewards must be on at both start and finish.
+  Disabled reward types are excluded from new prizes. Existing gifts remain claimable.
+  Reading checkpoint points have been removed; checkpoints still track activity progress.
 - **Show timer** – off by default. Show or hide the timer while practicing. The timer pauses while
   Settings, any subject's Practice History, My Rewards, or My Pokémons is open, or the app is in the background.
   When both Math Rewards System and Show timer are enabled, **Time limit** offers
   **None** or **5–60 minutes** in 5-minute increments. The selection applies to the
   next Rewards Game, not Practice Game. A timed game shows time remaining and ends when time runs out,
   saving the partial result without a prize. Changing settings during practice does
-  not remove its active time limit.
+  not remove its active time limit. Reading games also use this limit when Reading
+  Rewards System and Show timer are enabled at launch; leaving Reading or backgrounding
+  the app pauses it. Saved reading sessions retain their elapsed time and original limit.
 - **Show correct answers** – on by default. Reveal correct answers after
   mistakes during practice, in Results, and in Practice History. Wrong answers are
   still marked and counted, and saved attempts are unchanged. This choice is remembered.
@@ -221,35 +224,41 @@ multi-step cause and effect, and story planning. Import/update the activity libr
 get Summit content; merely selecting a level does not download anything.
 Open **Reading** on the home screen to choose from illustrated square game buttons.
 **Rewards** and **Pokémon** shortcuts stay at the top, as on the Math page.
-Reading progress is separate from math history and prizes. Use **Settings → Reading Settings →
+Reading history is separate from math history; prizes and Pokémon use the shared collections.
+Use **Settings → Reading Settings →
 Set Reading Level** to choose a level, and **Reading Progress** to view the private dashboard.
-Activities use large tappable choices, not timed reading or mandatory dragging.
-Tapping a game with a draft opens resume/new-attempt choices; Story Builder Partners
-also shows this dialog before its first attempt, with resume disabled until a draft exists.
-Starting over requires confirmation before archiving a saved draft.
+Select **15**, **25**, or **50** under **How many questions would you like?**, using
+the same Poké Ball, blue gift, and purple gift buttons as Math. Then tap a game to
+reserve that many activities at your selected reading level. An activity counts as
+one question, even when it contains several checkpoints. The first incorrect required
+answer marks that activity wrong; it cannot be retried to change the session score.
+The game ends when **more than 10% of the selected count** is wrong (2 for 15,
+3 for 25, or 6 for 50). Finish every assigned activity to receive a completion
+celebration; qualifying sessions also offer a gift box.
+Activities use large tappable choices; dragging is optional. **Resume** continues the
+saved game without drawing another batch. Legacy single-activity drafts and stories
+remain readable and retain their original progress, but do not earn session prizes.
 Activities are selected randomly without replacement for each reader, game, and level.
 Assignment counts as presented even if the activity is later skipped; resuming never
 consumes another activity. After the eligible pool is exhausted, a new cycle begins,
 avoiding an immediate repeat when another activity exists. A larger batch exhausts the
-remaining unseen activities before continuing into a new cycle. The current UI launches
-one activity at a time. Cycle rollover never resets points, drafts, or history.
+remaining unseen activities before continuing into a new cycle. The entire batch,
+including activity revisions, is saved at launch. Cycle rollover never resets drafts or history.
 
-| Game | Activity and completion points |
+| Game | Activity |
 | --- | --- |
-| Missing Word Mission | Choose the missing word: 1 point per sentence. |
-| Sentence Scramble | Hold and drag word tiles into empty sentence spaces, or back to Available tiles to remove them. Tapping also adds or removes tiles. Complete the order for 1 point, with an optional 1-point extra challenge. More than one valid order is accepted where appropriate. |
-| Story Sequencer | Arrange illustrated story parts: 1 point, plus 1 for a comprehension question. |
-| Reading Detective | Answer a passage question and select its evidence: 1 point each. |
-| Caption Quest | Match an illustration with a written caption: 1 point. |
-| Choose the Next Chapter | Choose a story branch freely, then answer its comprehension question: 1 point for comprehension, none for choosing a direction. |
-| Story Studio | Create a story with character, setting, problem, and ending checkpoints: up to 4 points. Use suggested tiles or type your own words. |
-| Story Builder Partners | Take turns with a friend or grown-up (no extra profile needed), or write both parts yourself, then arrange and reread the story. The local user earns one participation point and the story earns one separate shared completion point. Existing two-reader stories keep their original attribution and points. |
+| Missing Word Mission | Choose the missing word. |
+| Sentence Scramble | Hold and drag word tiles into empty sentence spaces, or tap to add/remove tiles. More than one valid order is accepted where appropriate. |
+| Story Sequencer | Arrange illustrated story parts and answer a comprehension question. |
+| Reading Detective | Answer a passage question and select its evidence. |
+| Caption Quest | Match an illustration with a written caption. |
+| Choose the Next Chapter | Choose a story branch freely, then answer its comprehension question. |
+| Story Studio | Create a story with character, setting, problem, and ending checkpoints. Use suggested tiles or type your own words. |
+| Story Builder Partners | Take turns with a friend or grown-up (no extra profile needed), or write both parts yourself, then arrange and reread the story. Existing two-reader stories keep their original attribution. |
 
-Hints and retries never remove points, and there are no speed bonuses. Each
-checkpoint awards points once within an attempt, even after leaving and resuming.
-Starting a new attempt allows fresh practice and points. The Reading Progress view
-distinguishes points and completed activities from independent first-try answers,
-retries, hints, and passage narration. Creative stories use completion checkpoints,
+Hints remain available, and there are no speed bonuses. The Reading Progress view
+distinguishes completed activities from independent first-try answers, legacy retries,
+hints, and passage narration. Creative stories use completion checkpoints,
 not automatic judgments of imagination or spelling. Personal milestones replace
 class rankings.
 
@@ -264,13 +273,14 @@ use non-destructive migrations. Clearing app data, like uninstalling, removes lo
 
 ### Reading packs and storage
 
-The downloadable source is `datasets/reading/manifest.json`, with UTF-8 JSON Lines data
+The downloadable source is `datasets/reading/reading_activities_import.json`, with UTF-8 JSON Lines data
 in `datasets/reading/activities-<sha256>.jsonl` (one `ReadingActivity` JSON object per line).
+The previous `manifest.json` entry point remains available for older app versions; checksum-named data files are unchanged.
 These files are outside Android resources/assets and are **not packaged in the APK**.
 Pack **v3** contains **24,000 activities**: **1,000 per game per difficulty**, across all eight
 games and Sprout, Trail, and Summit. This includes the original 72 activities unchanged and
 23,928 new template-generated activities. The original v1/v2 checksum-named files and archived
-manifests remain available. Existing installations can update without losing drafts, points,
+manifests remain available. Existing installations can update without losing drafts, progress,
 or presentation cycles. Older app versions without Summit support reject the expanded pack
 safely and retain their installed library; update the app first.
 The default HTTPS source is this repository's `main` branch on `raw.githubusercontent.com`;
@@ -445,6 +455,10 @@ unchanged. Each action removes one of the selected units, without breaking whole
 into fragments or changing the other units, practice history, or My Pokémons. Empty balances
 cannot be removed. Changes are saved on this device and cannot be undone; claimed gifts
 cannot be claimed again. **Back to admin** returns to the Admin dialog.
+
+Press **View reading activities database** to browse the installed activity library,
+filter by game and level, and inspect activity IDs, passages, questions, correct
+answers, orders, and story prompts. The browser is read-only and works offline.
 
 Under **Available rewards**, enable or disable each reward, grouped by tier. Choices
 are saved on this device and apply when a practice finishes, including a practice

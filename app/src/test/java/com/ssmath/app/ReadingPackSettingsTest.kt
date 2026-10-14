@@ -90,6 +90,15 @@ class ReadingPackSettingsTest {
         compose.onNodeWithTag("reading-pack-import").assertIsEnabled()
     }
 
+    @Test fun readingSettingsKeepsImportControlsSeparateFromAdminBrowser() {
+        val model = model(readingTestImporter(store.catalog, application.cacheDir, pool))
+        compose.setContent {
+            Column(Modifier.verticalScroll(rememberScrollState())) { ReadingPackSettings(model) }
+        }
+        compose.onNodeWithTag("reading-pack-import").performScrollTo().assertIsEnabled()
+        compose.onNodeWithTag("reading-database-open").assertDoesNotExist()
+    }
+
     @Test fun emptyMenuGuidesImportAndRapidStartsAssignOnlyOneActivity() {
         val model = model(readingTestImporter(store.catalog, application.cacheDir, pool))
         compose.setContent { ReadingModule(model, {}, 100, {}) }

@@ -297,6 +297,131 @@ class HistoryStoreTest {
         prizeType = type
     )
 
+    private fun reading(id: String = "reading-1") = ReadingRewardResult(
+        id, "reader", ReadingGame.MISSING, ReadingLevel.SPROUT, 100, 25, 25, 25,
+        prizeType = RewardType.LOLLIPOP, celebration = Celebration.PIKACHU
+    )
+
+    @Test fun readingRewardsMigrateLegacySnapshotsWithoutBecomingMathHistory() {
+        val math = eligible(1)
+        listOf(
+            "[${Json.encodeToString(PracticeResult.serializer(), math)}]",
+            """{"history":[${Json.encodeToString(PracticeResult.serializer(), math)}],"rewards":{"LOLLIPOP":{"whole":2,"fragments":1}}}"""
+        ).forEach { legacy ->
+            file.writeText(legacy)
+            val before = store.loadSnapshot()
+            val saved = store.addReadingResult(reading())
+            assertEquals(before.history, saved.history)
+            assertEquals(before.rewards, saved.rewards)
+            assertEquals(listOf(reading()), saved.readingResults)
+            assertEquals(setOf("reading-1"), saved.recordedReadingSessionIds)
+            assertEquals(saved, HistoryStore(file).loadSnapshot())
+        }
+    }
+
+    @Test fun readingAndMathClaimsShareFragmentCarryWithoutDuplicateAwardsAfterRestart() {
+        store.add(eligible(1))
+        store.claimReward(1)
+        (1..2).forEach { store.addReadingResult(reading("reading-$it")) }
+        store.claimReadingReward("reading-1")
+        val claimed = store.claimReadingReward("reading-2")
+        assertEquals(RewardBalance(1, 0), claimed.rewards[RewardType.LOLLIPOP])
+        val restored = HistoryStore(file)
+        val bytes = file.readText()
+        repeat(3) {
+            assertEquals(claimed, restored.claimReadingReward("reading-2"))
+            assertEquals(claimed, restored.addReadingResult(reading("reading-2").copy(prizeType = RewardType.BED_TIME)))
+        }
+        assertEquals(bytes, file.readText())
+        assertEquals(listOf(1L), claimed.history.map { it.id })
+        assertEquals(PrizeAward(RewardType.LOLLIPOP, RewardBalance(1, 0)), claimed.readingResults.first().prize)
+    }
+
+    @Test fun readingClaimsRequireCompleteAccurateUntimedRewardSessionsAndTheCorrectTier() {
+        listOf(
+            reading().copy(questionCount = 24, answered = 24, correct = 24),
+            reading().copy(correct = 22),
+            reading().copy(answered = 24, correct = 24),
+            reading().copy(timedOut = true),
+            reading().copy(rewardsEnabledAtStart = false),
+            reading().copy(prizeType = RewardType.RESTAURANT)
+        ).forEachIndexed { index, invalid ->
+            val result = invalid.copy(sessionId = "ineligible-$index")
+            val saved = store.addReadingResult(result)
+            assertNull(saved.readingResults.first().prizeType)
+            assertEquals(saved, store.claimReadingReward(result.sessionId))
+            assertTrue(saved.rewards.isEmpty())
+        }
+    }
+
+    @Test fun readingCollectionRequiresTheSelectedPresentedCelebrationAndIsIdempotent() {
+        val saved = store.addReadingResult(reading())
+        assertTrue(saved.pokemons.isEmpty())
+        assertNull(saved.readingResults.single().pokemonReward)
+        assertEquals(saved, store.collectReadingCelebration("reading-1", Celebration.PARTY))
+        assertEquals(saved, store.collectReadingCelebration("missing", Celebration.PIKACHU))
+        val collected = store.collectReadingCelebration("reading-1", Celebration.PIKACHU)
+        assertEquals(setOf(Celebration.PIKACHU), collected.pokemons)
+        assertEquals(Celebration.PIKACHU, collected.readingResults.single().pokemonReward)
+        assertTrue(collected.rewards.isEmpty())
+        assertEquals(collected, HistoryStore(file).collectReadingCelebration("reading-1", Celebration.PIKACHU))
+        assertEquals(collected, store.addReadingResult(reading()))
+    }
+
+    @Test fun mathDeletionAndClearKeepReadingResultsInventoryAndSharedCelebrations() {
+        store.add(eligible(1))
+        store.claimReward(1)
+        store.collectPokemon(1, Celebration.PIKACHU)
+        store.addReadingResult(reading())
+        store.claimReadingReward("reading-1")
+        store.collectReadingCelebration("reading-1", Celebration.PIKACHU)
+        val readingResults = store.loadSnapshot().readingResults
+        store.delete(1)
+        store.clear()
+        val remaining = HistoryStore(file).loadSnapshot()
+        assertTrue(remaining.history.isEmpty())
+        assertEquals(readingResults, remaining.readingResults)
+        assertEquals(RewardBalance(0, 1), remaining.rewards[RewardType.LOLLIPOP])
+        assertEquals(setOf(Celebration.PIKACHU), remaining.pokemons)
+        file.writeText(Json { encodeDefaults = true }.encodeToString(PracticeSnapshot.serializer(),
+            PracticeSnapshot(readingResults = listOf(reading()), recordedReadingSessionIds = setOf("reading-1"))))
+        store.clear()
+        assertEquals(listOf(reading()), store.loadSnapshot().readingResults)
+    }
+
+    @Test fun readingRetentionKeepsDurableReceiptsSoOldSessionsCannotRecreateRewards() {
+        val results = List(MAX_HISTORY_RESULTS) { reading("reading-$it") }
+        file.writeText(Json { encodeDefaults = true }.encodeToString(PracticeSnapshot.serializer(), PracticeSnapshot(
+            readingResults = results, recordedReadingSessionIds = results.map { it.sessionId }.toSet(),
+            rewards = mapOf(RewardType.LOLLIPOP to RewardBalance(1, 0)), pokemons = setOf(Celebration.PIKACHU)
+        )))
+        val newest = reading("newest").copy(finishedAt = 1)
+        val saved = store.addReadingResult(newest)
+        assertEquals(MAX_HISTORY_RESULTS, saved.readingResults.size)
+        assertEquals(newest, saved.readingResults.first())
+        val pruned = results.last()
+        assertFalse(saved.readingResults.any { it.sessionId == pruned.sessionId })
+        assertTrue(pruned.sessionId in saved.recordedReadingSessionIds)
+        assertEquals(saved, HistoryStore(file).addReadingResult(pruned))
+        assertEquals(saved, store.claimReadingReward(pruned.sessionId))
+        assertEquals(saved, store.collectReadingCelebration(pruned.sessionId, Celebration.PIKACHU))
+    }
+
+    @Test fun readingClaimAndCollectionWriteFailuresAreAtomicAndRetryable() {
+        store.addReadingResult(reading())
+        val before = file.readText()
+        val blocked = File(directory, "${file.name}.tmp").apply { mkdir() }
+        assertThrows(IOException::class.java) { store.claimReadingReward("reading-1") }
+        assertThrows(IOException::class.java) { store.collectReadingCelebration("reading-1", Celebration.PIKACHU) }
+        assertEquals(before, file.readText())
+        assertTrue(blocked.delete())
+        store.claimReadingReward("reading-1")
+        val collected = store.collectReadingCelebration("reading-1", Celebration.PIKACHU)
+        assertEquals(RewardBalance(0, 1), collected.rewards[RewardType.LOLLIPOP])
+        assertEquals(setOf(Celebration.PIKACHU), collected.pokemons)
+        assertEquals(collected, HistoryStore(file).loadSnapshot())
+    }
+
     @Test fun pendingPrizeAndAllResultMetadataSurviveReload() {
         val result = eligible(1).copy(questionCount = 26, minimum = 1)
         store.add(result)

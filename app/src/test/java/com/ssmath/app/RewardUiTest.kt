@@ -97,6 +97,34 @@ class RewardUiTest {
     @Test fun anEligibleScoreJustAboveNinetyKeepsTwoDecimalPlaces() =
         assertScoreText(892, 991, "90.01")
 
+    @Test fun readingGiftUsesTheSameClaimAnimationAndResetsForANewSession() {
+        var saved by mutableStateOf(ReadingRewardResult("reading-1", "reader", ReadingGame.MISSING,
+            ReadingLevel.SPROUT, 1, 30, 29, 30, prizeType = RewardType.LOLLIPOP))
+        var opens = 0
+        compose.setContent {
+            MathTheme { RewardGiftDialog(saved, false, null, { opens++ }, {}) }
+        }
+        compose.mainClock.advanceTimeBy(64)
+        compose.onNodeWithText("Congratulations! You've answered 96.67% correct! Tap to get a prize!")
+            .assertIsDisplayed()
+        repeat(2) { compose.onNodeWithTag("gift-box").performClick() }
+        compose.runOnIdle {
+            assertEquals(1, opens)
+            saved = saved.copy(prize = PrizeAward(RewardType.LOLLIPOP, RewardBalance(1, 0)))
+        }
+        compose.mainClock.advanceTimeBy(REWARD_OPEN_DURATION_MS.toLong() + 64)
+        compose.onNodeWithTag("awarded-fragment").assertIsDisplayed()
+        compose.onNodeWithTag("awarded-balance").assertTextEquals("Whole: 1 · Fragments: 0/3")
+        compose.onNodeWithTag("gift-box").assertHasNoClickAction()
+        compose.runOnIdle { saved = saved.copy(sessionId = "reading-2", prize = null) }
+        compose.waitForIdle()
+        compose.mainClock.advanceTimeBy(128)
+        compose.onNodeWithTag("gift-box").assertContentDescriptionEquals("Open gift box").assertIsEnabled()
+            .performSemanticsAction(SemanticsActions.OnClick) { it() }
+        compose.onNodeWithTag("awarded-fragment").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(2, opens) }
+    }
+
     @Test fun claimingDisablesTheBoxWithoutPrematurelyRevealingAnAward() {
         var opens = 0
         compose.setContent {
