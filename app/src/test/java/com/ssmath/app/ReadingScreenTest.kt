@@ -93,7 +93,7 @@ class ReadingScreenTest {
         }
         compose.waitUntil(5_000) {
             shadowOf(Looper.getMainLooper()).idle()
-            model.data != null
+            model.data != null && !model.saving
         }
     }
 
