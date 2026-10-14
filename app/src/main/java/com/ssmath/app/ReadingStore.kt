@@ -21,6 +21,9 @@ import kotlinx.serialization.json.JsonObject
 interface ReadingStorage {
     fun load(): ReadingData
     fun save(data: ReadingData)
+    fun prepare(data: ReadingData): ReadingData = data
+    fun start(data: ReadingData, game: ReadingGame, level: ReadingLevel, newAttempt: Boolean): ReadingData =
+        ReadingEngine.start(data, game, level, newAttempt).also(::save)
 }
 
 class ReadingStore(file: File) : ReadingStorage {
@@ -70,11 +73,12 @@ class ReadingStore(file: File) : ReadingStorage {
 /** One Activity-scoped actor serializes edits and disk writes, including rapid taps and typed drafts. */
 class ReadingViewModel(
     application: Application,
-    private val storage: ReadingStorage = ReadingStore(File(application.filesDir, "reading_private.json")),
-    private val io: CoroutineDispatcher = Dispatchers.IO
+    private val storage: ReadingStorage = ReadingSqliteStore(application),
+    private val io: CoroutineDispatcher = Dispatchers.IO,
+    private val importer: ReadingPackImporter? = null
 ) : AndroidViewModel(application) {
     constructor(application: Application) : this(application,
-        ReadingStore(File(application.filesDir, "reading_private.json")), Dispatchers.IO)
+        ReadingSqliteStore(application), Dispatchers.IO)
 
     var data by mutableStateOf<ReadingData?>(null)
         private set
@@ -84,7 +88,14 @@ class ReadingViewModel(
         private set
     var saving by mutableStateOf(false)
         private set
+    var packStatus by mutableStateOf<ReadingPackStatus?>(null)
+        private set
+    var importing by mutableStateOf(false)
+        private set
+    var importProgress by mutableStateOf<String?>(null)
+        private set
     private var pending: ReadingData? = null
+    private var pendingStart: Command.Edit? = null
     private val settings = application.getSharedPreferences("settings", 0)
     private val commands = Channel<Command>(Channel.UNLIMITED)
     private val deferred = ArrayDeque<Command.Edit>()
@@ -92,9 +103,12 @@ class ReadingViewModel(
         class Edit(
             val profileId: String?,
             val attemptId: String?,
-            val block: (ReadingData) -> ReadingData
+            val block: (ReadingData) -> ReadingData,
+            val start: Start? = null
         ) : Command
+        data class Start(val game: ReadingGame, val level: ReadingLevel?, val newAttempt: Boolean)
         data object Retry : Command
+        data object Import : Command
     }
 
     init {
@@ -102,8 +116,10 @@ class ReadingViewModel(
             load()
             for (command in commands) {
                 when (command) {
+                    Command.Import -> importPack()
                     Command.Retry -> {
-                        if (pending != null) persist(requireNotNull(pending)) else load()
+                        if (pendingStart != null) apply(requireNotNull(pendingStart))
+                        else if (pending != null) persist(requireNotNull(pending)) else load()
                         while (storageError == null && deferred.isNotEmpty()) apply(deferred.removeFirst())
                     }
                     is Command.Edit -> {
@@ -118,6 +134,29 @@ class ReadingViewModel(
     private suspend fun apply(command: Command.Edit) {
         val current = data ?: return
         if (current.selectedProfileId != command.profileId || current.profile?.activeAttemptId != command.attemptId) return
+        command.start?.let { start ->
+            saving = true
+            pendingStart = command
+            try {
+                data = withContext(io) {
+                    storage.start(current, start.game, start.level ?: requireNotNull(current.profile).level, start.newAttempt)
+                }
+                pendingStart = null
+                storageError = null
+                message = null
+            } catch (error: IllegalArgumentException) {
+                pendingStart = null
+                storageError = null
+                message = error.message ?: "Please check that choice."
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                storageError = "Your activity could not be saved. Nothing was assigned. Free storage, then retry."
+            } finally {
+                saving = false
+            }
+            return
+        }
         val next = try {
             command.block(current)
         } catch (error: IllegalArgumentException) {
@@ -131,6 +170,7 @@ class ReadingViewModel(
         saving = true
         try {
             data = withContext(io) { storage.load() }
+            packStatus = withContext(io) { (storage as? ReadingSqliteStore)?.catalog?.status() }
             storageError = null
         } catch (error: CancellationException) {
             throw error
@@ -146,8 +186,11 @@ class ReadingViewModel(
         saving = true
         pending = next
         try {
-            withContext(io) { storage.save(next) }
-            data = next
+            data = withContext(io) {
+                val prepared = storage.prepare(next)
+                storage.save(prepared)
+                prepared
+            }
             pending = null
             storageError = null
             message = null
@@ -165,6 +208,41 @@ class ReadingViewModel(
         val current = data
         if (current != null && storageError == null)
             commands.trySend(Command.Edit(current.selectedProfileId, current.profile?.activeAttemptId, block))
+    }
+
+    fun start(game: ReadingGame, level: ReadingLevel? = null, newAttempt: Boolean = false) {
+        val current = data ?: return
+        if (storageError == null && !importing) commands.trySend(Command.Edit(
+            current.selectedProfileId, current.profile?.activeAttemptId, { it },
+            Command.Start(game, level, newAttempt)))
+    }
+
+    fun importActivities() {
+        if (importing || saving || storageError != null || storage !is ReadingSqliteStore) return
+        importing = true
+        importProgress = "Preparing reading import…"
+        commands.trySend(Command.Import)
+    }
+
+    private suspend fun importPack() {
+        try {
+            if (storageError != null) {
+                importProgress = "Retry saving your reading progress before importing activities."
+                return
+            }
+            val store = storage as? ReadingSqliteStore ?: return
+            packStatus = (importer ?: ReadingPackImporter(store.catalog, getApplication<Application>().cacheDir))
+                .importPack { importProgress = it }
+            importProgress = "Reading activities are ready to play offline."
+            message = null
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            importProgress = "Import failed. Your installed activities and progress are unchanged. " +
+                "Check your connection and available storage, then retry. The repository dataset must be public."
+        } finally {
+            importing = false
+        }
     }
 
     fun submit(key: String, expectedTurn: Int? = null) {

@@ -37,6 +37,7 @@ class SubjectNavigationTest {
         DebugLog.initialize(application)
         application.getSharedPreferences("settings", 0).edit().clear().commit()
         File(application.filesDir, "practice_history.json").delete()
+        application.deleteDatabase("reading.db")
         listOf("reading_private.json", "reading_private.json.bak", "reading_private.json.new").forEach {
             File(application.filesDir, it).delete()
         }
@@ -179,10 +180,10 @@ class SubjectNavigationTest {
         compose.waitUntil(5_000) {
             compose.onAllNodesWithTag("reading-menu").fetchSemanticsNodes().isNotEmpty()
         }
-        compose.runOnIdle { assertEquals(data, readingModel.data) }
+        compose.runOnIdle { assertEquals(data, readingModel.data?.withoutCatalogueRefs()) }
         compose.onNodeWithTag("reading-game-MISSING").assertDoesNotExist()
         compose.onNodeWithTag("reading-game-SEQUENCE").performScrollTo().assertIsDisplayed()
-        assertEquals(data, store.load())
+        assertEquals(data, ReadingSqliteStore(application).load().withoutCatalogueRefs())
     }
 
     @Test fun readingCollectionsReturnToReadingAndSettingsControlsPreserveDrafts() {
@@ -214,8 +215,9 @@ class SubjectNavigationTest {
         }
         compose.onNodeWithTag("reading-level-TRAIL").assertIsSelected()
         compose.onNodeWithText("Done").performClick()
-        assertEquals(data.attempts, store.load().attempts)
-        assertEquals(ReadingLevel.TRAIL, store.load().profile?.level)
+        val persisted = ReadingSqliteStore(application).load().withoutCatalogueRefs()
+        assertEquals(data.attempts, persisted.attempts)
+        assertEquals(ReadingLevel.TRAIL, persisted.profile?.level)
         compose.onNodeWithTag("reading-progress").performScrollTo().performClick()
         compose.onNodeWithTag("reading-dashboard").assertIsDisplayed()
         compose.onNodeWithTag("reading-back").performScrollTo().performClick()
@@ -223,7 +225,7 @@ class SubjectNavigationTest {
         compose.onNodeWithContentDescription("Back").performClick()
         assertEquals(Overlay.READING, model.overlay)
         compose.onNodeWithTag("reading-menu").assertIsDisplayed()
-        assertEquals(data.attempts, readingModel.data?.attempts)
+        assertEquals(data.attempts, readingModel.data?.withoutCatalogueRefs()?.attempts)
         compose.onNodeWithTag("reading-progress").assertDoesNotExist()
         compose.onNodeWithTag("reading-level-SPROUT").assertDoesNotExist()
     }
@@ -257,6 +259,6 @@ class SubjectNavigationTest {
         now += 5_000
         assertEquals(elapsed, model.elapsedMs())
         assertEquals(game, model.game)
-        assertEquals(data.active, readingModel.data?.active)
+        assertEquals(data.active, readingModel.data?.withoutCatalogueRefs()?.active)
     }
 }

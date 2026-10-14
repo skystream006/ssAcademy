@@ -207,7 +207,7 @@ internal fun ReadingModule(
 ) {
     val data = model.data
     var failedNavigationToMenu by remember { mutableStateOf(false) }
-    val disabledDraft = data?.active?.let { it.open && it.content.game in disabledGames } == true
+    val disabledDraft = data?.active?.let { it.open && it.game in disabledGames } == true
     val page = if (failedNavigationToMenu || data?.page == ReadingPage.PROFILES ||
         (data?.page == ReadingPage.ACTIVITY && disabledDraft))
         ReadingPage.MENU else data?.page ?: ReadingPage.MENU
@@ -248,7 +248,7 @@ internal fun ReadingModule(
                 Text("Choose an activity to begin.")
                 ReadingButton("Back to reading menu", "reading-back", action = back)
             } else ReadingActivityScreen(data, model, attempt, narrationAvailable, speak, stop, back,
-                attempt.content.game !in disabledGames)
+                attempt.game !in disabledGames)
         }
     }
 }
@@ -341,6 +341,9 @@ private fun ReadingMenu(data: ReadingData, model: ReadingViewModel, onExit: () -
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             ReadingHeading("Reading adventures")
             Text("Read, imagine, and make stories. Take your time: hints and retries are always welcome.")
+            model.message?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
+            if (model.packStatus?.counts?.values?.sum() == 0)
+                Text("Import reading activities in Settings > Reading Settings to begin. Saved drafts can still be resumed.")
             if (games.isEmpty()) Text("No reading games are active. Enable games in Settings > Reading Settings > Active Reading Games.")
             if (profile == null) Text("Enter your name at the welcome screen to save your progress.")
             else {
@@ -356,7 +359,7 @@ private fun ReadingMenu(data: ReadingData, model: ReadingViewModel, onExit: () -
                                         stop()
                                         if (game == ReadingGame.PARTNERS ||
                                             ReadingEngine.draft(data, game, profile.level) != null) selectedGame = game
-                                        else model.act { ReadingEngine.start(it, game, requireNotNull(it.profile).level) }
+                                        else model.start(game)
                                     }, Modifier.weight(1f), "reading-game-${game.name}")
                                 }
                                 if (row.size < columns) Spacer(Modifier.weight(1f))
@@ -378,14 +381,14 @@ private fun ReadingMenu(data: ReadingData, model: ReadingViewModel, onExit: () -
             confirmButton = {
                 ReadingButton("Resume ${game.title}", "reading-resume-${game.name}", enabled = hasDraft) {
                     selectedGame = null
-                    model.act { ReadingEngine.start(it, game, requireNotNull(it.profile).level) }
+                    model.start(game)
                 }
             },
             dismissButton = {
                 ReadingChoice("Start a new attempt instead", "reading-new-${game.name}") {
                     selectedGame = null
                     if (hasDraft) discard = game
-                    else model.act { ReadingEngine.start(it, game, requireNotNull(it.profile).level) }
+                    else model.start(game)
                 }
             })
     }
@@ -397,7 +400,7 @@ private fun ReadingMenu(data: ReadingData, model: ReadingViewModel, onExit: () -
                 ReadingButton("Archive draft and start new", "reading-confirm-new") {
                     discard = null
                     stop()
-                    model.act { ReadingEngine.start(it, game, requireNotNull(it.profile).level, newAttempt = true) }
+                    model.start(game, newAttempt = true)
                 }
             }, dismissButton = {
                 ReadingChoice("Keep my draft", "reading-keep-draft") { discard = null }
@@ -691,7 +694,7 @@ private fun rememberReadingEditor(a: ReadingAttempt, key: String, model: Reading
     var text by rememberSaveable(a.id, key, model.data?.selectedProfileId, turn) {
         mutableStateOf(a.fields[key].orEmpty())
     }
-    val locked = a.content.game == ReadingGame.STUDIO && a.earned(key)
+    val locked = a.game == ReadingGame.STUDIO && a.earned(key)
     androidx.compose.runtime.LaunchedEffect(a.id, key, model.data?.selectedProfileId, locked) {
         if (locked) text = a.fields[key].orEmpty()
     }
@@ -794,9 +797,10 @@ private fun ReadingSummary(data: ReadingData, model: ReadingViewModel, a: Readin
     ReadingColumn("reading-summary") {
         ReadingPictureView(ReadingPicture("📖 🌱 ✨", "An open book with a growing shoot and sparkling stars"))
         ReadingHeading("Your reading is growing!")
-        Text("Congratulations on finishing ${a.content.game.title}.")
+        model.message?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
+        Text("Congratulations on finishing ${a.game.title}.")
         Text("Individual points this attempt: ${a.checkpoints.values.count { it.awardedPoint && !it.shared }}")
-        if (a.content.game == ReadingGame.PARTNERS) Text(
+        if (a.game == ReadingGame.PARTNERS) Text(
             "Shared completion points: ${a.checkpoints.values.count { it.awardedPoint && it.shared }}, stored once for the team.")
         val checks = a.checkpoints.values.filter { it.objective && it.tries > 0 }
         if (checks.isNotEmpty()) {
@@ -814,7 +818,7 @@ private fun ReadingSummary(data: ReadingData, model: ReadingViewModel, a: Readin
         Text("Your private milestones", style = MaterialTheme.typography.titleLarge)
         data.milestones(requireNotNull(data.selectedProfileId)).forEach { Text("✦ $it") }
         ReadingButton("Next activity · new attempt", "reading-next", enabled = gameEnabled) {
-            stop(); model.act { ReadingEngine.start(it, a.content.game, a.content.level) }
+            stop(); model.start(a.game, a.level)
         }
         ReadingButton("Back to reading menu", "reading-back", action = back)
     }
@@ -850,7 +854,7 @@ private fun ReadingProgress(data: ReadingData, model: ReadingViewModel, textSize
         Text("By game and level", style = MaterialTheme.typography.titleLarge)
         ReadingGame.entries.forEach { game ->
             ReadingLevel.entries.forEach { level ->
-                val attempts = data.attemptsFor(profile.id).filter { it.content.game == game && it.content.level == level }
+                val attempts = data.attemptsFor(profile.id).filter { it.game == game && it.level == level }
                 if (attempts.isNotEmpty()) {
                     val metric = data.accuracy(profile.id, game, level)
                     Text("${game.title} · ${level.name.lowercase()}: " +
@@ -894,7 +898,7 @@ private fun ReadingHistoryEntries(data: ReadingData, readerId: String, disabledG
     attempts.forEach { a ->
         Card(Modifier.fillMaxWidth().testTag("reading-history-entry-${a.id}")) {
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("${a.content.game.title} · ${a.content.title} · ${a.content.level.name.lowercase()}")
+                Text("${a.game.title} · ${a.title} · ${a.level.name.lowercase()}")
                 Text("Started ${formatFinishedAt(a.startedAt)}")
                 Text(a.finishedAt?.let { "Finished ${formatFinishedAt(it)}" } ?:
                     if (a.abandoned) "Archived draft" else "In progress · resumable")
@@ -905,7 +909,7 @@ private fun ReadingHistoryEntries(data: ReadingData, readerId: String, disabledG
                     "${objective.count { it.earned && it.supportedAtCompletion }} supported · ${objective.count { it.retried }} retried")
                 if (onOpen != null && !a.abandoned) ReadingChoice(
                     if (a.finishedAt != null) "Read summary" else "Resume draft", "reading-history-${a.id}",
-                    enabled = a.finishedAt != null || a.content.game !in disabledGames
+                    enabled = a.finishedAt != null || a.game !in disabledGames
                 ) { onOpen(a) }
             }
         }

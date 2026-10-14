@@ -20,9 +20,13 @@ enum class ReadingLevel(val label: String) {
     TRAIL("Trail · longer sentences and context clues")
 }
 
+@Serializable
 data class ReadingPicture(val symbol: String, val description: String)
+@Serializable
 data class ReadingQuestion(val prompt: String, val choices: List<String>, val answer: Int)
+@Serializable
 data class ReadingBranch(val label: String, val text: String, val question: ReadingQuestion)
+@Serializable
 data class ReadingActivity(
     val id: String,
     val game: ReadingGame,
@@ -40,7 +44,7 @@ data class ReadingActivity(
     val hint: String
 )
 
-/** Original, bundled stories: no downloads, random answer generation, or external images. */
+/** Original content retained only to resolve pre-database saves; new libraries come from reading packs. */
 object ReadingContent {
     private fun q(prompt: String, answer: String, vararg others: String): ReadingQuestion {
         val position = "$prompt|$answer".hashCode().ushr(1) % (others.size + 1)
@@ -50,7 +54,7 @@ object ReadingContent {
 
     private fun p(symbol: String, description: String) = ReadingPicture(symbol, description)
 
-    val activities: List<ReadingActivity> = buildList {
+    val activities: List<ReadingActivity> get() = buildList {
         fun missing(level: ReadingLevel, id: String, title: String, picture: ReadingPicture,
                     sentence: String, answer: String, hint: String, vararg others: String) {
             add(ReadingActivity(id, ReadingGame.MISSING, level, title, picture,

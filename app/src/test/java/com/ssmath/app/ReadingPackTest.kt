@@ -1,0 +1,400 @@
+package com.ssmath.app
+
+import android.app.Application
+import androidx.test.core.app.ApplicationProvider
+import java.io.ByteArrayInputStream
+import java.io.File
+import java.io.IOException
+import java.io.InputStream
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.encodeToString
+import org.junit.After
+import org.junit.Assert.*
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34], application = Application::class)
+class ReadingPackTest {
+    private val application get() = ApplicationProvider.getApplicationContext<Application>()
+    private lateinit var database: ReadingDatabase
+    private lateinit var catalog: ReadingCatalog
+    private lateinit var cache: File
+    private val first get() = ReadingContent.activities.first()
+    private val root get() = listOf(File("../datasets/reading"), File("datasets/reading")).first { it.isDirectory }
+
+    @Before fun setup() {
+        application.deleteDatabase("reading-pack-test.db")
+        database = ReadingDatabase(application, "reading-pack-test.db")
+        catalog = ReadingCatalog(database)
+        cache = File(application.cacheDir, "reading-pack-test").apply { mkdirs() }
+    }
+
+    @After fun cleanup() {
+        database.close()
+        application.deleteDatabase("reading-pack-test.db")
+        cache.deleteRecursively()
+    }
+
+    private fun contentBytes(activities: List<ReadingActivity>) =
+        activities.joinToString(separator = "\n", postfix = "\n") { readingPackJson.encodeToString(it) }
+            .toByteArray(Charsets.UTF_8)
+
+    private fun manifest(bytes: ByteArray, activities: List<ReadingActivity>, version: String = "test-v1") =
+        ReadingPackManifest(1, version, "activities-${readingSha256(bytes)}.jsonl", readingSha256(bytes),
+            bytes.size.toLong(), activities.groupingBy { "${it.game.name}:${it.level.name}" }.eachCount())
+
+    private fun transport(bytes: ByteArray, manifest: ReadingPackManifest): ReadingPackTransport =
+        ReadingPackTransport { url, consume ->
+            requireReadingPackUrl(url)
+            val data = if (url == READING_PACK_MANIFEST_URL)
+                readingPackJson.encodeToString(manifest).toByteArray(Charsets.UTF_8)
+            else {
+                assertTrue(url.endsWith("/${manifest.file}"))
+                bytes
+            }
+            ByteArrayInputStream(data).use(consume)
+        }
+
+    private fun install(
+        activities: List<ReadingActivity> = listOf(first),
+        bytes: ByteArray = contentBytes(activities),
+        manifest: ReadingPackManifest = manifest(bytes, activities),
+        onProgress: (String) -> Unit = {}
+    ): ReadingPackStatus = runBlocking {
+        ReadingPackImporter(catalog, cache, transport(bytes, manifest)).importPack(onProgress)
+    }
+
+    private fun rowCount(table: String): Int =
+        database.readableDatabase.rawQuery("SELECT COUNT(*) FROM $table", null).use {
+            it.moveToFirst()
+            it.getInt(0)
+        }
+
+    private fun storedChecksum(): String =
+        database.readableDatabase.rawQuery("SELECT checksum FROM reading_pack WHERE singleton=1", null).use {
+            it.moveToFirst()
+            it.getString(0)
+        }
+
+    private fun assertCleanFailure(action: () -> Unit) {
+        val oldStatus = catalog.status()
+        val oldContent = rowCount("reading_content")
+        val oldCurrent = rowCount("reading_current")
+        assertThrows(Exception::class.java, action)
+        assertEquals(oldStatus, catalog.status())
+        assertEquals(oldContent, rowCount("reading_content"))
+        assertEquals(oldCurrent, rowCount("reading_current"))
+        assertEquals(0, cache.listFiles().orEmpty().size)
+        database.readableDatabase.rawQuery(
+            "SELECT name FROM sqlite_master WHERE name='reading_import_stage'", null
+        ).use { assertFalse(it.moveToFirst()) }
+    }
+
+    @Test fun repositoryPackExactlyReproducesAll48BundledActivities() {
+        val manifest = readingPackJson.decodeFromString<ReadingPackManifest>(File(root, "manifest.json").readText())
+        val bytes = File(root, manifest.file).readBytes()
+        assertEquals(48, manifest.counts.values.sum())
+        assertEquals(bytes.size.toLong(), manifest.bytes)
+        assertEquals(readingSha256(bytes), manifest.sha256)
+        val activities = bytes.toString(Charsets.UTF_8).lineSequence().filter { it.isNotBlank() }
+            .map { readingPackJson.decodeFromString<ReadingActivity>(it) }.toList()
+        assertEquals(ReadingContent.activities, activities)
+        activities.forEach(ReadingPackValidator::validate)
+        assertEquals(manifest.counts, install(activities, bytes, manifest).counts)
+        assertEquals("v1", catalog.status().version)
+        assertEquals(manifest.sha256, storedChecksum())
+        ReadingGame.entries.forEach { game -> ReadingLevel.entries.forEach { level ->
+            assertEquals(3, catalog.candidates(game, level).size)
+        } }
+        activities.forEach { activity ->
+            val latest = requireNotNull(catalog.latest(activity.id))
+            assertEquals(activity, latest.activity)
+            assertEquals(activity, catalog.find(activity.id, latest.revision))
+        }
+    }
+
+    @Test fun emptyCatalogueRemainsEmptyUntilACompletePackHasBeenInstalled() {
+        assertEquals(ReadingPackStatus(), catalog.status())
+        assertNull(catalog.latest(first.id))
+        assertTrue(catalog.candidates(first.game, first.level).isEmpty())
+        assertThrows(IllegalArgumentException::class.java) { catalog.find(first.id, "unknown") }
+    }
+
+    @Test fun legacyArchiveIsNotSelectableAndSharesTheCanonicalRevisionWithImportedContent() {
+        val revision = catalog.insertLegacy(first)
+        assertEquals(first, catalog.find(first.id, revision))
+        assertEquals(revision, catalog.insertLegacy(first))
+        assertEquals(1, rowCount("reading_content"))
+        assertNull(catalog.latest(first.id))
+        assertEquals(ReadingPackStatus(), catalog.status())
+        install()
+        assertEquals(revision, catalog.latest(first.id)?.revision)
+        assertEquals(1, rowCount("reading_content"))
+    }
+
+    @Test fun updatesAreAdditiveAndKeepOldRevisionsAcrossReopeningTheDatabase() {
+        install(ReadingContent.activities.take(2))
+        val original = requireNotNull(catalog.latest(first.id))
+        val changed = first.copy(title = "An updated title")
+        val addition = first.copy(id = "missing-new")
+        val entries = listOf(changed, addition)
+        val bytes = contentBytes(entries)
+        install(entries, bytes, manifest(bytes, entries, "test-v2"))
+        assertNotEquals(original.revision, catalog.latest(first.id)?.revision)
+        assertEquals(first, catalog.find(first.id, original.revision))
+        assertEquals(changed, catalog.latest(first.id)?.activity)
+        assertNotNull(catalog.latest(ReadingContent.activities[1].id))
+        assertEquals(3, catalog.status().counts["MISSING:SPROUT"])
+        database.close()
+        database = ReadingDatabase(application, "reading-pack-test.db")
+        catalog = ReadingCatalog(database)
+        assertEquals("test-v2", catalog.status().version)
+        assertEquals(first, catalog.find(first.id, original.revision))
+        assertEquals(changed, catalog.latest(first.id)?.activity)
+        assertEquals(addition, catalog.latest(addition.id)?.activity)
+    }
+
+    @Test fun repeatedImportsPreserveReaderStateCyclesAndPresentedHistory() {
+        val db = database.writableDatabase
+        db.execSQL("INSERT INTO reading_state VALUES(1,'state sentinel')")
+        db.execSQL("INSERT INTO reading_cycles VALUES('reader','MISSING','SPROUT',7,'missing-cup')")
+        db.execSQL("INSERT INTO reading_presented VALUES('reader','MISSING','SPROUT','missing-cup',7)")
+        val original = install()
+        repeat(3) { assertEquals(original, install()) }
+        assertEquals(1, rowCount("reading_content"))
+        assertEquals(1, rowCount("reading_current"))
+        db.rawQuery("SELECT payload FROM reading_state", null).use {
+            assertTrue(it.moveToFirst()); assertEquals("state sentinel", it.getString(0))
+        }
+        db.rawQuery("SELECT cycle,last_id FROM reading_cycles", null).use {
+            assertTrue(it.moveToFirst()); assertEquals(7, it.getInt(0)); assertEquals(first.id, it.getString(1))
+        }
+        db.rawQuery("SELECT activity_id,cycle FROM reading_presented", null).use {
+            assertTrue(it.moveToFirst()); assertEquals(first.id, it.getString(0)); assertEquals(7, it.getInt(1))
+        }
+    }
+
+    @Test fun catalogMethodsParticipateInTheCallersTransaction() {
+        val db = database.writableDatabase
+        db.beginTransaction()
+        try {
+            val revision = catalog.insertLegacy(first)
+            assertEquals(first, catalog.find(first.id, revision))
+            db.execSQL("INSERT INTO reading_state VALUES(1,'temporary')")
+        } finally {
+            db.endTransaction()
+        }
+        assertEquals(0, rowCount("reading_content"))
+        assertEquals(0, rowCount("reading_state"))
+    }
+
+    @Test fun malformedJsonUnknownGamesAndUnexpectedFieldsRollBackAnExistingCatalogue() {
+        install()
+        val valid = contentBytes(listOf(first.copy(id = "new-before-failure")))
+        val corrupt = listOf(
+            "{not json}\n",
+            readingPackJson.encodeToString(first.copy(id = "bad-game")).replace("\"MISSING\"", "\"UNKNOWN\"") + "\n",
+            readingPackJson.encodeToString(first.copy(id = "bad-level")).replace("\"SPROUT\"", "\"EXPERT\"") + "\n",
+            readingPackJson.encodeToString(first.copy(id = "bad-field")).replace("\"title\":", "\"surprise\":") + "\n"
+        )
+        corrupt.forEach { invalid ->
+            val bytes = valid + invalid.toByteArray(Charsets.UTF_8)
+            assertCleanFailure { install(bytes = bytes, manifest = manifest(bytes, listOf(first, first))) }
+        }
+        assertEquals(first, catalog.latest(first.id)?.activity)
+    }
+
+    @Test fun everyGameRejectsItsInvalidSchemaAndAnswers() {
+        val invalid = ReadingGame.entries.map { game ->
+            val activity = ReadingContent.forGame(game, ReadingLevel.SPROUT).first()
+            when (game) {
+                ReadingGame.MISSING -> activity.copy(passage = listOf("No gap here."))
+                ReadingGame.SCRAMBLE -> activity.copy(validOrders = listOf(listOf(0, 0, 2)))
+                ReadingGame.SEQUENCE -> activity.copy(validOrders = listOf(listOf(0, 1, 2)))
+                ReadingGame.DETECTIVE -> activity.copy(evidence = activity.passage.size)
+                ReadingGame.CAPTION -> activity.copy(question = null)
+                ReadingGame.CHAPTER -> activity.copy(branches = listOf(activity.branches.first(), activity.branches.first()))
+                ReadingGame.STUDIO, ReadingGame.PARTNERS -> activity.copy(writingChoices = listOf(listOf("Only one")))
+            }
+        } + listOf(
+            first.copy(question = requireNotNull(first.question).copy(answer = 4)),
+            first.copy(question = requireNotNull(first.question).copy(choices = listOf("same", "same"), answer = 0)),
+            first.copy(question = requireNotNull(first.question).copy(prompt = "")),
+            first.copy(picture = first.picture.copy(description = "")),
+            first.copy(id = "../bad"),
+            first.copy(hint = "bad\u0000text"),
+            ReadingContent.find("sequence-seed").copy(eventPictures = emptyList()),
+            ReadingContent.find("scramble-cats").copy(validOrders = emptyList()),
+            ReadingContent.find("scramble-cats").copy(validOrders = listOf(listOf(1, 2, 3))),
+            ReadingContent.find("chapter-path").let { activity ->
+                activity.copy(branches = activity.branches.map { it.copy(question = it.question.copy(answer = -1)) })
+            }
+        )
+        install()
+        invalid.forEach { activity ->
+            assertCleanFailure { install(listOf(first.copy(id = "new-before-invalid"), activity)) }
+        }
+    }
+
+    @Test fun duplicateActivityIdsAreRejectedBeforeInstallingAnyRows() {
+        install()
+        assertCleanFailure {
+            install(listOf(first.copy(id = "same-new"), first.copy(id = "same-new", title = "Different payload")))
+        }
+    }
+
+    @Test fun idsCannotMoveGameOrLevelEvenWhenOnlyAnArchivedRevisionExists() {
+        val movedLevel = first.copy(level = ReadingLevel.TRAIL)
+        val movedGame = ReadingContent.find("caption-cat").copy(id = first.id)
+        catalog.insertLegacy(first)
+        listOf(movedLevel, movedGame).forEach { assertCleanFailure { install(listOf(it)) } }
+        install()
+        listOf(movedLevel, movedGame).forEach { assertCleanFailure { install(listOf(it)) } }
+        assertThrows(IllegalArgumentException::class.java) { catalog.insertLegacy(movedLevel) }
+    }
+
+    @Test fun checksumCountAndByteFailuresNeverReplaceTheInstalledPack() {
+        install()
+        val addition = listOf(first.copy(id = "new-checksum"))
+        val bytes = contentBytes(addition)
+        val good = manifest(bytes, addition, "v2")
+        val zeroHash = "0".repeat(64)
+        listOf(
+            good.copy(sha256 = zeroHash, file = "activities-$zeroHash.jsonl"),
+            good.copy(counts = mapOf("MISSING:SPROUT" to 2)),
+            good.copy(counts = mapOf("MISSING:TRAIL" to 1)),
+            good.copy(bytes = good.bytes - 1),
+            good.copy(bytes = good.bytes + 1)
+        ).forEach { invalid -> assertCleanFailure { install(addition, bytes, invalid) } }
+        assertEquals("test-v1", catalog.status().version)
+    }
+
+    @Test fun manifestsRejectUnsupportedVersionsPathsAndUnboundedCountsBeforeDownloading() {
+        val bytes = contentBytes(listOf(first))
+        val good = manifest(bytes, listOf(first))
+        listOf(
+            good.copy(schemaVersion = 2),
+            good.copy(version = ""),
+            good.copy(version = "v".repeat(81)),
+            good.copy(file = "activities-v1.jsonl"),
+            good.copy(file = "../secret.jsonl"),
+            good.copy(file = "https://other.example/pack.jsonl"),
+            good.copy(bytes = ReadingPackImporter.MAX_PACK_BYTES + 1),
+            good.copy(bytes = 0),
+            good.copy(counts = emptyMap()),
+            good.copy(counts = mapOf("MISSING:SPROUT" to 0)),
+            good.copy(counts = mapOf("MISSING:SPROUT" to -1)),
+            good.copy(counts = mapOf("MISSING:SPROUT" to Int.MAX_VALUE)),
+            good.copy(counts = mapOf("MISSING:SPROUT" to ReadingPackImporter.MAX_ACTIVITIES,
+                "MISSING:TRAIL" to ReadingPackImporter.MAX_ACTIVITIES)),
+            good.copy(counts = mapOf("UNKNOWN:SPROUT" to 1))
+        ).forEach { invalid ->
+            var requests = 0
+            val transport = ReadingPackTransport { url, consume ->
+                requests++
+                assertEquals(READING_PACK_MANIFEST_URL, url)
+                consume(ByteArrayInputStream(readingPackJson.encodeToString(invalid).toByteArray()))
+            }
+            assertCleanFailure {
+                runBlocking { ReadingPackImporter(catalog, cache, transport).importPack() }
+            }
+            assertEquals(1, requests)
+        }
+    }
+
+    @Test fun onlyExactCredentialFreeHttpsRepositoryPathsAreAllowed() {
+        val url = READING_PACK_MANIFEST_URL
+        requireReadingPackUrl(url)
+        requireReadingPackUrl(url.replace("manifest.json", "activities-${"a".repeat(64)}.jsonl"))
+        listOf(
+            url.replace("https:", "http:"),
+            url.replace("raw.githubusercontent.com", "raw.githubusercontent.com.attacker.example"),
+            url.replace("https://", "https://reader@"),
+            url.replace("raw.githubusercontent.com", "raw.githubusercontent.com:444"),
+            url.replace("/main/", "/other-branch/"),
+            url.replace("/ssAcademy/", "/another-repo/"),
+            url.replace("manifest.json", "../secret"),
+            url.replace("manifest.json", "%6danifest.json"),
+            "$url?token=secret",
+            "$url#fragment"
+        ).forEach { invalid ->
+            assertThrows(IllegalArgumentException::class.java) { requireReadingPackUrl(invalid) }
+            assertThrows(IllegalArgumentException::class.java) {
+                runBlocking { HttpsReadingPackTransport().read(invalid) { fail("Network must not be used") } }
+            }
+        }
+    }
+
+    @Test fun oversizedManifestAndRecordInputsAreBoundedAndInvalidUtf8IsRejected() {
+        val transport = ReadingPackTransport { _, consume ->
+            var supplied = 0
+            val input = object : InputStream() {
+                override fun read(): Int {
+                    supplied++
+                    require(supplied <= ReadingPackImporter.MAX_MANIFEST_BYTES + 8 * 1024)
+                    return ' '.code
+                }
+            }
+            consume(input)
+        }
+        assertCleanFailure { runBlocking { ReadingPackImporter(catalog, cache, transport).importPack() } }
+        val tooLong = (" ".repeat(ReadingPackImporter.MAX_LINE_BYTES + 1) + "\n").toByteArray()
+        assertCleanFailure { install(bytes = tooLong) }
+        val invalidUtf8 = contentBytes(listOf(first)) + byteArrayOf(0xc3.toByte(), 0x28, 0x0a)
+        assertCleanFailure { install(bytes = invalidUtf8) }
+        val emptyLine = contentBytes(listOf(first)) + "\n".toByteArray()
+        assertCleanFailure { install(bytes = emptyLine) }
+    }
+
+    @Test fun aFailedStreamOrCancellationLeavesThePreviousPackAndCleansItsDownload() {
+        install()
+        val bytes = contentBytes(listOf(first.copy(id = "network-addition")))
+        val manifest = manifest(bytes, listOf(first))
+        listOf(false, true).forEach { cancelled ->
+            val transport = ReadingPackTransport { url, consume ->
+                if (url == READING_PACK_MANIFEST_URL)
+                    consume(ByteArrayInputStream(readingPackJson.encodeToString(manifest).toByteArray()))
+                else consume(object : InputStream() {
+                    override fun read(): Int =
+                        if (cancelled) throw CancellationException("Test cancellation") else throw IOException("Offline")
+                })
+            }
+            assertCleanFailure { runBlocking { ReadingPackImporter(catalog, cache, transport).importPack() } }
+        }
+        assertEquals(first, catalog.latest(first.id)?.activity)
+    }
+
+    @Test fun cancellationAfterStagingRowsRollsBackTheTransaction() {
+        install()
+        val entries = (1..101).map { first.copy(id = "cancel-$it") }
+        val bytes = contentBytes(entries)
+        val manifest = manifest(bytes, entries)
+        assertCleanFailure {
+            runBlocking {
+                val job = requireNotNull(currentCoroutineContext()[Job])
+                ReadingPackImporter(catalog, cache, transport(bytes, manifest)).importPack { message ->
+                    if (message.startsWith("Validated 100")) job.cancel("Cancelled during staging")
+                }
+            }
+        }
+        assertEquals(1, rowCount("reading_current"))
+        assertEquals(first, catalog.latest(first.id)?.activity)
+        assertNull(catalog.latest("cancel-1"))
+    }
+
+    @Test fun serializationFormattingDoesNotCreateNewContentRevisions() {
+        install()
+        val original = requireNotNull(catalog.latest(first.id))
+        val bytes = ("  " + readingPackJson.encodeToString(first) + "  \n").toByteArray()
+        install(bytes = bytes)
+        assertEquals(original.revision, catalog.latest(first.id)?.revision)
+        assertEquals(1, rowCount("reading_content"))
+    }
+}
