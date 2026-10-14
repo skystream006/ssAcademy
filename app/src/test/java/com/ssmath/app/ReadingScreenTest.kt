@@ -8,6 +8,7 @@ import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
@@ -458,6 +459,10 @@ class ReadingScreenTest {
         waitFor { it.active?.order == listOf(1, -1, 0) }
         dragTile("reading-tile-2", "reading-space-1")
         waitFor { it.active?.order == listOf(1, 2, 0) }
+        dragTile("reading-placed-1", "reading-tile-bank")
+        waitFor { it.active?.order == listOf(1, -1, 0) }
+        dragTile("reading-tile-2", "reading-space-1")
+        waitFor { it.active?.order == listOf(1, 2, 0) }
         click("reading-check-order")
         waitFor { it.active?.earned("order") == true }
         val locked = model.data
@@ -496,7 +501,7 @@ class ReadingScreenTest {
         click("reading-back")
         waitFor { it.page == ReadingPage.MENU }
         click("reading-game-SCRAMBLE")
-        click("reading-resume-SCRAMBLE")
+        compose.onNodeWithTag("reading-resume-SCRAMBLE").performClick()
         waitFor { it.page == ReadingPage.ACTIVITY }
         assertEquals(listOf(-1, 1, -1, 3), model.data?.active?.order)
         click("reading-tile-2")
@@ -506,6 +511,39 @@ class ReadingScreenTest {
         click("reading-check-order")
         waitFor { it.active?.earned("order") == true }
         assertEquals(1, ReadingStore(file).load().points("reader-a"))
+    }
+
+    @Test
+    @Config(qualifiers = "w320dp-h640dp")
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun sentenceDragScrollsTowardOffscreenSpacesAndCancellationKeepsTheDraft() {
+        val data = readingFixture(ReadingContent.find("scramble-lantern"))
+        show(data, percent = 200)
+        compose.onNodeWithTag("reading-tile-3").performScrollTo()
+        val source = compose.onNodeWithTag("reading-tile-3").assertIsDisplayed()
+            .fetchSemanticsNode().boundsInRoot.center
+        val viewport = compose.onNodeWithTag("reading-activity").fetchSemanticsNode().boundsInRoot
+        fun scrollOffset() = compose.onNodeWithTag("reading-activity").fetchSemanticsNode()
+            .config[SemanticsProperties.VerticalScrollAxisRange].value()
+        val before = scrollOffset()
+        assertTrue(before > 0)
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.onRoot().performTouchInput {
+                down(source)
+                advanceEventTime(600)
+                moveTo(source)
+                moveTo(Offset(source.x, viewport.top + 1f), delayMillis = 200)
+            }
+            compose.mainClock.advanceTimeBy(1_000)
+            assertTrue("Dragging at the top should reveal earlier spaces", scrollOffset() < before)
+            compose.onRoot().performTouchInput { cancel() }
+        } finally {
+            compose.mainClock.autoAdvance = true
+        }
+        compose.waitForIdle()
+        assertEquals(data, model.data)
+        assertEquals(data, ReadingStore(file).load())
     }
 
     @Test
