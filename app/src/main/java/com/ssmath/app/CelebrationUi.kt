@@ -40,6 +40,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -275,7 +276,11 @@ internal fun CelebrationDialog(
         title = { Text(if (replay) celebration.label else "Congratulations!") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
-                if (!replay) Text("You answered every question!", modifier = Modifier.padding(bottom = 16.dp))
+                if (!replay) {
+                    Text("You answered every question!", modifier = Modifier.padding(bottom = 16.dp))
+                    Text(celebration.label, style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), textAlign = TextAlign.Center)
+                }
                 CelebrationScene(celebration, progress = { progress.value })
             }
         },

@@ -76,7 +76,7 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    Rewards Games below 15 questions go straight to results without an animation.
    Practice Game uses only the five Other scenes, regardless of question count,
    without awarding prizes or Pokémon.
-   Each scene says **Hurray!!**. These animations
+   Each animation shows its name alongside the scene, which says **Hurray!!**. These animations
    are drawn in the app and work offline. Press **View results** to
    skip the animation, or wait for it to finish.
    In both math modes, the game ends when wrong answers go **above 10%** of the
