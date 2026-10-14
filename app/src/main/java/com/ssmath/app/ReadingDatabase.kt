@@ -47,8 +47,50 @@ class ReadingDatabase(context: Context, name: String = "reading.db") :
 
 data class CatalogActivity(val activity: ReadingActivity, val revision: String)
 data class ReadingPackStatus(val version: String? = null, val counts: Map<String, Int> = emptyMap())
+internal data class ReadingCatalogEntry(
+    val id: String,
+    val revision: String,
+    val title: String,
+    val game: ReadingGame,
+    val level: ReadingLevel
+)
+internal data class ReadingCatalogPage(val entries: List<ReadingCatalogEntry>, val total: Int)
 
 class ReadingCatalog(val database: ReadingDatabase) {
+    internal fun browse(
+        game: ReadingGame? = null,
+        level: ReadingLevel? = null,
+        offset: Int = 0,
+        limit: Int = 40
+    ): ReadingCatalogPage {
+        require(offset >= 0 && limit in 1..100) { "Invalid reading catalogue page" }
+        val filters = mutableListOf<String>()
+        val arguments = mutableListOf<String>()
+        game?.let { filters += "r.game=?"; arguments += it.name }
+        level?.let { filters += "r.level=?"; arguments += it.name }
+        val where = if (filters.isEmpty()) "" else " WHERE ${filters.joinToString(" AND ")}"
+        val db = database.readableDatabase
+        val total = db.rawQuery("SELECT COUNT(*) FROM reading_current r$where", arguments.toTypedArray()).use {
+            it.moveToFirst()
+            it.getInt(0)
+        }
+        // Decode only one bounded page: Android's older SQLite versions do not all support JSON extraction.
+        val entries = db.rawQuery(
+            """SELECT c.payload, r.revision FROM reading_current r
+                JOIN reading_content c ON c.id=r.id AND c.revision=r.revision$where
+                ORDER BY r.id LIMIT ? OFFSET ?""",
+            (arguments + limit.toString() + offset.toString()).toTypedArray()
+        ).use { cursor ->
+            buildList {
+                while (cursor.moveToNext()) {
+                    val activity = readingPackJson.decodeFromString<ReadingActivity>(cursor.getString(0))
+                    add(ReadingCatalogEntry(activity.id, cursor.getString(1), activity.title, activity.game, activity.level))
+                }
+            }
+        }
+        return ReadingCatalogPage(entries, total)
+    }
+
     fun find(id: String, revision: String): ReadingActivity =
         database.readableDatabase.rawQuery(
             "SELECT payload FROM reading_content WHERE id=? AND revision=?", arrayOf(id, revision)

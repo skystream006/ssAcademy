@@ -19,7 +19,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
-internal class ReadingRepositoryPack(manifestFile: String = "manifest.json") {
+internal class ReadingRepositoryPack(manifestFile: String = "reading-activities-import.json") {
     private val root = listOf(File("../datasets/reading"), File("datasets/reading")).first { it.isDirectory }
     private val manifestBytes = File(root, manifestFile).readBytes()
     val manifest = readingPackJson.decodeFromString<ReadingPackManifest>(manifestBytes.toString(Charsets.UTF_8))
@@ -39,7 +39,7 @@ internal class ReadingRepositoryPack(manifestFile: String = "manifest.json") {
         ReadingPackTransport { url, consume ->
             requireReadingPackUrl(url)
             if (url == READING_PACK_MANIFEST_URL) manifestBytes.inputStream().use(consume) else {
-                assertEquals(READING_PACK_MANIFEST_URL.removeSuffix("manifest.json") + manifest.file, url)
+                assertEquals(READING_PACK_MANIFEST_URL.substringBeforeLast('/') + "/" + manifest.file, url)
                 contentFile.inputStream().use(consume)
             }
         })
@@ -178,6 +178,38 @@ class ReadingPackTest {
             }
             assertTrue(catalog.candidates(game, ReadingLevel.SUMMIT).isEmpty())
         }
+    }
+
+    @Test fun importRequestsDescriptiveManifestThenUnchangedChecksumData() {
+        val activities = listOf(first)
+        val bytes = contentBytes(activities)
+        val current = manifest(bytes, activities)
+        val response = transport(bytes, current)
+        val requests = mutableListOf<String>()
+        val status = runBlocking {
+            ReadingPackImporter(catalog, cache, ReadingPackTransport { url, consume ->
+                requests += url
+                response.read(url, consume)
+            }).importPack()
+        }
+        assertEquals("test-v1", status.version)
+        assertEquals("reading-activities-import.json", requests.first().substringAfterLast('/'))
+        assertEquals("activities-${current.sha256}.jsonl", requests.last().substringAfterLast('/'))
+        assertEquals(first, catalog.latest(first.id)?.activity)
+        assertCleanFailure {
+            install(activities, bytes, current.copy(file = "activities-${"0".repeat(64)}.jsonl"))
+        }
+        assertEquals("test-v1", install(activities, bytes, manifest(bytes, activities)).version)
+    }
+
+    @Test fun canonicalAndLegacyPublishedImportsHaveIdenticalPayloadBytesAndMetadata() {
+        val current = ReadingRepositoryPack()
+        val legacy = ReadingRepositoryPack("manifest.json")
+        assertEquals("activities-${current.manifest.sha256}.jsonl", current.manifest.file)
+        assertEquals(current.manifest, legacy.manifest)
+        assertEquals(current.contentFile, legacy.contentFile)
+        assertEquals(current.manifest.sha256, readingSha256(current.bytes))
+        assertArrayEquals(legacy.bytes, current.bytes)
     }
 
     @Test fun emptyCatalogueRemainsEmptyUntilACompletePackHasBeenInstalled() {
@@ -344,6 +376,8 @@ class ReadingPackTest {
             good.copy(version = ""),
             good.copy(version = "v".repeat(81)),
             good.copy(file = "activities-v1.jsonl"),
+            good.copy(file = "reading_activities_import.jsonl"),
+            good.copy(file = "reading_activities_import-${"0".repeat(64)}.jsonl"),
             good.copy(file = "../secret.jsonl"),
             good.copy(file = "https://other.example/pack.jsonl"),
             good.copy(bytes = ReadingPackImporter.MAX_PACK_BYTES + 1),
@@ -371,8 +405,10 @@ class ReadingPackTest {
 
     @Test fun onlyExactCredentialFreeHttpsRepositoryPathsAreAllowed() {
         val url = READING_PACK_MANIFEST_URL
+        val root = url.substringBeforeLast('/') + "/"
         requireReadingPackUrl(url)
-        requireReadingPackUrl(url.replace("manifest.json", "activities-${"a".repeat(64)}.jsonl"))
+        requireReadingPackUrl(root + "manifest.json")
+        requireReadingPackUrl(root + "activities-${"a".repeat(64)}.jsonl")
         listOf(
             url.replace("https:", "http:"),
             url.replace("raw.githubusercontent.com", "raw.githubusercontent.com.attacker.example"),
@@ -380,8 +416,11 @@ class ReadingPackTest {
             url.replace("raw.githubusercontent.com", "raw.githubusercontent.com:444"),
             url.replace("/main/", "/other-branch/"),
             url.replace("/ssAcademy/", "/another-repo/"),
-            url.replace("manifest.json", "../secret"),
-            url.replace("manifest.json", "%6danifest.json"),
+            root + "../secret",
+            root + "%72eading-activities-import.json",
+            root + "reading_activities_import.json",
+            root + "reading_activities_import-${"a".repeat(64)}.jsonl",
+            root + "reading_activities_import.jsonl",
             "$url?token=secret",
             "$url#fragment"
         ).forEach { invalid ->

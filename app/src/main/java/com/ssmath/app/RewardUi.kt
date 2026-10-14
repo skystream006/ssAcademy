@@ -121,12 +121,31 @@ internal fun RewardGiftDialog(
     error: String?,
     onOpen: () -> Unit,
     onDismiss: () -> Unit
+) = RewardGiftDialog(result.id, result.percentCorrectText, result.prize, claiming, error, onOpen, onDismiss)
+
+@Composable
+internal fun RewardGiftDialog(
+    result: ReadingRewardResult,
+    claiming: Boolean,
+    error: String?,
+    onOpen: () -> Unit,
+    onDismiss: () -> Unit
+) = RewardGiftDialog(result.sessionId, result.percentCorrectText, result.prize, claiming, error, onOpen, onDismiss)
+
+@Composable
+private fun RewardGiftDialog(
+    resultKey: Any,
+    percentCorrectText: String,
+    prize: PrizeAward?,
+    claiming: Boolean,
+    error: String?,
+    onOpen: () -> Unit,
+    onDismiss: () -> Unit
 ) {
-    val prize = result.prize
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    val hop = remember(result.id) { Animatable(0f) }
-    val opening = remember(result.id) { Animatable(if (prize == null) 0f else 1f) }
-    var requested by remember(result.id) { mutableStateOf(false) }
+    val hop = remember(resultKey) { Animatable(0f) }
+    val opening = remember(resultKey) { Animatable(if (prize == null) 0f else 1f) }
+    var requested by remember(resultKey) { mutableStateOf(false) }
     val canOpen = prize == null && !claiming && !requested
     val requestOpen = {
         if (canOpen && !requested) {
@@ -135,11 +154,11 @@ internal fun RewardGiftDialog(
         }
     }
 
-    LaunchedEffect(result.id, requested, claiming, error) {
+    LaunchedEffect(resultKey, requested, claiming, error) {
         // A retry can fail before a frame observes claiming=true or a changed error.
         if (requested && !claiming && error != null) requested = false
     }
-    LaunchedEffect(result.id, lifecycle, prize != null, claiming, requested) {
+    LaunchedEffect(resultKey, lifecycle, prize != null, claiming, requested) {
         hop.snapTo(0f)
         if (prize == null && !claiming && !requested) {
             lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
@@ -151,7 +170,7 @@ internal fun RewardGiftDialog(
             }
         }
     }
-    LaunchedEffect(result.id, lifecycle, prize != null) {
+    LaunchedEffect(resultKey, lifecycle, prize != null) {
         if (prize != null && opening.value < 1f) {
             lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 val remaining = ((1f - opening.value) * REWARD_OPEN_DURATION_MS).toInt().coerceAtLeast(1)
@@ -170,7 +189,7 @@ internal fun RewardGiftDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 if (prize == null) {
-                    Text("Congratulations! You've answered ${result.percentCorrectText}% correct! Tap to get a prize!")
+                    Text("Congratulations! You've answered $percentCorrectText% correct! Tap to get a prize!")
                 }
                 val interaction = if (prize == null) {
                     Modifier.clickable(enabled = canOpen, role = Role.Button, onClick = requestOpen)

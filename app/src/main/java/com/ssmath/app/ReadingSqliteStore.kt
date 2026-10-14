@@ -89,13 +89,13 @@ class ReadingSqliteStore(
                 writeState(resumed)
                 return@transaction resumed
             }
-            var next = data
-            repeat(count) {
-                val chosen = select(owner.id, game, level)
-                val ref = ReadingActivityRef(chosen.revision, game, level, chosen.activity.title)
-                next = prepare(ReadingEngine.start(next, game, level, newAttempt = true,
-                    id = UUID.randomUUID().toString(), selected = chosen.activity, activityRef = ref))
-            }
+            val assigned = allocate(owner.id, game, level, count)
+            val first = assigned.first()
+            var next = ReadingEngine.start(data, game, level, newAttempt = true, id = first.id,
+                now = first.startedAt, selected = first.content, activityRef = first.activityRef)
+            next = next.copy(attempts = next.attempts + assigned.drop(1), profiles = next.profiles.map {
+                if (it.id == owner.id) it.copy(activeAttemptId = assigned.last().id) else it
+            })
             ReadingEngine.validate(next, ::resolve)
             writeState(next)
             prepare(next)
@@ -103,6 +103,36 @@ class ReadingSqliteStore(
         expectedState = encode(result)
         return result
     }
+
+    @Synchronized
+    override fun startSession(data: ReadingData, game: ReadingGame, level: ReadingLevel, count: Int,
+                              rewardsEnabledAtStart: Boolean, timeLimitMs: Long?): ReadingData {
+        val result = transaction {
+            check(loaded) { "Load reading data successfully before starting." }
+            require(count in listOf(15, 25, 50)) { "Choose 15, 25, or 50 questions." }
+            require(encode(data) == encode(requireNotNull(readState()))) {
+                "Reading progress changed. Reopen reading before starting another session."
+            }
+            val now = System.currentTimeMillis()
+            val assigned = allocate(requireNotNull(data.profile).id, game, level, count, now)
+            val next = ReadingEngine.startSession(data, game, level, count, rewardsEnabledAtStart,
+                now = now, timeLimitMs = timeLimitMs, assigned = assigned)
+            ReadingEngine.validate(next, ::resolve)
+            writeState(next)
+            prepare(next)
+        }
+        expectedState = encode(result)
+        return result
+    }
+
+    private fun SQLiteDatabase.allocate(ownerId: String, game: ReadingGame, level: ReadingLevel, count: Int,
+                                        now: Long = System.currentTimeMillis()): List<ReadingAttempt> =
+        List(count) {
+            val chosen = select(ownerId, game, level)
+            ReadingAttempt(UUID.randomUUID().toString(), ownerId, chosen.activity.id, now,
+                activityRef = ReadingActivityRef(chosen.revision, game, level, chosen.activity.title),
+                loadedContent = chosen.activity)
+        }
 
     private fun SQLiteDatabase.select(reader: String, game: ReadingGame, level: ReadingLevel): CatalogActivity {
         val keys = arrayOf(reader, game.name, level.name)

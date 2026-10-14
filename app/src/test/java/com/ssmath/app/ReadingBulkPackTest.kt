@@ -162,15 +162,18 @@ class ReadingBulkPackTest {
             assertEquals(activity.id, 1, data.attempts.size)
             assertTrue(activity.id, requireNotNull(data.active).checkpoints.values.all { it.earned && it.tries == 1 })
             assertEquals(data, ReadingEngine.finish(data))
+            assertEquals(activity.id, 1, data.completions("reader-a"))
             assertEquals(activity.id, when (activity.game) {
                 ReadingGame.SCRAMBLE, ReadingGame.SEQUENCE, ReadingGame.DETECTIVE -> 2
                 ReadingGame.STUDIO -> 4
                 else -> 1
-            }, data.points("reader-a"))
+            }, data.checkpointCount("reader-a"))
+            assertTrue(activity.id, requireNotNull(data.active).checkpoints.values.none { it.rewardGranted })
             if (activity.game == ReadingGame.PARTNERS) {
-                assertEquals(1, data.points("reader-b"))
-                assertEquals(1, data.sharedPoints("reader-a"))
-                assertEquals(1, data.sharedPoints("reader-b"))
+                assertEquals(1, data.completions("reader-b"))
+                assertEquals(1, data.checkpointCount("reader-b"))
+                assertEquals(1, data.sharedCompletions("reader-a"))
+                assertEquals(1, data.sharedCompletions("reader-b"))
             }
             ReadingEngine.validate(data)
         }
@@ -295,9 +298,11 @@ class ReadingBulkPackTest {
         val before = data
         val oldCycles = cycles()
         val oldPresented = presented()
-        assertEquals(2, before.points("reader-a"))
-        assertEquals(1, before.points("reader-b"))
-        assertEquals(1, before.sharedPoints("reader-a"))
+        assertEquals(2, before.completions("reader-a"))
+        assertEquals(1, before.completions("reader-b"))
+        assertEquals(2, before.checkpointCount("reader-a"))
+        assertEquals(1, before.checkpointCount("reader-b"))
+        assertEquals(1, before.sharedCompletions("reader-a"))
         assertEquals(1, before.stories.size)
         assertTrue(before.attempts.all { it.activityRef != null })
         assertEquals(2L, scalar("SELECT cycle FROM reading_cycles WHERE game='MISSING' AND level='SPROUT'"))
@@ -375,9 +380,11 @@ class ReadingBulkPackTest {
         assertEquals(oldCycles, cycles().filterNot { it[1] == "CAPTION" && it[2] == "SUMMIT" })
         assertEquals(oldPresented, presented().filterNot { it[1] == "CAPTION" && it[2] == "SUMMIT" })
         assertEquals(before.stories, data.stories)
-        assertEquals(before.points("reader-a"), data.points("reader-a"))
-        assertEquals(before.points("reader-b"), data.points("reader-b"))
-        assertEquals(before.sharedPoints("reader-a"), data.sharedPoints("reader-a"))
+        assertEquals(before.completions("reader-a"), data.completions("reader-a"))
+        assertEquals(before.completions("reader-b"), data.completions("reader-b"))
+        assertEquals(before.checkpointCount("reader-a"), data.checkpointCount("reader-a"))
+        assertEquals(before.checkpointCount("reader-b"), data.checkpointCount("reader-b"))
+        assertEquals(before.sharedCompletions("reader-a"), data.sharedCompletions("reader-a"))
         assertEquals(1, data.attempts.count { it.loadedContent != null })
         assertEquals(data, reopen())
         assertEquals(status, store.catalog.status())

@@ -157,7 +157,7 @@ class ReadingScreenTest {
         assertEquals(0, model.data?.active?.narrations)
         chooseCorrectAnswer()
         click("reading-check-answer")
-        waitFor { it.points("reader-a") == 1 }
+        waitFor { it.active?.earned("answer") == true }
         compose.onNodeWithTag("reading-check-answer").performScrollTo().assertIsNotEnabled()
         click("reading-finish")
         waitFor { it.active?.finishedAt != null }
@@ -169,7 +169,7 @@ class ReadingScreenTest {
         compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }
         assertEquals(1, exited)
         assertTrue(stopped > 0)
-        assertEquals(1, ReadingStore(file).load().points("reader-a"))
+        assertTrue(requireNotNull(ReadingStore(file).load().active).earned("answer"))
     }
 
     private fun assertSimplifiedActivityHeader(data: ReadingData) {
@@ -469,7 +469,7 @@ class ReadingScreenTest {
         compose.onNodeWithTag("reading-placed-0").assertIsNotEnabled()
         dragTile("reading-placed-0", "reading-tile-bank")
         assertEquals(locked, model.data)
-        assertEquals(1, ReadingStore(file).load().points("reader-a"))
+        assertTrue(requireNotNull(ReadingStore(file).load().active).earned("order"))
     }
 
     @Test fun invalidAndCancelledSentenceDropsLeaveTheSavedOrderUnchanged() {
@@ -500,8 +500,7 @@ class ReadingScreenTest {
         waitFor { it.active?.order == listOf(-1, 1, -1, 3) }
         click("reading-back")
         waitFor { it.page == ReadingPage.MENU }
-        click("reading-game-SCRAMBLE")
-        compose.onNodeWithTag("reading-resume-SCRAMBLE").performClick()
+        click("reading-resume-SCRAMBLE")
         waitFor { it.page == ReadingPage.ACTIVITY }
         assertEquals(listOf(-1, 1, -1, 3), model.data?.active?.order)
         click("reading-tile-2")
@@ -510,7 +509,7 @@ class ReadingScreenTest {
         waitFor { it.active?.order == listOf(2, 1, 0, 3) }
         click("reading-check-order")
         waitFor { it.active?.earned("order") == true }
-        assertEquals(1, ReadingStore(file).load().points("reader-a"))
+        assertTrue(requireNotNull(ReadingStore(file).load().active).earned("order"))
     }
 
     @Test
@@ -592,8 +591,8 @@ class ReadingScreenTest {
         compose.onNodeWithText("Answer checkpoint earned · +1").assertDoesNotExist()
         click("reading-finish")
         waitFor { it.active?.finishedAt != null }
-        compose.onNodeWithText("Individual points this attempt: 0").performScrollTo().assertIsDisplayed()
-        assertEquals(0, ReadingStore(file).load().points("reader-a"))
+        compose.onNodeWithText("Individual points this attempt:", substring = true).assertDoesNotExist()
+        assertEquals(1, ReadingStore(file).load().completions("reader-a"))
         assertEquals(1, model.data?.accuracy("reader-a")?.firstIndependent)
     }
 
@@ -641,6 +640,7 @@ class ReadingScreenTest {
             "reading-game-CHAPTER", "reading-game-PARTNERS"), nodes.map {
             it.config[SemanticsProperties.TestTag]
         })
+        click("reading-question-count-15")
         click("reading-game-SEQUENCE")
         waitFor { it.page == ReadingPage.ACTIVITY && it.active?.content?.game == ReadingGame.SEQUENCE }
     }
@@ -670,7 +670,7 @@ class ReadingScreenTest {
         waitFor { it.page == ReadingPage.PROGRESS }
         compose.onNodeWithTag("reading-history-attempt-a").performScrollTo().assertIsNotEnabled()
         assertEquals(data.attempts, model.data?.attempts)
-        assertEquals(1, model.data?.points("reader-a"))
+        assertTrue(requireNotNull(model.data?.active).earned("answer"))
         compose.runOnIdle { disabledGames.value = emptySet() }
         compose.onNodeWithTag("reading-history-attempt-a").assertIsEnabled().performClick()
         waitFor { it.page == ReadingPage.ACTIVITY }
@@ -689,9 +689,8 @@ class ReadingScreenTest {
         assertEquals(data.attempts, ReadingStore(file).load().attempts)
         compose.runOnIdle { disabledGames.value = emptySet() }
         compose.onNodeWithTag("reading-next").assertIsEnabled().performClick()
-        waitFor { it.active?.id != "attempt-a" }
-        assertEquals(2, model.data?.attempts?.size)
-        assertEquals(1, model.data?.points("reader-a"))
+        waitFor { it.page == ReadingPage.MENU }
+        assertEquals(data.attempts, model.data?.attempts)
     }
 
     @Test fun sequencerSupportsTapRemovalOrderedEventsAndComprehension() {
@@ -709,7 +708,7 @@ class ReadingScreenTest {
         compose.onNodeWithTag("reading-placed-0").performScrollTo().assertIsNotEnabled()
         chooseCorrectAnswer()
         click("reading-check-answer")
-        waitFor { it.points("reader-a") == 2 }
+        waitFor { it.active?.earned("answer") == true && it.active?.earned("order") == true }
         click("reading-finish")
         waitFor { it.active?.finishedAt != null }
         compose.onNodeWithTag("reading-summary").assertIsDisplayed()
@@ -728,7 +727,7 @@ class ReadingScreenTest {
         click("reading-finish")
         waitFor { it.stories.size == 1 }
         compose.onNodeWithTag("reading-saved-story").performScrollTo().assertIsDisplayed()
-        assertEquals(4, model.data?.points("reader-a"))
+        assertEquals(4, model.data?.active?.checkpoints?.values?.count { it.earned })
         assertEquals(0, model.data?.accuracy("reader-a")?.attempted)
         assertTrue(requireNotNull(model.data).stories.single().text.contains("A kind fox"))
         assertEquals(model.data?.stories, ReadingStore(file).load().stories)
@@ -747,8 +746,8 @@ class ReadingScreenTest {
         }
         click("reading-finish")
         waitFor { it.stories.size == 1 }
-        compose.onNodeWithText("Individual points this attempt: 0").performScrollTo().assertIsDisplayed()
-        assertEquals(0, ReadingStore(file).load().points("reader-a"))
+        compose.onNodeWithText("Individual points this attempt:", substring = true).assertDoesNotExist()
+        assertEquals(1, ReadingStore(file).load().stories.size)
     }
 
     @Test fun typedStoryDraftKeepsRapidCharactersAndRestoresAfterLeavingActivity() {
@@ -761,8 +760,7 @@ class ReadingScreenTest {
         editor.assertTextContains("A curious fox")
         compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }
         waitFor { it.page == ReadingPage.MENU }
-        click("reading-game-STUDIO")
-        compose.onNodeWithTag("reading-resume-STUDIO").performClick()
+        click("reading-resume-STUDIO")
         waitFor { it.page == ReadingPage.ACTIVITY }
         compose.onNodeWithTag("reading-write-character").performScrollTo().assertTextContains("A curious fox")
         assertEquals("A curious fox", ReadingStore(file).load().active?.fields?.get("character"))
@@ -813,13 +811,16 @@ class ReadingScreenTest {
         assertPresetThenImmediateTyping(data, "reading-turn-choice-1", "turn", "A tiny robot began an adventure.")
     }
 
-    @Test fun gameStartUsesTheQueuedLevelSelectionEvenBeforeItsSaveFinishes() {
+    @Test fun gameStartWaitsForTheQueuedLevelSelectionToSave() {
         show(readingFixture().copy(page = ReadingPage.MENU))
+        click("reading-question-count-15")
         delayedWrites {
             compose.runOnIdle { model.act { ReadingEngine.level(it, ReadingLevel.TRAIL) } }
             waitForBlockedSave()
-            click("reading-game-SEQUENCE")
+            compose.onNodeWithTag("reading-game-SEQUENCE").assertIsNotEnabled()
         }
+        waitFor { it.profile?.level == ReadingLevel.TRAIL }
+        click("reading-game-SEQUENCE")
         waitFor { it.page == ReadingPage.ACTIVITY && it.active?.content?.level == ReadingLevel.TRAIL }
         assertEquals(ReadingLevel.TRAIL, model.data?.profile?.level)
         assertEquals(ReadingLevel.SPROUT, model.data?.attempts?.first()?.content?.level)
@@ -834,8 +835,7 @@ class ReadingScreenTest {
         compose.onNodeWithTag("reading-add-reader").assertDoesNotExist()
         compose.onNodeWithTag("reading-level-SPROUT").assertDoesNotExist()
         compose.onNodeWithTag("reading-progress").assertDoesNotExist()
-        click("reading-game-MISSING")
-        compose.onNodeWithTag("reading-resume-MISSING").performClick()
+        click("reading-resume-MISSING")
         waitFor { it.page == ReadingPage.ACTIVITY }
         assertEquals("attempt-a", model.data?.active?.id)
         assertEquals("1", model.data?.active?.fields?.get("answer"))
@@ -927,26 +927,25 @@ class ReadingScreenTest {
         compose.onNodeWithTag("academy-welcome").assertDoesNotExist()
     }
 
-    @Test fun newAttemptRequiresExplicitDiscardConfirmationAndCancelKeepsDraft() {
+    @Test fun gameTapStartsTheSelectedBatchAndRetainsLegacyDraftHistory() {
         show(readingFixture().copy(page = ReadingPage.MENU))
+        compose.onNodeWithTag("reading-game-MISSING").assertIsNotEnabled()
+        click("reading-question-count-25")
         click("reading-game-MISSING")
-        compose.onNodeWithTag("reading-new-MISSING").performClick()
-        compose.onNodeWithTag("reading-keep-draft").performClick()
-        assertEquals("attempt-a", model.data?.active?.id)
-        click("reading-game-MISSING")
-        compose.onNodeWithTag("reading-new-MISSING").performClick()
-        compose.onNodeWithTag("reading-confirm-new").performClick()
-        waitFor { it.active?.id != "attempt-a" }
-        assertTrue(requireNotNull(model.data).attempts.first().abandoned)
-        assertEquals(2, model.data?.attempts?.size)
+        waitFor { it.activeSession?.questionCount == 25 }
+        assertEquals(26, model.data?.attempts?.size)
+        assertEquals("attempt-a", model.data?.attempts?.first()?.id)
+        val session = requireNotNull(model.data?.activeSession)
+        assertEquals(25, session.attemptIds.distinct().size)
+        assertEquals(session.attemptIds.first(), model.data?.active?.id)
+        compose.onNodeWithTag("reading-question-progress").assertTextContains("Question 1 of 25")
     }
 
-    @Test fun partnersDialogSupportsFirstStartResumeAndCompletionWithoutAnotherReader() {
+    @Test fun partnersBatchSupportsFirstStartResumeAndCompletionWithoutAnotherReader() {
         val data = ReadingEngine.addProfile(ReadingData(), "Ari", "reader-a")
         show(data)
+        click("reading-question-count-15")
         click("reading-game-PARTNERS")
-        compose.onNodeWithTag("reading-resume-PARTNERS").assertIsNotEnabled()
-        compose.onNodeWithTag("reading-new-PARTNERS").performClick()
         waitFor { it.active?.content?.game == ReadingGame.PARTNERS }
         repeat(4) { index ->
             click("reading-turn-choice-0")
@@ -957,10 +956,7 @@ class ReadingScreenTest {
         val draft = requireNotNull(model.data).active
         click("reading-back")
         waitFor { it.page == ReadingPage.MENU }
-        click("reading-game-PARTNERS")
-        compose.onNodeWithText("Resume Story Builder Partners").assertIsDisplayed()
-        compose.onNodeWithText("Start a new attempt instead").assertIsDisplayed()
-        compose.onNodeWithTag("reading-resume-PARTNERS").performClick()
+        click("reading-resume-PARTNERS")
         waitFor { it.page == ReadingPage.ACTIVITY }
         assertEquals(draft, model.data?.active)
         repeat(4) { index ->
@@ -974,25 +970,51 @@ class ReadingScreenTest {
         click("reading-finish")
         waitFor { it.stories.size == 1 }
         assertEquals(1, model.data?.profiles?.size)
-        assertEquals(1, model.data?.points("reader-a"))
-        assertEquals(1, model.data?.sharedPoints("reader-a"))
+        assertTrue(requireNotNull(model.data?.active).earned("participation:reader-a"))
+        assertEquals(1, model.data?.sharedCompletions("reader-a"))
         assertEquals(model.data, ReadingStore(file).load())
     }
 
-    @Test fun partnersNewAttemptArchivesDraftWithoutLosingParticipationPoints() {
+    @Test fun partnersNewBatchRetainsExistingParticipationHistory() {
         var data = ReadingEngine.addProfile(ReadingData(), "Ari", "reader-a")
         data = ReadingEngine.start(data, ReadingGame.PARTNERS, ReadingLevel.SPROUT, id = "old-story")
         data = ReadingEngine.submit(ReadingEngine.field(data, "turn", "A fox set out.", expectedTurn = 0),
             "turn", expectedTurn = 0)
         show(data.copy(page = ReadingPage.MENU))
+        click("reading-question-count-15")
         click("reading-game-PARTNERS")
-        compose.onNodeWithTag("reading-new-PARTNERS").performClick()
-        compose.onNodeWithTag("reading-confirm-new").performClick()
         waitFor { it.active?.id != "old-story" }
-        assertTrue(requireNotNull(model.data).attempts.first().abandoned)
         assertEquals(data.attempts.first().checkpoints, model.data?.attempts?.first()?.checkpoints)
-        assertEquals(1, model.data?.points("reader-a"))
+        assertTrue(requireNotNull(model.data).attempts.first().earned("participation:reader-a"))
         assertEquals(1, model.data?.profiles?.size)
+        assertEquals(model.data, ReadingStore(file).load())
+    }
+
+    @Test fun wrongAnswersEndTheSelectedBatchOnlyAfterMoreThanTenPercent() {
+        show(ReadingEngine.addProfile(ReadingData(), "Ari", "reader-a"))
+        compose.onNodeWithText("How many questions would you like?").assertIsDisplayed()
+        compose.onNodeWithText("reading points", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("Read, imagine, and make stories.", substring = true).assertDoesNotExist()
+        listOf(15, 25, 50).forEach { compose.onNodeWithTag("reading-question-count-$it").assertIsDisplayed() }
+        click("reading-question-count-15")
+        click("reading-game-MISSING")
+        waitFor { it.activeSession != null }
+        repeat(2) { index ->
+            val wrong = (readingCorrect(requireNotNull(model.data)) + 1) % requireNotNull(model.data?.active?.content?.question).choices.size
+            click("reading-answer-$wrong")
+            waitFor { it.active?.fields?.get("answer") == wrong.toString() }
+            click("reading-check-answer")
+            waitFor { it.activeSession?.let { session -> it.sessionWrong(session) == index + 1 } == true }
+            if (index == 0) {
+                assertNull(model.data?.activeSession?.finishedAt)
+                click("reading-next")
+                waitFor { it.active?.finishedAt == null }
+            }
+        }
+        waitFor { it.activeSession?.finishedAt != null }
+        compose.onNodeWithTag("reading-session-summary").assertIsDisplayed()
+        compose.onNodeWithTag("reading-next").assertDoesNotExist()
+        assertNull(model.data?.activeSession?.prizeType)
         assertEquals(model.data, ReadingStore(file).load())
     }
 
@@ -1022,7 +1044,7 @@ class ReadingScreenTest {
         assertEquals(0, model.data?.active?.narrations)
         chooseCorrectAnswer()
         click("reading-check-answer")
-        waitFor { it.points("reader-a") == 1 }
+        waitFor { it.active?.earned("answer") == true }
         assertEquals(ReadingAccuracy(1, 1, 0, 0), model.data?.accuracy("reader-a"))
 
         compose.runOnIdle {

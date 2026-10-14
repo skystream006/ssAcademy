@@ -151,7 +151,7 @@ fun SettingsScreen(model: MathViewModel) {
             CollapsibleSettingsSection("Reading Settings", defaultExpanded = false) {
                 ReadingPackSettings()
                 SubjectRewardsSetting(model, Subject.READING,
-                    "Earn reading points for completed checkpoints. Progress and previously earned points are always saved.")
+                    "Earn prize fragments by completing 25 or more questions with over 90% correct.")
                 SubjectHistorySetting(model, Subject.READING)
                 ListItem(headlineContent = { Text("Reading Progress") },
                     supportingContent = { Text("Private progress and saved stories") },
@@ -326,7 +326,7 @@ private fun ActiveReadingGamesDialog(model: MathViewModel, onDismiss: () -> Unit
             Column(Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Choose which games are available. Changes are saved automatically. " +
-                    "Saved drafts, history, and points are kept when a game is disabled.")
+                    "Saved drafts, history, and rewards are kept when a game is disabled.")
                 ReadingGame.entries.forEach { game ->
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Text(game.title, Modifier.weight(1f))
@@ -371,7 +371,7 @@ private fun SubjectHistorySetting(model: MathViewModel, subject: Subject) {
 fun SubjectHistoryScreen(model: MathViewModel) {
     ScreenScaffold("${model.historySubject.label} Practice History", model::closeOverlay) {
         if (model.historySubject == Subject.READING) {
-            ReadingHistoryScreen()
+            ReadingHistoryScreen(model)
         } else {
             Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
                 Text("No ${model.historySubject.label.lowercase()} practice results yet. More activities are coming soon.",
@@ -384,6 +384,11 @@ fun SubjectHistoryScreen(model: MathViewModel) {
 @Composable
 private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit) {
     var showingRemoval by rememberSaveable { mutableStateOf(false) }
+    var browsingReading by rememberSaveable { mutableStateOf(false) }
+    if (browsingReading) {
+        ReadingDatabaseBrowser(onDismiss = { browsingReading = false }, backLabel = "Back to admin")
+        return
+    }
     if (showingRemoval) {
         RemoveRewardsDialog(
             model.rewardBalances, model.removingReward, model.rewardRemovalError,
@@ -408,6 +413,12 @@ private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit) {
                 Text("My Rewards", style = MaterialTheme.typography.titleMedium)
                 Button(onClick = { showingRemoval = true }) {
                     Text("Remove rewards", Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+                }
+                HorizontalDivider()
+                Text("Reading activities", style = MaterialTheme.typography.titleMedium)
+                Button(onClick = { browsingReading = true },
+                    modifier = Modifier.fillMaxWidth().testTag("reading-database-open")) {
+                    Text("View reading activities database", Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
                 }
                 HorizontalDivider()
                 Text("Available rewards", style = MaterialTheme.typography.titleMedium)

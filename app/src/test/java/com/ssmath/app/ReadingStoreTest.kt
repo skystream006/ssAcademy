@@ -24,10 +24,10 @@ class ReadingStoreTest {
 
     @Before fun clean() {
         listOf(file, File(file.path + ".bak"), File(file.path + ".new")).forEach { it.delete() }
-        settings.edit().remove("reading_rewards_enabled").remove("rewards_enabled").commit()
+        settings.edit().clear().commit()
     }
 
-    @Test fun draftsSupportBranchAttributionAndStoriesRoundTripWithoutDuplicatingPoints() {
+    @Test fun draftsSupportBranchAttributionAndStoriesRoundTripWithoutDuplicatingCheckpoints() {
         val store = ReadingStore(file)
         assertEquals(ReadingData(), store.load())
         ReadingContent.activities.forEach { content ->
@@ -54,7 +54,7 @@ class ReadingStoreTest {
                 reopened = ReadingEngine.submit(ReadingEngine.finish(reopened), "answer")
             }
             assertEquals(content.id, complete, reopened)
-            assertEquals(complete.points("reader-a"), reopened.points("reader-a"))
+            assertEquals(complete.checkpointCount("reader-a"), reopened.checkpointCount("reader-a"))
             assertEquals(complete.stories, reopened.stories)
         }
     }
@@ -68,7 +68,7 @@ class ReadingStoreTest {
         var result = readingAnswer(restored, readingCorrect(restored))
         store.save(result)
         result = readingAnswer(ReadingStore(file).load(), readingCorrect(restored))
-        assertEquals(1, result.points("reader-a"))
+        assertEquals(1, result.checkpointCount("reader-a"))
         assertEquals(ReadingAccuracy(0, 1, 0, 1), result.accuracy("reader-a"))
     }
 
@@ -83,13 +83,13 @@ class ReadingStoreTest {
             assertEquals(data, restored)
             listOf(1, 2, 0).forEach { restored = ReadingEngine.placeTile(restored, it) }
             restored = ReadingEngine.submit(restored, "order")
-            assertEquals(1, restored.points("reader-a"))
+            assertEquals(1, restored.checkpointCount("reader-a"))
             store.save(restored)
             assertEquals(restored, ReadingEngine.submit(ReadingStore(file).load(), "order"))
         }
     }
 
-    @Test fun legacyCheckpointsWithoutRewardFlagsKeepOnlyPreviouslyEarnedPoints() {
+    @Test fun legacyCheckpointsWithoutRewardFlagsKeepTheirProgressWithoutAwards() {
         val dataSets = listOf(
             readingSolve(readingFixture()),
             readingAnswer(readingFixture(), readingWrong(readingFixture())),
@@ -105,10 +105,10 @@ class ReadingStoreTest {
             assertEquals(original.active?.id, restored.active?.id)
             assertEquals(original.active?.contentId, restored.active?.contentId)
             assertEquals(original.stories, restored.stories)
-            assertTrue(requireNotNull(restored.active).checkpoints.values.all { it.rewardGranted })
+            assertTrue(requireNotNull(restored.active).checkpoints.values.none { it.rewardGranted })
             listOf("reader-a", "reader-b").forEach { id ->
-                assertEquals(original.points(id), restored.points(id))
-                assertEquals(original.sharedPoints(id), restored.sharedPoints(id))
+                assertEquals(original.checkpointCount(id), restored.checkpointCount(id))
+                assertEquals(original.sharedCompletions(id), restored.sharedCompletions(id))
                 assertEquals(original.accuracy(id), restored.accuracy(id))
             }
             if (restored.active?.finishedAt != null) {
@@ -116,12 +116,13 @@ class ReadingStoreTest {
             } else {
                 val disabled = readingAnswer(restored, readingCorrect(restored), rewardsEnabled = false)
                 assertTrue(requireNotNull(disabled.active).earned("answer"))
-                assertEquals(0, disabled.points("reader-a"))
+                assertEquals(1, disabled.checkpointCount("reader-a"))
+                assertFalse(requireNotNull(disabled.active).checkpoints.getValue("answer").rewardGranted)
             }
         }
     }
 
-    @Test fun allDisabledActivityCompletionsAndStoriesSurviveReloadWithoutRetroactivePoints() {
+    @Test fun allLegacyActivityCompletionsAndStoriesSurviveReloadWithoutRetroactiveAwards() {
         val store = ReadingStore(file)
         store.load()
         ReadingContent.activities.forEach { content ->
@@ -139,9 +140,8 @@ class ReadingStoreTest {
                 restored = ReadingStore(file).load()
             }
             assertEquals(content.id, complete, restored)
-            assertEquals(0, restored.points("reader-a"))
-            assertEquals(0, restored.points("reader-b"))
-            assertEquals(0, restored.sharedPoints("reader-a"))
+            assertTrue(requireNotNull(restored.active).checkpoints.values.none { it.rewardGranted })
+            assertTrue(restored.sessions.isEmpty())
         }
     }
 
@@ -159,13 +159,13 @@ class ReadingStoreTest {
         data = ReadingEngine.start(restored, content.game, content.level)
         assertEquals(data, ReadingEngine.submit(data, "setting", rewardsEnabled = true))
         assertEquals(data, ReadingEngine.submit(data, "character", rewardsEnabled = false))
-        assertEquals(1, data.points("reader-a"))
+        assertEquals(2, data.checkpointCount("reader-a"))
         data = ReadingEngine.submit(data, "problem")
         data = ReadingEngine.submit(ReadingEngine.field(data, "ending", "solved it"), "ending")
         data = ReadingEngine.finish(data)
         store.save(data)
         assertEquals(data, ReadingStore(file).load())
-        assertEquals(3, data.points("reader-a"))
+        assertEquals(4, data.checkpointCount("reader-a"))
         assertEquals("attempt-a", data.stories.single().attemptId)
         assertTrue(data.stories.single().text.contains("found a mystery"))
     }
@@ -219,8 +219,8 @@ class ReadingStoreTest {
         repeat(20) { model.act { ReadingEngine.hint(it) } }
         model.act { ReadingEngine.field(it, "answer", readingCorrect(it).toString()) }
         repeat(20) { model.submit("answer") }
-        await { model.data?.points("reader-a") == 1 && model.data?.active?.hints == 20 && !model.saving }
-        assertEquals(1, storage.saved.points("reader-a"))
+        await { model.data?.checkpointCount("reader-a") == 1 && model.data?.active?.hints == 20 && !model.saving }
+        assertEquals(1, storage.saved.checkpointCount("reader-a"))
         assertEquals(20, storage.saved.active?.hints)
         assertEquals(1, storage.saved.active?.checkpoints?.get("answer")?.tries)
         assertTrue(storage.allWritesOffMain)
@@ -264,16 +264,16 @@ class ReadingStoreTest {
         storage.failSave = true
         model.submit("answer")
         await { model.storageError != null }
-        assertEquals(0, model.data?.points("reader-a"))
-        assertEquals(0, storage.saved.points("reader-a"))
+        assertEquals(0, model.data?.checkpointCount("reader-a"))
+        assertEquals(0, storage.saved.checkpointCount("reader-a"))
         model.act { ReadingEngine.hint(it) }
         settings.edit().putBoolean("reading_rewards_enabled", false).commit()
         storage.failSave = false
         model.retry()
-        await { model.storageError == null && model.data?.points("reader-a") == 1 }
+        await { model.storageError == null && model.data?.checkpointCount("reader-a") == 1 }
         model.submit("answer")
         await { !model.saving }
-        assertEquals(1, storage.saved.points("reader-a"))
+        assertEquals(1, storage.saved.checkpointCount("reader-a"))
         assertEquals(0, storage.saved.active?.hints)
     }
 
@@ -312,7 +312,7 @@ class ReadingStoreTest {
         storage.failSave = false
         model.retry()
         await { model.data?.active?.earned("answer") == true && !model.saving }
-        assertEquals(0, storage.saved.points("reader-a"))
+        assertEquals(1, storage.saved.checkpointCount("reader-a"))
         assertEquals(10, storage.saved.active?.hints)
         assertEquals(ReadingAccuracy(0, 1, 1, 0), storage.saved.accuracy("reader-a"))
     }
@@ -360,23 +360,24 @@ class ReadingStoreTest {
         await { model.data?.page == ReadingPage.MENU && !model.saving }
         assertEquals(listOf(ReadingTurn("reader-a", "Ari's sentence.")), storage.saved.active?.turns)
         assertNull(storage.saved.active?.fields?.get("turn"))
-        assertEquals(1, storage.saved.points("reader-a"))
-        assertEquals(0, storage.saved.points("reader-b"))
+        assertEquals(1, storage.saved.checkpointCount("reader-a"))
+        assertEquals(0, storage.saved.checkpointCount("reader-b"))
     }
 
-    @Test fun submitDefaultsToReadingRewardsEnabledEvenWhenMathRewardsAreOff() {
+    @Test fun legacySubmitDoesNotAwardRewardsEvenWhenReadingRewardsDefaultOn() {
         settings.edit().putBoolean("rewards_enabled", false).commit()
         val storage = RecordingStorage(ReadingEngine.field(readingFixture(), "answer", readingCorrect(readingFixture()).toString()))
         val model = ReadingViewModel(application, storage)
         await { model.data != null }
         model.submit("answer")
         await { model.data?.active?.earned("answer") == true && !model.saving }
-        assertEquals(1, storage.saved.points("reader-a"))
+        assertEquals(1, storage.saved.checkpointCount("reader-a"))
+        assertFalse(requireNotNull(storage.saved.active).checkpoints.getValue("answer").rewardGranted)
         assertFalse(settings.getBoolean("rewards_enabled", true))
         assertFalse(settings.contains("reading_rewards_enabled"))
     }
 
-    @Test fun readingPreferenceDisablesOnlyNewPointsAndReenablingAppliesOnlyToNewCheckpoints() {
+    @Test fun readingRewardPreferencesNeverAwardLegacyCheckpoints() {
         settings.edit().putBoolean("rewards_enabled", true).putBoolean("reading_rewards_enabled", false).commit()
         val store = ReadingStore(file)
         store.load()
@@ -386,7 +387,7 @@ class ReadingStoreTest {
         model.submit("answer")
         model.act { ReadingEngine.finish(it) }
         await { model.data?.active?.finishedAt != null && !model.saving }
-        assertEquals(0, model.data?.points("reader-a"))
+        assertEquals(1, model.data?.checkpointCount("reader-a"))
         assertEquals(ReadingAccuracy(1, 1, 0, 0), model.data?.accuracy("reader-a"))
         assertEquals(1, model.data?.completions("reader-a"))
         assertTrue(settings.getBoolean("rewards_enabled", false))
@@ -397,17 +398,17 @@ class ReadingStoreTest {
         resumed.submit("answer")
         resumed.act { ReadingEngine.start(it, ReadingGame.MISSING, ReadingLevel.SPROUT, id = "new-attempt") }
         await { resumed.data?.active?.id == "new-attempt" && !resumed.saving }
-        assertEquals(0, resumed.data?.points("reader-a"))
+        assertEquals(1, resumed.data?.checkpointCount("reader-a"))
         resumed.act { ReadingEngine.field(it, "answer", readingCorrect(it).toString()) }
         resumed.submit("answer")
         await { resumed.data?.active?.earned("answer") == true && !resumed.saving }
         val saved = ReadingStore(file).load()
-        assertEquals(1, saved.points("reader-a"))
+        assertEquals(2, saved.checkpointCount("reader-a"))
         assertFalse(saved.attempts.first().checkpoints.getValue("answer").rewardGranted)
-        assertTrue(saved.attempts.last().checkpoints.getValue("answer").rewardGranted)
+        assertFalse(saved.attempts.last().checkpoints.getValue("answer").rewardGranted)
     }
 
-    @Test fun queuedSubmitSnapshotsThePreferenceBeforeTheActorExecutesIt() {
+    @Test fun queuedLegacySubmitNeverAwardsCheckpointRewards() {
         settings.edit().putBoolean("reading_rewards_enabled", false).commit()
         val storage = RecordingStorage(ReadingEngine.field(readingFixture(), "answer", readingCorrect(readingFixture()).toString()))
         val model = ReadingViewModel(application, storage)
@@ -425,11 +426,12 @@ class ReadingStoreTest {
             gate.countDown()
         }
         await { model.data?.active?.earned("answer") == true && !model.saving }
-        assertEquals(0, storage.saved.points("reader-a"))
+        assertEquals(1, storage.saved.checkpointCount("reader-a"))
+        assertFalse(requireNotNull(storage.saved.active).checkpoints.getValue("answer").rewardGranted)
         assertEquals(ReadingAccuracy(0, 1, 1, 0), storage.saved.accuracy("reader-a"))
     }
 
-    @Test fun failedDisabledCheckpointSaveDoesNotGainPointsWhenRetriedWithRewardsEnabled() {
+    @Test fun failedLegacyCheckpointSaveDoesNotGainAwardsWhenRetriedWithRewardsEnabled() {
         settings.edit().putBoolean("reading_rewards_enabled", false).commit()
         val storage = RecordingStorage(ReadingEngine.field(readingFixture(), "answer", readingCorrect(readingFixture()).toString()))
         val model = ReadingViewModel(application, storage)
@@ -445,10 +447,188 @@ class ReadingStoreTest {
         repeat(10) { model.submit("answer") }
         model.act { it.copy(page = ReadingPage.MENU) }
         await { model.data?.page == ReadingPage.MENU && !model.saving }
-        assertEquals(0, storage.saved.points("reader-a"))
+        assertEquals(1, storage.saved.checkpointCount("reader-a"))
         assertEquals(1, storage.saved.active?.checkpoints?.get("answer")?.tries)
         assertEquals(ReadingAccuracy(1, 1, 0, 0), storage.saved.accuracy("reader-a"))
         assertFalse(requireNotNull(storage.saved.active).checkpoints.getValue("answer").rewardGranted)
+    }
+
+    @Test fun sessionStartSnapshotsSettingsAndQueuedNextDoesNotSkipAssignedActivities() {
+        settings.edit().putBoolean("reading_rewards_enabled", true).putBoolean("show_timer", true)
+            .putInt("time_limit_minutes", 10).commit()
+        val storage = RecordingStorage(readingFixture())
+        val model = ReadingViewModel(application, storage)
+        await { model.data != null }
+        model.startSession(ReadingGame.MISSING, 15)
+        await { model.data?.activeSession != null && !model.saving }
+        val session = requireNotNull(model.data?.activeSession)
+        assertEquals(15, session.questionCount)
+        assertEquals(600_000L, session.timeLimitMs)
+        assertTrue(session.rewardsEnabledAtStart)
+        assertEquals(16, storage.saved.attempts.size)
+        assertFalse(storage.saved.attempts.first().abandoned)
+        model.act { ReadingEngine.field(it, "answer", readingCorrect(it).toString()) }
+        repeat(10) { model.submit("answer") }
+        repeat(10) { model.finishActivity() }
+        await { model.data?.active?.finishedAt != null && !model.saving }
+        assertEquals(session.attemptIds.first(), model.data?.active?.id)
+        assertEquals(1, requireNotNull(model.data).sessionCorrect(session))
+        repeat(10) { model.nextSessionActivity() }
+        await { model.data?.active?.id == session.attemptIds[1] && !model.saving }
+        assertEquals(1, requireNotNull(model.data).sessionAnswered(session))
+        assertTrue(requireNotNull(model.data?.active).checkpoints.isEmpty())
+    }
+
+    @Test fun legacySerializedRewardFlagsRemainDecodableButNeverBecomeSessionPrizes() {
+        val original = readingSolve(readingFixture())
+        val legacy = original.copy(attempts = original.attempts.map { attempt ->
+            attempt.copy(checkpoints = attempt.checkpoints.mapValues { (_, checkpoint) ->
+                checkpoint.copy(rewardGranted = true)
+            })
+        })
+        val store = ReadingStore(file)
+        store.load()
+        store.save(legacy)
+        val restored = ReadingStore(file).load()
+        assertEquals(legacy, restored)
+        assertTrue(requireNotNull(restored.active).checkpoints.values.all { it.rewardGranted })
+        assertTrue(restored.sessions.isEmpty())
+        assertEquals(restored, ReadingEngine.finish(restored))
+        assertEquals(restored, ReadingEngine.submit(restored, "answer"))
+    }
+
+    @Test fun sessionsRoundTripWithCurrentFinishedMemberDraftAndEndedUnusedAssignments() {
+        val store = ReadingStore(file)
+        store.load()
+        var data = readingSolve(readingSessionFixture())
+        store.save(data)
+        data = ReadingStore(file).load()
+        val session = requireNotNull(data.activeSession)
+        assertEquals(session.attemptIds.first(), data.active?.id)
+        assertNotNull(data.active?.finishedAt)
+        data = ReadingEngine.nextSessionActivity(data)
+        data = ReadingEngine.field(data, "answer", readingWrong(data).toString())
+        store.save(data)
+        assertEquals(data, ReadingStore(file).load())
+        data = ReadingEngine.submit(ReadingStore(file).load(), "answer")
+        data = ReadingEngine.nextSessionActivity(data)
+        data = readingAnswer(data, readingWrong(data))
+        store.save(data)
+        assertEquals(data, ReadingStore(file).load())
+        assertEquals(3, data.sessionAnswered(session))
+        assertEquals(1, data.sessionCorrect(session))
+        assertEquals(2, data.sessionWrong(session))
+        assertNotNull(data.activeSession?.finishedAt)
+        assertEquals(12, data.attempts.count { it.abandoned })
+    }
+
+    @Test fun disabledGamesCannotBeStartedSubmittedResumedOrAdvancedThroughTheModel() {
+        settings.edit().putStringSet("disabled_reading_games", setOf(ReadingGame.MISSING.name)).commit()
+        val storage = RecordingStorage(readingSessionFixture().copy(page = ReadingPage.MENU))
+        val model = ReadingViewModel(application, storage)
+        await { model.data != null }
+        val original = model.data
+        model.startSession(ReadingGame.MISSING, 25)
+        await { model.message != null }
+        assertEquals(original, model.data)
+        model.submit("answer")
+        model.finishActivity()
+        model.nextSessionActivity()
+        model.act { ReadingEngine.resume(it, requireNotNull(it.active).id) }
+        model.act { ReadingEngine.field(it, "answer", readingCorrect(it).toString()) }
+        model.act { ReadingEngine.renameProfile(it, "Checked") }
+        await { model.data?.profile?.name == "Checked" && !model.saving }
+        assertEquals(original?.attempts, model.data?.attempts)
+        assertEquals(ReadingPage.MENU, model.data?.page)
+        assertEquals(1, model.data?.sessions?.size)
+    }
+
+    @Test fun failedSessionAllocationRetriesItsOriginalRewardAndTimerSnapshot() {
+        settings.edit().putBoolean("reading_rewards_enabled", false).commit()
+        val storage = RecordingStorage(readingFixture()).apply { failSave = true }
+        val model = ReadingViewModel(application, storage)
+        await { model.data != null }
+        model.startSession(ReadingGame.MISSING, 25)
+        await { model.storageError != null && !model.saving }
+        assertTrue(storage.saved.sessions.isEmpty())
+        settings.edit().putBoolean("reading_rewards_enabled", true).putBoolean("show_timer", true)
+            .putInt("time_limit_minutes", 5).commit()
+        storage.failSave = false
+        model.retry()
+        await { model.data?.activeSession != null && model.storageError == null && !model.saving }
+        assertFalse(requireNotNull(model.data?.activeSession).rewardsEnabledAtStart)
+        assertNull(model.data?.activeSession?.timeLimitMs)
+        assertEquals(25, model.data?.activeSession?.questionCount)
+        assertEquals(1, model.data?.sessions?.size)
+    }
+
+    @Test fun sessionTimerCountsVisibleTimeOnlyAndResumesPersistedElapsedBeforeTimeout() {
+        val store = ReadingStore(file)
+        store.load()
+        store.save(readingSessionFixture(count = 25, timeLimitMs = 300_000))
+        var clock = 0L
+        val model = ReadingViewModel(application, store, clock = { clock })
+        await { model.data != null }
+        model.setSessionForeground(true)
+        clock += 5_000
+        model.act { ReadingEngine.hint(it) }
+        await { model.data?.activeSession?.elapsedMs == 5_000L && model.data?.active?.hints == 1 && !model.saving }
+        model.setSessionForeground(false)
+        clock += 60_000
+        model.act { it.copy(page = ReadingPage.MENU) }
+        await { model.data?.page == ReadingPage.MENU && !model.saving }
+        assertEquals(5_000L, model.sessionElapsedMs)
+        assertEquals(295_000L, model.sessionRemainingMs)
+        assertEquals(5_000L, ReadingStore(file).load().activeSession?.elapsedMs)
+
+        clock += 1_000_000
+        val resumed = ReadingViewModel(application, ReadingStore(file), clock = { clock })
+        await { resumed.data != null }
+        assertEquals(5_000L, resumed.sessionElapsedMs)
+        resumed.act { ReadingEngine.resume(it, requireNotNull(it.active).id) }
+        await { resumed.data?.page == ReadingPage.ACTIVITY && !resumed.saving }
+        resumed.setSessionForeground(true)
+        clock += 295_000
+        resumed.submit("answer")
+        await { resumed.data?.activeSession?.timedOut == true && !resumed.saving }
+        val finished = requireNotNull(resumed.data)
+        assertEquals(300_000L, finished.activeSession?.elapsedMs)
+        assertEquals(0L, resumed.sessionRemainingMs)
+        assertEquals(0, finished.sessionAnswered(requireNotNull(finished.activeSession)))
+        assertNull(finished.activeSession?.prizeType)
+        assertTrue(finished.attempts.all { it.abandoned })
+        assertEquals(finished, ReadingStore(file).load())
+        ReadingEngine.validate(finished)
+        resumed.setSessionForeground(false)
+    }
+
+    @Test fun sessionPrizeUsesLiveFinishPreferencesAndFailedSaveCannotRerollIt() {
+        var data = readingSessionFixture(count = 25)
+        repeat(24) { data = ReadingEngine.nextSessionActivity(readingSolve(data)) }
+        data = readingAnswer(data, readingCorrect(data))
+        val storage = RecordingStorage(data)
+        val model = ReadingViewModel(application, storage)
+        await { model.data != null }
+        settings.edit().putStringSet("disabled_rewards",
+            (RewardType.entries.toSet() - RewardType.LOLLIPOP).map { it.name }.toSet()).commit()
+        storage.failSave = true
+        model.finishActivity()
+        await { model.storageError != null && !model.saving }
+        assertNull(model.data?.activeSession?.finishedAt)
+        settings.edit().putBoolean("reading_rewards_enabled", false)
+            .putStringSet("disabled_rewards", RewardType.entries.map { it.name }.toSet()).commit()
+        storage.failSave = false
+        model.retry()
+        await { model.data?.activeSession?.finishedAt != null && model.storageError == null && !model.saving }
+        assertEquals(RewardType.LOLLIPOP, model.data?.activeSession?.prizeType)
+        assertEquals(25, requireNotNull(model.data).sessionCorrect(requireNotNull(model.data?.activeSession)))
+
+        val disabledStorage = RecordingStorage(data)
+        val disabledModel = ReadingViewModel(application, disabledStorage)
+        await { disabledModel.data != null }
+        disabledModel.finishActivity()
+        await { disabledModel.data?.activeSession?.finishedAt != null && !disabledModel.saving }
+        assertNull(disabledModel.data?.activeSession?.prizeType)
     }
 
     private fun await(condition: () -> Boolean) {

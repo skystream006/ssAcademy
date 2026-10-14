@@ -26,7 +26,7 @@ internal fun readingTestImporter(
     val manifest = ReadingPackManifest(1, version, "activities-$hash.jsonl", hash, payload.size.toLong(),
         activities.groupingBy { "${it.game.name}:${it.level.name}" }.eachCount())
     return ReadingPackImporter(catalog, cache, ReadingPackTransport { url, consume ->
-        val bytes = if (url.endsWith("manifest.json")) readingPackJson.encodeToString(manifest).toByteArray()
+        val bytes = if (url == READING_PACK_MANIFEST_URL) readingPackJson.encodeToString(manifest).toByteArray()
             else payload
         bytes.inputStream().use(consume)
     })
@@ -86,6 +86,8 @@ class ReadingSqliteStoreTest {
         assertEquals(4L, scalar("SELECT cycle FROM reading_cycles"))
         assertEquals(3L, scalar("SELECT COUNT(*) FROM reading_presented"))
         assertEquals(11, data.attempts.size)
+        assertTrue(data.attempts.all { it.open })
+        assertEquals(data.attempts.last().id, data.active?.id)
         assertEquals(1, data.attempts.count { it.loadedContent != null })
         assertEquals(data, store.load())
     }
@@ -136,7 +138,7 @@ class ReadingSqliteStoreTest {
         data = store.start(data, ReadingGame.MISSING, ReadingLevel.SPROUT, false)
         assertEquals(original?.contentId, data.active?.contentId)
         assertNotEquals(original?.id, data.active?.id)
-        assertEquals(1, data.points("reader-a"))
+        assertEquals(1, data.checkpointCount("reader-a"))
         assertEquals(original?.checkpoints, data.attempts.first().checkpoints)
         assertTrue(requireNotNull(data.active).checkpoints.isEmpty())
         assertEquals(2L, scalar("SELECT cycle FROM reading_cycles"))
@@ -186,7 +188,7 @@ class ReadingSqliteStoreTest {
         val migrated = store.load()
         assertEquals(original, migrated.withoutCatalogueRefs())
         assertEquals(original.active?.content, migrated.active?.content)
-        assertEquals(original.points("reader-a"), migrated.points("reader-a"))
+        assertEquals(original.checkpointCount("reader-a"), migrated.checkpointCount("reader-a"))
         assertEquals(ReadingPackStatus(), store.catalog.status())
         assertEquals(1L, scalar("SELECT COUNT(*) FROM reading_presented"))
         assertEquals(original, ReadingStore(legacy).load())
@@ -237,7 +239,7 @@ class ReadingSqliteStoreTest {
         assertEquals(3200L, scalar("SELECT COUNT(*) FROM reading_attempts"))
         assertTrue(scalar("SELECT MAX(length(CAST(payload AS BLOB))) FROM reading_attempts") < 256 * 1024)
         assertTrue(scalar("SELECT length(CAST(payload AS BLOB)) FROM reading_state") < 65536)
-        assertEquals(3200, store.load().points("reader-a"))
+        assertEquals(3200, store.load().checkpointCount("reader-a"))
 
         // Recreate the v1 shape, including a row too large to fetch into a default CursorWindow.
         database.writableDatabase.execSQL("DROP TABLE reading_attempts")
@@ -252,11 +254,69 @@ class ReadingSqliteStoreTest {
         store = ReadingSqliteStore(application, database, legacy)
         val upgraded = store.load()
         assertEquals(3200, upgraded.attempts.size)
-        assertEquals(3200, upgraded.points("reader-a"))
+        assertEquals(3200, upgraded.checkpointCount("reader-a"))
         assertEquals(1, upgraded.attempts.count { it.loadedContent != null })
         assertEquals(1L, scalar("SELECT normalized FROM reading_state"))
         assertEquals(3200L, scalar("SELECT COUNT(*) FROM reading_attempts"))
         assertEquals(1L, scalar("SELECT COUNT(*) FROM reading_presented"))
         assertEquals(upgraded, store.load())
+    }
+
+    @Test fun sessionBatchReservationsAndLedgerRollbackTogetherOnFailedWrite() {
+        install()
+        val data = reader()
+        database.writableDatabase.execSQL("""CREATE TRIGGER fail_session BEFORE INSERT ON reading_state
+            BEGIN SELECT RAISE(ABORT, 'Storage unavailable'); END""")
+        assertThrows(Exception::class.java) {
+            store.startSession(data, ReadingGame.MISSING, ReadingLevel.SPROUT, 25, true)
+        }
+        assertEquals(0L, scalar("SELECT COUNT(*) FROM reading_presented"))
+        assertEquals(0L, scalar("SELECT COUNT(*) FROM reading_cycles"))
+        assertEquals(0L, scalar("SELECT COUNT(*) FROM reading_attempts"))
+        assertEquals(data, store.load())
+        database.writableDatabase.execSQL("DROP TRIGGER fail_session")
+        val started = store.startSession(data, ReadingGame.MISSING, ReadingLevel.SPROUT, 25, true)
+        assertEquals(25, started.activeSession?.questionCount)
+        assertEquals(25, started.attempts.size)
+        assertTrue(started.attempts.all { it.open })
+        assertEquals(started.attempts.first().id, started.active?.id)
+        assertEquals(started, store.load())
+        assertThrows(IllegalArgumentException::class.java) {
+            store.startSession(data, ReadingGame.MISSING, ReadingLevel.SPROUT, 25, true)
+        }
+        assertEquals(started, store.load())
+    }
+
+    @Test fun everyAssignedSessionRevisionSurvivesReimportReopenAndResume() {
+        install()
+        var data = store.startSession(reader(), ReadingGame.MISSING, ReadingLevel.SPROUT, 15, true)
+        val original = data
+        val revisions = data.attempts.map { it.activityRef }
+        install(pool.map { it.copy(title = "Replacement ${it.title}", hint = "Replacement hint") }, "updated")
+        database.close()
+        database = ReadingDatabase(application, "rotation.db")
+        store = ReadingSqliteStore(application, database, legacy)
+        data = store.load()
+        assertEquals(original, data)
+        repeat(15) { index ->
+            assertEquals(revisions[index], data.active?.activityRef)
+            assertEquals(pool.first { it.id == data.active?.contentId }, data.active?.content)
+            data = readingAnswer(data, readingCorrect(data))
+            data = ReadingEngine.finish(data)
+            store.save(data)
+            data = store.load()
+            assertNotNull(data.active?.finishedAt)
+            assertEquals(1, data.attempts.count { it.loadedContent != null })
+            if (index < 14) {
+                data = store.prepare(ReadingEngine.nextSessionActivity(data))
+                store.save(data)
+                data = store.prepare(ReadingEngine.resume(store.load(), requireNotNull(data.activeSession).attemptIds.last()))
+                store.save(data)
+            }
+        }
+        assertEquals(revisions, data.attempts.map { it.activityRef })
+        assertEquals(15, data.sessionCorrect(requireNotNull(data.activeSession)))
+        assertNotNull(data.activeSession?.finishedAt)
+        assertEquals(data, store.load())
     }
 }

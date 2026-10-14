@@ -50,13 +50,43 @@ data class PracticeResult(
         }
 }
 
+/** Reading receipts share inventory, but never become Math practice results. */
+@Serializable
+data class ReadingRewardResult(
+    val sessionId: String,
+    val ownerId: String,
+    val game: ReadingGame,
+    val level: ReadingLevel,
+    val finishedAt: Long,
+    val questionCount: Int,
+    val correct: Int,
+    val answered: Int,
+    val timedOut: Boolean = false,
+    val rewardsEnabledAtStart: Boolean = true,
+    val prizeType: RewardType? = null,
+    val prize: PrizeAward? = null,
+    val celebration: Celebration? = null,
+    val pokemonReward: Celebration? = null
+) {
+    val percentCorrectText: String
+        get() {
+            if (answered == 0) return "0"
+            val numerator = correct.toLong() * 100
+            return if (numerator % answered == 0L) (numerator / answered).toString()
+            else String.format(Locale.ROOT, "%.2f", numerator.toDouble() / answered).trimEnd('0').trimEnd('.')
+        }
+    val completed: Boolean get() = questionCount > 0 && answered == questionCount && !timedOut
+}
+
 @Serializable
 data class PracticeSnapshot(
     val history: List<PracticeResult> = emptyList(),
     val rewards: Map<RewardType, RewardBalance> = emptyMap(),
     val claimedResultIds: Set<Long> = emptySet(),
     val lastResultId: Long = 0,
-    val pokemons: Set<Celebration> = emptySet()
+    val pokemons: Set<Celebration> = emptySet(),
+    val readingResults: List<ReadingRewardResult> = emptyList(),
+    val recordedReadingSessionIds: Set<String> = emptySet()
 )
 
 data class SavedPractice(val result: PracticeResult, val snapshot: PracticeSnapshot)
@@ -131,6 +161,56 @@ class HistoryStore(private val file: File) {
         ))
     }
 
+    fun addReadingResult(result: ReadingRewardResult): PracticeSnapshot {
+        val snapshot = loadSnapshot()
+        if (result.sessionId in snapshot.recordedReadingSessionIds ||
+            snapshot.readingResults.any { it.sessionId == result.sessionId }) return snapshot
+        require(result.sessionId.isNotBlank() && result.questionCount > 0 &&
+            result.answered in 0..result.questionCount && result.correct in 0..result.answered)
+        require(result.prize == null && result.pokemonReward == null)
+        val eligible = result.rewardsEnabledAtStart &&
+            qualifiesForReward(result.questionCount, result.correct, result.answered, result.timedOut)
+        val saved = result.copy(
+            prizeType = result.prizeType?.takeIf { eligible && it.tier == rewardTierForQuestionCount(result.questionCount) },
+            celebration = result.celebration?.takeIf {
+                result.completed && (it.category == CelebrationCategory.OTHER || result.questionCount >= 15)
+            }
+        )
+        return save(snapshot.copy(
+            readingResults = (listOf(saved) + snapshot.readingResults).take(MAX_HISTORY_RESULTS),
+            // Retain receipts even after result retention, so old sessions cannot grant another reward.
+            recordedReadingSessionIds = snapshot.recordedReadingSessionIds + result.sessionId
+        ))
+    }
+
+    fun claimReadingReward(sessionId: String): PracticeSnapshot {
+        val snapshot = loadSnapshot()
+        val result = snapshot.readingResults.find { it.sessionId == sessionId } ?: return snapshot
+        val type = result.prizeType ?: return snapshot
+        if (result.prize != null || !result.rewardsEnabledAtStart ||
+            type.tier != rewardTierForQuestionCount(result.questionCount) ||
+            !qualifiesForReward(result.questionCount, result.correct, result.answered, result.timedOut)) return snapshot
+        val balance = (snapshot.rewards[type] ?: RewardBalance()).addFragment()
+        return save(snapshot.copy(
+            readingResults = snapshot.readingResults.map {
+                if (it.sessionId == sessionId) it.copy(prize = PrizeAward(type, balance)) else it
+            },
+            rewards = snapshot.rewards + (type to balance)
+        ))
+    }
+
+    fun collectReadingCelebration(sessionId: String, celebration: Celebration): PracticeSnapshot {
+        val snapshot = loadSnapshot()
+        val result = snapshot.readingResults.find { it.sessionId == sessionId } ?: return snapshot
+        if (!result.completed || result.pokemonReward != null || result.celebration != celebration) return snapshot
+        return save(snapshot.copy(
+            readingResults = snapshot.readingResults.map {
+                if (it.sessionId == sessionId) it.copy(pokemonReward = celebration) else it
+            },
+            pokemons = snapshot.pokemons + celebration
+        ))
+    }
+
     fun useReward(type: RewardType): PracticeSnapshot = removeReward(type, fragment = false)
 
     fun removeReward(type: RewardType, fragment: Boolean): PracticeSnapshot {
@@ -177,7 +257,8 @@ class HistoryStore(private val file: File) {
     fun clear(): List<PracticeResult> {
         val snapshot = loadSnapshot()
         if (snapshot.rewards.isNotEmpty() || snapshot.claimedResultIds.isNotEmpty() ||
-            snapshot.lastResultId != 0L || snapshot.pokemons.isNotEmpty()) {
+            snapshot.lastResultId != 0L || snapshot.pokemons.isNotEmpty() ||
+            snapshot.readingResults.isNotEmpty() || snapshot.recordedReadingSessionIds.isNotEmpty()) {
             save(withoutResults(snapshot, snapshot.history))
         } else if (file.exists() && !file.delete()) throw IOException("Unable to clear practice history.")
         return emptyList()
@@ -188,7 +269,8 @@ class HistoryStore(private val file: File) {
         val fragments = removed.mapNotNull { it.prize?.type }.groupingBy { it }.eachCount()
         val remaining = snapshot.history.filterNot { it.id in ids }
         val pokemonsToRemove = removed.mapNotNull { it.pokemonReward }.toSet() -
-            remaining.mapNotNull { it.pokemonReward }.toSet()
+            remaining.mapNotNull { it.pokemonReward }.toSet() -
+            snapshot.readingResults.mapNotNull { it.pokemonReward }.toSet()
         // Keep claimed IDs to prevent a stale save from restoring a deleted prize.
         return snapshot.copy(
             history = remaining,

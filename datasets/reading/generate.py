@@ -105,8 +105,6 @@ def main():
     data, manifest = build_pack()
     destination = ROOT / manifest["file"]
     if args.check:
-        if json.loads((ROOT / "manifest.json").read_text(encoding="utf-8")) != manifest:
-            raise SystemExit("The current manifest differs from the generated catalogue")
         if not destination.exists() or destination.read_bytes() != data:
             raise SystemExit("The published catalogue differs from its content source")
     else:
@@ -114,9 +112,15 @@ def main():
             raise SystemExit("Refusing to modify an existing checksum-named pack")
         if not destination.exists():
             destination.write_bytes(data)
-        (ROOT / "manifest.json").write_text(
-            json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(f'{sum(manifest["counts"].values()):,} activities; {manifest["bytes"]:,} bytes; {destination.name}')
+    # Keep the original manifest URL working for released apps.
+    for manifest_name in ("reading-activities-import.json", "manifest.json"):
+        if args.check:
+            if json.loads((ROOT / manifest_name).read_text(encoding="utf-8")) != manifest:
+                raise SystemExit(f"{manifest_name} differs from the generated catalogue")
+        else:
+            (ROOT / manifest_name).write_text(
+                json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(f'{sum(manifest["counts"].values()):,} activities; {manifest["bytes"]:,} bytes; {manifest["file"]}')
 
 
 if __name__ == "__main__":

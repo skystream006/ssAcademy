@@ -1,6 +1,7 @@
 package com.ssmath.app
 
 import android.app.Application
+import android.os.SystemClock
 import android.util.AtomicFile
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -9,10 +10,13 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import java.io.File
 import java.io.IOException
+import kotlin.random.Random
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -24,6 +28,10 @@ interface ReadingStorage {
     fun prepare(data: ReadingData): ReadingData = data
     fun start(data: ReadingData, game: ReadingGame, level: ReadingLevel, newAttempt: Boolean): ReadingData =
         ReadingEngine.start(data, game, level, newAttempt).also(::save)
+    fun startSession(data: ReadingData, game: ReadingGame, level: ReadingLevel, count: Int,
+                     rewardsEnabledAtStart: Boolean, timeLimitMs: Long? = null): ReadingData =
+        ReadingEngine.startSession(data, game, level, count, rewardsEnabledAtStart,
+            timeLimitMs = timeLimitMs).also(::save)
 }
 
 class ReadingStore(file: File) : ReadingStorage {
@@ -75,7 +83,9 @@ class ReadingViewModel(
     application: Application,
     private val storage: ReadingStorage = ReadingSqliteStore(application),
     private val io: CoroutineDispatcher = Dispatchers.IO,
-    private val importer: ReadingPackImporter? = null
+    private val importer: ReadingPackImporter? = null,
+    private val clock: () -> Long = SystemClock::elapsedRealtime,
+    private val rewardRandom: Random = Random.Default
 ) : AndroidViewModel(application) {
     constructor(application: Application) : this(application,
         ReadingSqliteStore(application), Dispatchers.IO)
@@ -94,6 +104,15 @@ class ReadingViewModel(
         private set
     var importProgress by mutableStateOf<String?>(null)
         private set
+    var sessionElapsedMs by mutableStateOf(0L)
+        private set
+    val sessionRemainingMs: Long? get() = data?.activeSession?.timeLimitMs?.let {
+        (it - sessionElapsedMs).coerceAtLeast(0)
+    }
+    private var sessionForeground = false
+    private var clockSessionId: String? = null
+    private var runningSince: Long? = null
+    private var timerJob: Job? = null
     private var pending: ReadingData? = null
     private var pendingStart: Command.Edit? = null
     private val settings = application.getSharedPreferences("settings", 0)
@@ -106,7 +125,9 @@ class ReadingViewModel(
             val block: (ReadingData) -> ReadingData,
             val start: Start? = null
         ) : Command
-        data class Start(val game: ReadingGame, val level: ReadingLevel?, val newAttempt: Boolean)
+        data class Start(val game: ReadingGame, val level: ReadingLevel?, val newAttempt: Boolean,
+                         val count: Int? = null, val rewardsEnabled: Boolean = false, val timeLimitMs: Long? = null)
+        data object Tick : Command
         data object Retry : Command
         data object Import : Command
     }
@@ -114,9 +135,11 @@ class ReadingViewModel(
     init {
         viewModelScope.launch {
             load()
+            refreshSessionClock()
             for (command in commands) {
                 when (command) {
                     Command.Import -> importPack()
+                    Command.Tick -> updateSessionClock(flush = !sessionForeground)
                     Command.Retry -> {
                         if (pendingStart != null) apply(requireNotNull(pendingStart))
                         else if (pending != null) persist(requireNotNull(pending)) else load()
@@ -127,19 +150,33 @@ class ReadingViewModel(
                         if (storageError != null) deferred.addLast(command) else apply(command)
                     }
                 }
+                refreshSessionClock()
             }
         }
     }
 
     private suspend fun apply(command: Command.Edit) {
+        updateSessionClock()
         val current = data ?: return
+        if (storageError != null && command != pendingStart) {
+            deferred.addLast(command)
+            return
+        }
         if (current.selectedProfileId != command.profileId || current.profile?.activeAttemptId != command.attemptId) return
         command.start?.let { start ->
+            if (isDisabled(start.game)) {
+                message = "This reading game is disabled in Settings."
+                pendingStart = null
+                return
+            }
             saving = true
             pendingStart = command
             try {
                 data = withContext(io) {
-                    storage.start(current, start.game, start.level ?: requireNotNull(current.profile).level, start.newAttempt)
+                    val level = start.level ?: requireNotNull(current.profile).level
+                    if (start.count == null) storage.start(current, start.game, level, start.newAttempt)
+                    else storage.startSession(current, start.game, level, start.count,
+                        start.rewardsEnabled, start.timeLimitMs)
                 }
                 pendingStart = null
                 storageError = null
@@ -161,6 +198,13 @@ class ReadingViewModel(
             command.block(current)
         } catch (error: IllegalArgumentException) {
             message = error.message ?: "Please check that choice."
+            return
+        }
+        if ((next.active?.open == true && isDisabled(requireNotNull(next.active).game) &&
+            (next.page == ReadingPage.ACTIVITY || next.active != current.active)) ||
+            (current.active?.open == true && isDisabled(requireNotNull(current.active).game) &&
+                next.attempts != current.attempts)) {
+            message = "This reading game is disabled in Settings."
             return
         }
         if (next != current) persist(next)
@@ -217,6 +261,94 @@ class ReadingViewModel(
             Command.Start(game, level, newAttempt)))
     }
 
+    fun startSession(game: ReadingGame, count: Int) {
+        val current = data ?: return
+        if (storageError != null || importing) return
+        val enabled = settings.getBoolean(Subject.READING.rewardsPreference, true)
+        val minutes = settings.getInt("time_limit_minutes", 0).coerceIn(0, 60) / 5 * 5
+        val limit = (minutes * 60_000L).takeIf { enabled && settings.getBoolean("show_timer", false) && it > 0 }
+        commands.trySend(Command.Edit(current.selectedProfileId, current.profile?.activeAttemptId, { it },
+            Command.Start(game, null, true, count, enabled, limit)))
+    }
+
+    private fun isDisabled(game: ReadingGame) =
+        game.name in settings.getStringSet("disabled_reading_games", emptySet()).orEmpty()
+
+    private fun disabledRewards() = RewardType.entries.filter {
+        it.name in settings.getStringSet("disabled_rewards", emptySet()).orEmpty()
+    }.toSet()
+
+    fun finishActivity() {
+        act { current ->
+            if (current.active?.let { isDisabled(it.game) } == true) current
+            else ReadingEngine.finish(current, rewardsEnabled = settings.getBoolean(Subject.READING.rewardsPreference, true),
+                disabledRewards = disabledRewards(), random = rewardRandom)
+        }
+    }
+
+    fun nextSessionActivity() {
+        act { ReadingEngine.nextSessionActivity(it) }
+    }
+
+    /** Call with true only while the activity screen is visible and its lifecycle is resumed. */
+    fun setSessionForeground(visible: Boolean) {
+        captureSessionClock()
+        sessionForeground = visible
+        refreshSessionClock()
+        commands.trySend(Command.Tick)
+    }
+
+    private fun captureSessionClock() {
+        val now = clock()
+        runningSince?.let {
+            sessionElapsedMs += (now - it).coerceAtLeast(0)
+            runningSince = now
+            data?.activeSession?.timeLimitMs?.let { limit -> sessionElapsedMs = sessionElapsedMs.coerceAtMost(limit) }
+        }
+    }
+
+    private fun refreshSessionClock() {
+        captureSessionClock()
+        val session = data?.activeSession
+        if (session?.id != clockSessionId || session?.finishedAt != null) {
+            clockSessionId = session?.id
+            sessionElapsedMs = session?.elapsedMs ?: 0
+            runningSince = null
+        }
+        val running = session != null && session.finishedAt == null && sessionForeground &&
+            data?.page == ReadingPage.ACTIVITY && storageError == null && !isDisabled(session.game)
+        if (running) {
+            if (runningSince == null) runningSince = clock()
+            if (timerJob == null) timerJob = viewModelScope.launch {
+                while (true) {
+                    delay(200)
+                    commands.trySend(Command.Tick)
+                }
+            }
+        } else {
+            runningSince = null
+            timerJob?.cancel()
+            timerJob = null
+        }
+    }
+
+    private suspend fun updateSessionClock(flush: Boolean = true) {
+        captureSessionClock()
+        val current = data ?: return
+        val session = current.activeSession ?: return
+        if (session.finishedAt != null || storageError != null || session.id != clockSessionId) return
+        val elapsed = maxOf(session.elapsedMs, sessionElapsedMs)
+        if (elapsed == session.elapsedMs) return
+        val expired = session.timeLimitMs?.let { elapsed >= it } == true
+        if (!flush && !expired && elapsed - session.elapsedMs < 1_000) return
+        var next = current.copy(sessions = current.sessions.map {
+            if (it.id == session.id) it.copy(elapsedMs = elapsed) else it
+        })
+        if (expired)
+            next = ReadingEngine.endSession(next, session.id, timedOut = true)
+        persist(next)
+    }
+
     fun importActivities() {
         if (importing || saving || storageError != null || storage !is ReadingSqliteStore) return
         importing = true
@@ -246,8 +378,12 @@ class ReadingViewModel(
     }
 
     fun submit(key: String, expectedTurn: Int? = null) {
-        val rewardsEnabled = settings.getBoolean(Subject.READING.rewardsPreference, true)
-        act { ReadingEngine.submit(it, key, expectedTurn = expectedTurn, rewardsEnabled = rewardsEnabled) }
+        act {
+            if (it.active?.let { a -> isDisabled(a.game) } == true) it
+            else ReadingEngine.submit(it, key, expectedTurn = expectedTurn,
+                rewardsEnabled = settings.getBoolean(Subject.READING.rewardsPreference, true),
+                disabledRewards = disabledRewards(), random = rewardRandom)
+        }
     }
 
     fun setName(name: String) {
