@@ -2,6 +2,7 @@ package com.ssmath.app
 
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.UUID
 import kotlinx.serialization.json.Json
@@ -42,6 +43,7 @@ class ReadingSqliteStore(
                 migrated
             }
             ReadingEngine.validate(data, ::resolve)
+            if (existing != null && !normalizedState()) writeState(data)
             prepare(data)
         }
         expectedState = encode(result)
@@ -150,14 +152,63 @@ class ReadingSqliteStore(
         return attempt.copy(loadedContent = content)
     }
 
-    private fun SQLiteDatabase.readState(): ReadingData? =
-        rawQuery("SELECT payload FROM reading_state WHERE singleton=1", null).use {
-            if (it.moveToFirst()) json.decodeFromString<ReadingData>(it.getString(0)) else null
+    private fun SQLiteDatabase.normalizedState(): Boolean =
+        rawQuery("SELECT normalized FROM reading_state WHERE singleton=1", null).use {
+            it.moveToFirst() && it.getInt(0) == 1
         }
 
+    private fun SQLiteDatabase.readState(): ReadingData? {
+        val bytes = rawQuery("SELECT length(CAST(payload AS BLOB)) FROM reading_state WHERE singleton=1", null).use {
+            if (!it.moveToFirst()) return null
+            it.getInt(0)
+        }
+        // Also recovers version-one ledgers larger than Android's CursorWindow limit.
+        val output = ByteArrayOutputStream()
+        var offset = 1
+        while (offset <= bytes) {
+            rawQuery("SELECT substr(CAST(payload AS BLOB),?,65536) FROM reading_state WHERE singleton=1",
+                arrayOf(offset.toString())).use {
+                check(it.moveToFirst())
+                output.write(it.getBlob(0))
+            }
+            offset += 65536
+        }
+        val header = json.decodeFromString<ReadingData>(output.toString(Charsets.UTF_8.name()))
+        if (!normalizedState()) return header
+        val attempts = rawQuery("SELECT payload FROM reading_attempts ORDER BY position", null).use {
+            buildList { while (it.moveToNext()) add(json.decodeFromString<ReadingAttempt>(it.getString(0))) }
+        }
+        val stories = rawQuery("SELECT payload FROM reading_stories ORDER BY position", null).use {
+            buildList { while (it.moveToNext()) add(json.decodeFromString<ReadingStory>(it.getString(0))) }
+        }
+        return header.copy(attempts = attempts, stories = stories)
+    }
+
     private fun SQLiteDatabase.writeState(data: ReadingData) {
-        execSQL("INSERT OR REPLACE INTO reading_state(singleton,payload) VALUES(1,?)",
-            arrayOf(encode(data)))
+        writeRows("reading_attempts", "id", data.attempts.map {
+            it.id to json.encodeToString(ReadingAttempt.serializer(), it)
+        })
+        writeRows("reading_stories", "attempt_id", data.stories.map {
+            it.attemptId to json.encodeToString(ReadingStory.serializer(), it)
+        })
+        execSQL("INSERT OR REPLACE INTO reading_state(singleton,payload,normalized) VALUES(1,?,1)",
+            arrayOf(encode(data.copy(attempts = emptyList(), stories = emptyList()))))
+    }
+
+    private fun SQLiteDatabase.writeRows(table: String, key: String, rows: List<Pair<String, String>>) {
+        val removed = rawQuery("SELECT $key FROM $table", null).use {
+            buildSet { while (it.moveToNext()) add(it.getString(0)) }.toMutableSet()
+        }
+        rows.forEachIndexed { position, (id, payload) ->
+            // Each content-free history record stays well below the platform cursor-window limit.
+            require(payload.toByteArray(Charsets.UTF_8).size <= 256 * 1024) { "Reading history record is too large." }
+            removed.remove(id)
+            execSQL("INSERT OR IGNORE INTO $table($key,position,payload) VALUES(?,?,?)",
+                arrayOf<Any>(id, position, payload))
+            execSQL("UPDATE $table SET position=?,payload=? WHERE $key=? AND (position<>? OR payload<>?)",
+                arrayOf<Any>(position, payload, id, position, payload))
+        }
+        removed.forEach { execSQL("DELETE FROM $table WHERE $key=?", arrayOf(it)) }
     }
 
     private fun encode(data: ReadingData) = json.encodeToString(ReadingData.serializer(), data)

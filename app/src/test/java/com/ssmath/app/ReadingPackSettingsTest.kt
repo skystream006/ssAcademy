@@ -1,6 +1,7 @@
 package com.ssmath.app
 
 import android.app.Application
+import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.rememberScrollState
@@ -26,6 +27,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
@@ -50,6 +52,13 @@ class ReadingPackSettingsTest {
     private fun model(importer: ReadingPackImporter) =
         ReadingViewModel(application, store, Dispatchers.Unconfined, importer).also { models.put("reading", it) }
 
+    private fun await(condition: () -> Boolean) {
+        compose.waitUntil(10_000) {
+            shadowOf(Looper.getMainLooper()).idle()
+            condition()
+        }
+    }
+
     @Test fun settingsImportsAndShowsVersionAndCountsThenActivitiesWorkOffline() {
         val model = model(readingTestImporter(store.catalog, application.cacheDir, pool))
         compose.setContent {
@@ -57,11 +66,11 @@ class ReadingPackSettingsTest {
         }
         compose.onNodeWithText("No reading pack installed.").assertIsDisplayed()
         compose.onNodeWithTag("reading-pack-import").performScrollTo().assertIsEnabled().performClick()
-        compose.waitUntil(10_000) { model.packStatus?.version == "test-1" && !model.importing }
+        await { model.packStatus?.version == "test-1" && !model.importing }
         compose.onNodeWithText("Installed version: test-1 · 3 activities").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Reading activities are ready to play offline.").performScrollTo().assertIsDisplayed()
         compose.runOnIdle { model.start(ReadingGame.MISSING) }
-        compose.waitUntil(5_000) { model.data?.active != null && !model.saving }
+        await { model.data?.active != null && !model.saving }
         val first = requireNotNull(model.data?.active)
         assertNotNull(first.loadedContent)
         assertEquals(first, store.load().active)
@@ -74,7 +83,7 @@ class ReadingPackSettingsTest {
             ReadingPackTransport { _, _ -> throw IOException("Offline") }))
         compose.setContent { ReadingPackSettings(model) }
         compose.onNodeWithTag("reading-pack-import").performClick()
-        compose.waitUntil(5_000) { !model.importing && model.importProgress?.startsWith("Import failed.") == true }
+        await { !model.importing && model.importProgress?.startsWith("Import failed.") == true }
         assertEquals(original, store.load())
         assertEquals(3, model.packStatus?.counts?.values?.sum())
         assertNull(model.storageError)
@@ -87,12 +96,12 @@ class ReadingPackSettingsTest {
         compose.onNodeWithText("Import reading activities in Settings > Reading Settings to begin. Saved drafts can still be resumed.")
             .performScrollTo().assertIsDisplayed()
         compose.runOnIdle { model.start(ReadingGame.MISSING) }
-        compose.waitUntil(5_000) { model.message?.contains("Import reading activities") == true }
+        await { model.message?.contains("Import reading activities") == true }
         assertTrue(requireNotNull(model.data).attempts.isEmpty())
         compose.runOnIdle { model.importActivities() }
-        compose.waitUntil(10_000) { !model.importing && model.packStatus?.version == "test-1" }
+        await { !model.importing && model.packStatus?.version == "test-1" }
         compose.runOnIdle { repeat(10) { model.start(ReadingGame.MISSING) } }
-        compose.waitUntil(5_000) { model.data?.active != null && !model.saving }
+        await { model.data?.active != null && !model.saving }
         compose.runOnIdle { assertEquals(1, requireNotNull(model.data).attempts.size) }
         assertEquals(1, store.load().attempts.size)
     }

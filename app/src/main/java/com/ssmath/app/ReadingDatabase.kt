@@ -6,7 +6,7 @@ import android.database.sqlite.SQLiteOpenHelper
 import kotlinx.serialization.encodeToString
 
 class ReadingDatabase(context: Context, name: String = "reading.db") :
-    SQLiteOpenHelper(context.applicationContext, name, null, 1) {
+    SQLiteOpenHelper(context.applicationContext, name, null, 2) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("""CREATE TABLE reading_content (
             id TEXT NOT NULL, revision TEXT NOT NULL, payload TEXT NOT NULL,
@@ -17,7 +17,9 @@ class ReadingDatabase(context: Context, name: String = "reading.db") :
         db.execSQL("""CREATE TABLE reading_pack (
             singleton INTEGER PRIMARY KEY CHECK(singleton=1), version TEXT NOT NULL, checksum TEXT NOT NULL)""")
         db.execSQL("""CREATE TABLE reading_state (
-            singleton INTEGER PRIMARY KEY CHECK(singleton=1), payload TEXT NOT NULL)""")
+            singleton INTEGER PRIMARY KEY CHECK(singleton=1), payload TEXT NOT NULL,
+            normalized INTEGER NOT NULL DEFAULT 1)""")
+        createHistoryTables(db)
         db.execSQL("""CREATE TABLE reading_cycles (
             reader_id TEXT NOT NULL, game TEXT NOT NULL, level TEXT NOT NULL,
             cycle INTEGER NOT NULL, last_id TEXT, PRIMARY KEY(reader_id,game,level))""")
@@ -28,7 +30,18 @@ class ReadingDatabase(context: Context, name: String = "reading.db") :
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        error("A non-destructive reading database migration is required: $oldVersion to $newVersion")
+        check(oldVersion == 1 && newVersion == 2) {
+            "A non-destructive reading database migration is required: $oldVersion to $newVersion"
+        }
+        db.execSQL("ALTER TABLE reading_state ADD COLUMN normalized INTEGER NOT NULL DEFAULT 0")
+        createHistoryTables(db)
+    }
+
+    private fun createHistoryTables(db: SQLiteDatabase) {
+        db.execSQL("""CREATE TABLE reading_attempts (
+            id TEXT PRIMARY KEY NOT NULL, position INTEGER NOT NULL, payload TEXT NOT NULL)""")
+        db.execSQL("""CREATE TABLE reading_stories (
+            attempt_id TEXT PRIMARY KEY NOT NULL, position INTEGER NOT NULL, payload TEXT NOT NULL)""")
     }
 }
 

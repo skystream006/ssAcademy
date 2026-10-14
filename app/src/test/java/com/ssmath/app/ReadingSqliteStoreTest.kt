@@ -220,4 +220,43 @@ class ReadingSqliteStoreTest {
         assertEquals(other.contentId, resumed.active?.content?.id)
         assertEquals(1, resumed.attempts.count { it.loadedContent != null })
     }
+
+    @Test fun largeHistoryUsesBoundedRowsAndMigratesOversizedVersionOneLedgers() {
+        install(pool.take(1))
+        val solved = readingSolve(store.start(reader(), ReadingGame.MISSING, ReadingLevel.SPROUT, false))
+        val completed = requireNotNull(solved.active)
+        val attempts = (1..3200).map { index ->
+            completed.copy(id = "history-${index.toString().padStart(32, '0')}", loadedContent = null)
+        }
+        val history = solved.copy(attempts = attempts, profiles = solved.profiles.map {
+            it.copy(activeAttemptId = attempts.last().id)
+        })
+        val payload = readingPackJson.encodeToString(history)
+        assertTrue(payload.toByteArray().size > 2 * 1024 * 1024)
+        store.save(history)
+        assertEquals(3200L, scalar("SELECT COUNT(*) FROM reading_attempts"))
+        assertTrue(scalar("SELECT MAX(length(CAST(payload AS BLOB))) FROM reading_attempts") < 256 * 1024)
+        assertTrue(scalar("SELECT length(CAST(payload AS BLOB)) FROM reading_state") < 65536)
+        assertEquals(3200, store.load().points("reader-a"))
+
+        // Recreate the v1 shape, including a row too large to fetch into a default CursorWindow.
+        database.writableDatabase.execSQL("DROP TABLE reading_attempts")
+        database.writableDatabase.execSQL("DROP TABLE reading_stories")
+        database.writableDatabase.execSQL("DROP TABLE reading_state")
+        database.writableDatabase.execSQL(
+            "CREATE TABLE reading_state(singleton INTEGER PRIMARY KEY CHECK(singleton=1),payload TEXT NOT NULL)")
+        database.writableDatabase.execSQL("INSERT INTO reading_state VALUES(1,?)", arrayOf(payload))
+        database.writableDatabase.version = 1
+        database.close()
+        database = ReadingDatabase(application, "rotation.db")
+        store = ReadingSqliteStore(application, database, legacy)
+        val upgraded = store.load()
+        assertEquals(3200, upgraded.attempts.size)
+        assertEquals(3200, upgraded.points("reader-a"))
+        assertEquals(1, upgraded.attempts.count { it.loadedContent != null })
+        assertEquals(1L, scalar("SELECT normalized FROM reading_state"))
+        assertEquals(3200L, scalar("SELECT COUNT(*) FROM reading_attempts"))
+        assertEquals(1L, scalar("SELECT COUNT(*) FROM reading_presented"))
+        assertEquals(upgraded, store.load())
+    }
 }

@@ -163,7 +163,7 @@ class ReadingPackTest {
 
     @Test fun repeatedImportsPreserveReaderStateCyclesAndPresentedHistory() {
         val db = database.writableDatabase
-        db.execSQL("INSERT INTO reading_state VALUES(1,'state sentinel')")
+        db.execSQL("INSERT INTO reading_state(singleton,payload) VALUES(1,'state sentinel')")
         db.execSQL("INSERT INTO reading_cycles VALUES('reader','MISSING','SPROUT',7,'missing-cup')")
         db.execSQL("INSERT INTO reading_presented VALUES('reader','MISSING','SPROUT','missing-cup',7)")
         val original = install()
@@ -187,7 +187,7 @@ class ReadingPackTest {
         try {
             val revision = catalog.insertLegacy(first)
             assertEquals(first, catalog.find(first.id, revision))
-            db.execSQL("INSERT INTO reading_state VALUES(1,'temporary')")
+            db.execSQL("INSERT INTO reading_state(singleton,payload) VALUES(1,'temporary')")
         } finally {
             db.endTransaction()
         }
@@ -380,7 +380,7 @@ class ReadingPackTest {
             runBlocking {
                 val job = requireNotNull(currentCoroutineContext()[Job])
                 ReadingPackImporter(catalog, cache, transport(bytes, manifest)).importPack { message ->
-                    if (message.startsWith("Validated 100")) job.cancel("Cancelled during staging")
+                    if (message.startsWith("Validated 100")) job.cancel(CancellationException("Cancelled during staging"))
                 }
             }
         }
@@ -396,5 +396,18 @@ class ReadingPackTest {
         install(bytes = bytes)
         assertEquals(original.revision, catalog.latest(first.id)?.revision)
         assertEquals(1, rowCount("reading_content"))
+    }
+
+    @Test fun downloadProgressIncludesThrottledPercentAndByteCounts() {
+        val entries = (1..600).map { first.copy(id = "progress-$it") }
+        val bytes = contentBytes(entries)
+        val messages = mutableListOf<String>()
+        install(entries, bytes, onProgress = messages::add)
+        val downloads = messages.filter { it.startsWith("Downloading reading activities:") }
+        assertTrue(downloads.size in 2..21)
+        assertEquals("Downloading reading activities: 100% (${bytes.size}/${bytes.size} bytes)", downloads.last())
+        val percentages = downloads.map { it.substringAfter(": ").substringBefore('%').toInt() }
+        assertEquals(percentages.sorted().distinct(), percentages)
+        percentages.dropLast(1).zipWithNext().forEach { (previous, next) -> assertTrue(next - previous >= 5) }
     }
 }

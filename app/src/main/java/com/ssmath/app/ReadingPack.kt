@@ -187,10 +187,20 @@ class ReadingPackImporter(
             val digest = MessageDigest.getInstance("SHA-256")
             val size = file.outputStream().use { output ->
                 var downloaded = 0L
+                var reportedBytes = 0L
+                var reportedPercent = 0
                 transport.read(READING_PACK_ROOT + manifest.file) { input ->
-                    downloaded = copyBounded(input, manifest.bytes, { context.ensureActive() }) { bytes, count ->
+                    copyBounded(input, manifest.bytes, { context.ensureActive() }) { bytes, count ->
                         digest.update(bytes, 0, count)
                         output.write(bytes, 0, count)
+                        downloaded += count
+                        val percent = (downloaded * 100 / manifest.bytes).toInt()
+                        if (downloaded == manifest.bytes || percent - reportedPercent >= 5 ||
+                            downloaded - reportedBytes >= 256 * 1024) {
+                            onProgress("Downloading reading activities: $percent% ($downloaded/${manifest.bytes} bytes)")
+                            reportedBytes = downloaded
+                            reportedPercent = percent
+                        }
                     }
                 }
                 downloaded

@@ -282,7 +282,10 @@ Imports are additive: omitted activities remain installed; the same activity ID 
 to another game or level. Reimporting a pack neither duplicates content nor clears rotation.
 New IDs become unseen in the existing cycle. Changed content receives a new revision while
 old revisions stay available to drafts/history; the logical activity ID still counts as seen.
-The progress ledger and activity reservations commit in one transaction. History/progress
+The progress ledger and activity reservations commit in one transaction. Attempts and stories
+use separate bounded rows so a growing history cannot exceed Android's per-row cursor window.
+Schema upgrades also recover older oversized singleton ledgers without clearing history.
+History/progress
 use small activity references, and only the active attempt's full content is retained in
 the loaded reading state. Database work runs off the UI thread.
 
