@@ -138,6 +138,7 @@ class ReadingEntryTest {
                 compose.onNodeWithTag("reading-next").performScrollTo().performClick()
             }
         }
+        compose.onNodeWithTag("reading-session-summary").assertIsDisplayed()
         await { app.readingRewardResults.singleOrNull()?.pokemonReward != null }
         compose.runOnIdle { app.dismissReadingCelebration() }
         compose.onNodeWithTag("gift-box").assertIsDisplayed().performClick()
