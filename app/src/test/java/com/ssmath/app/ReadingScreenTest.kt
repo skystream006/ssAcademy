@@ -43,6 +43,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.shadows.ShadowToast
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class, qualifiers = "w360dp-h800dp")
@@ -92,7 +93,7 @@ class ReadingScreenTest {
         }
         compose.waitUntil(5_000) {
             shadowOf(Looper.getMainLooper()).idle()
-            model.data != null
+            model.data != null && !model.saving
         }
     }
 
@@ -156,11 +157,10 @@ class ReadingScreenTest {
         assertEquals(ReadingGame.MISSING.guidance, lastSpoken)
         assertEquals(0, model.data?.active?.narrations)
         chooseCorrectAnswer()
-        click("reading-check-answer")
-        waitFor { it.active?.earned("answer") == true }
-        compose.onNodeWithTag("reading-check-answer").performScrollTo().assertIsNotEnabled()
-        click("reading-finish")
+        click("reading-submit-answer")
         waitFor { it.active?.finishedAt != null }
+        compose.onNodeWithText("Check answer").assertDoesNotExist()
+        compose.onNodeWithText("Finish and save").assertDoesNotExist()
         compose.onNodeWithTag("reading-summary").assertIsDisplayed()
         compose.onNodeWithText("First-try independent: 1 / 1").performScrollTo().assertIsDisplayed()
         compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }
@@ -237,7 +237,7 @@ class ReadingScreenTest {
         compose.onNodeWithTag("reading-listen").assertDoesNotExist()
         compose.onNodeWithTag("reading-stop").assertDoesNotExist()
         chooseCorrectAnswer()
-        click("reading-check-answer")
+        click("reading-submit-answer")
         waitFor { it.active?.earned("answer") == true }
         assertEquals(ReadingAccuracy(1, 1, 0, 0), model.data?.accuracy("reader-a"))
     }
@@ -312,9 +312,9 @@ class ReadingScreenTest {
         chooseCorrectAnswer()
         val answer = readingCorrect(requireNotNull(model.data))
         compose.onNodeWithTag("reading-answer-$answer").assertTextContains("✓ ${choices[answer]}")
-        click("reading-check-answer")
-        waitFor { it.active?.earned("answer") == true }
-        choices.indices.forEach { compose.onNodeWithTag("reading-answer-$it").assertIsNotEnabled() }
+        click("reading-submit-answer")
+        waitFor { it.active?.finishedAt != null }
+        compose.onNodeWithTag("reading-summary").assertIsDisplayed()
     }
 
     private fun choiceColor(tag: String): Int {
@@ -441,11 +441,11 @@ class ReadingScreenTest {
 
     @Test fun sentenceTilesDragIntoAnyEmptySpaceBetweenSpacesAndBackOut() {
         show(readingFixture(ReadingContent.find("scramble-cats")))
-        compose.onNodeWithTag("reading-check-order").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithTag("reading-submit-order").performScrollTo().assertIsNotEnabled()
         dragTile("reading-tile-0", "reading-space-2")
         waitFor { it.active?.order == listOf(-1, -1, 0) }
         compose.onNodeWithTag("reading-tile-0").assertDoesNotExist()
-        compose.onNodeWithTag("reading-check-order").assertIsNotEnabled()
+        compose.onNodeWithTag("reading-submit-order").assertIsNotEnabled()
         assertEquals(listOf(-1, -1, 0), ReadingStore(file).load().active?.order)
         dragTile("reading-tile-1", "reading-space-0")
         waitFor { it.active?.order == listOf(1, -1, 0) }
@@ -463,11 +463,11 @@ class ReadingScreenTest {
         waitFor { it.active?.order == listOf(1, -1, 0) }
         dragTile("reading-tile-2", "reading-space-1")
         waitFor { it.active?.order == listOf(1, 2, 0) }
-        click("reading-check-order")
-        waitFor { it.active?.earned("order") == true }
+        click("reading-submit-order")
+        waitFor { it.active?.finishedAt != null }
         val locked = model.data
-        compose.onNodeWithTag("reading-placed-0").assertIsNotEnabled()
-        dragTile("reading-placed-0", "reading-tile-bank")
+        compose.onNodeWithTag("reading-placed-0").assertDoesNotExist()
+        compose.runOnIdle { model.act { ReadingEngine.removeTile(it, 0) } }
         assertEquals(locked, model.data)
         assertTrue(requireNotNull(ReadingStore(file).load().active).earned("order"))
     }
@@ -479,7 +479,7 @@ class ReadingScreenTest {
         assertEquals(data, model.data)
         dragTile("reading-tile-0", "reading-space-1", cancelled = true)
         assertEquals(data, model.data)
-        dragTile("reading-placed-0", "reading-check-order")
+        dragTile("reading-placed-0", "reading-submit-order")
         assertEquals(data, model.data)
         assertEquals(data, ReadingStore(file).load())
         compose.onNodeWithTag("reading-tile-0").assertExists()
@@ -507,7 +507,7 @@ class ReadingScreenTest {
         waitFor { it.active?.order == listOf(2, 1, -1, 3) }
         click("reading-tile-0")
         waitFor { it.active?.order == listOf(2, 1, 0, 3) }
-        click("reading-check-order")
+        click("reading-submit-order")
         waitFor { it.active?.earned("order") == true }
         assertTrue(requireNotNull(ReadingStore(file).load().active).earned("order"))
     }
@@ -565,19 +565,21 @@ class ReadingScreenTest {
                     click("reading-tile-$tile")
                     waitFor { it.active?.order?.size == position + 1 }
                 }
-                click("reading-check-order")
+                click("reading-submit-order")
                 waitFor { it.active?.earned("order") == true }
+                if (game == ReadingGame.SCRAMBLE) {
+                    compose.onNodeWithTag("reading-summary").assertIsDisplayed()
+                    assertNotNull(model.data?.active?.finishedAt)
+                    continue
+                }
                 compose.onNodeWithTag("reading-placed-0").assertIsNotEnabled()
             }
             val question = requireNotNull(ReadingEngine.question(requireNotNull(model.data?.active)))
             assertChoiceGrid("reading-answer", question.choices)
             chooseCorrectAnswer()
-            val key = if (game == ReadingGame.SCRAMBLE) "bonus" else "answer"
-            click("reading-check-$key")
-            waitFor { it.active?.earned(key) == true }
-            question.choices.indices.forEach { compose.onNodeWithTag("reading-answer-$it").assertIsNotEnabled() }
-            click("reading-finish")
+            click("reading-submit-answer")
             waitFor { it.active?.finishedAt != null }
+            question.choices.indices.forEach { compose.onNodeWithTag("reading-answer-$it").assertDoesNotExist() }
         }
     }
 
@@ -585,12 +587,9 @@ class ReadingScreenTest {
         application.getSharedPreferences("settings", 0).edit().putBoolean("reading_rewards_enabled", false).commit()
         show(readingFixture())
         chooseCorrectAnswer()
-        click("reading-check-answer")
-        waitFor { it.active?.earned("answer") == true }
-        compose.onNodeWithText("Answer checkpoint saved").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Answer checkpoint earned · +1").assertDoesNotExist()
-        click("reading-finish")
+        click("reading-submit-answer")
         waitFor { it.active?.finishedAt != null }
+        compose.onNodeWithText("Answer checkpoint earned · +1").assertDoesNotExist()
         compose.onNodeWithText("Individual points this attempt:", substring = true).assertDoesNotExist()
         assertEquals(1, ReadingStore(file).load().completions("reader-a"))
         assertEquals(1, model.data?.accuracy("reader-a")?.firstIndependent)
@@ -703,13 +702,12 @@ class ReadingScreenTest {
             click("reading-tile-$tile")
             waitFor { it.active?.order?.size == index + 1 }
         }
-        click("reading-check-order")
+        click("reading-submit-order")
         waitFor { it.active?.earned("order") == true }
         compose.onNodeWithTag("reading-placed-0").performScrollTo().assertIsNotEnabled()
         chooseCorrectAnswer()
-        click("reading-check-answer")
+        click("reading-submit-answer")
         waitFor { it.active?.earned("answer") == true && it.active?.earned("order") == true }
-        click("reading-finish")
         waitFor { it.active?.finishedAt != null }
         compose.onNodeWithTag("reading-summary").assertIsDisplayed()
         assertEquals(2, requireNotNull(model.data).accuracy("reader-a").firstIndependent)
@@ -722,9 +720,8 @@ class ReadingScreenTest {
             waitFor { !it.active?.fields?.get(key).isNullOrBlank() }
             click("reading-save-$key")
             waitFor { it.active?.earned(key) == true }
-            compose.onNodeWithTag("reading-write-$key").performScrollTo().assertIsNotEnabled()
+            if (key != "ending") compose.onNodeWithTag("reading-write-$key").performScrollTo().assertIsNotEnabled()
         }
-        click("reading-finish")
         waitFor { it.stories.size == 1 }
         compose.onNodeWithTag("reading-saved-story").performScrollTo().assertIsDisplayed()
         assertEquals(4, model.data?.active?.checkpoints?.values?.count { it.earned })
@@ -741,10 +738,9 @@ class ReadingScreenTest {
             waitFor { !it.active?.fields?.get(key).isNullOrBlank() }
             click("reading-save-$key")
             waitFor { it.active?.earned(key) == true }
-            compose.onNodeWithText("$key saved").performScrollTo().assertIsDisplayed()
+            if (key != "ending") compose.onNodeWithText("$key saved").performScrollTo().assertIsDisplayed()
             compose.onNodeWithText("$key saved · +1").assertDoesNotExist()
         }
-        click("reading-finish")
         waitFor { it.stories.size == 1 }
         compose.onNodeWithText("Individual points this attempt:", substring = true).assertDoesNotExist()
         assertEquals(1, ReadingStore(file).load().stories.size)
@@ -796,7 +792,6 @@ class ReadingScreenTest {
             click("reading-save-$key")
             waitFor { it.active?.earned(key) == true }
         }
-        click("reading-finish")
         waitFor { it.stories.size == 1 }
         val story = requireNotNull(model.data).stories.single().text
         assertTrue(story.startsWith("A kind fox lived in "))
@@ -929,7 +924,7 @@ class ReadingScreenTest {
 
     @Test fun gameTapStartsTheSelectedBatchAndRetainsLegacyDraftHistory() {
         show(readingFixture().copy(page = ReadingPage.MENU))
-        compose.onNodeWithTag("reading-game-MISSING").assertIsNotEnabled()
+        compose.onNodeWithTag("reading-game-MISSING").assertIsEnabled()
         click("reading-question-count-25")
         click("reading-game-MISSING")
         waitFor { it.activeSession?.questionCount == 25 }
@@ -939,6 +934,88 @@ class ReadingScreenTest {
         assertEquals(25, session.attemptIds.distinct().size)
         assertEquals(session.attemptIds.first(), model.data?.active?.id)
         compose.onNodeWithTag("reading-question-progress").assertTextContains("Question 1 of 25")
+    }
+
+    @Test fun everyGamePromptsForQuestionCountWithoutStartingOrChangingTheDraft() {
+        val data = readingFixture().copy(page = ReadingPage.MENU)
+        show(data)
+        ReadingGame.entries.forEach { game ->
+            ShadowToast.reset()
+            click("reading-game-${game.name}")
+            assertEquals("Please select the number of questions.", ShadowToast.getTextOfLatestToast())
+            assertEquals(data, model.data)
+            assertEquals(data, ReadingStore(file).load())
+        }
+        click("reading-question-count-15")
+        ShadowToast.reset()
+        click("reading-game-MISSING")
+        waitFor { it.activeSession?.questionCount == 15 }
+        assertNull(ShadowToast.getTextOfLatestToast())
+    }
+
+    @Test fun submitAdvancesImmediatelyAndKeepsThePreviousCorrectionBelowTheNewProblem() {
+        val data = readingSessionFixture()
+        val first = requireNotNull(data.active)
+        val question = requireNotNull(first.content.question)
+        show(data)
+        compose.onNodeWithTag("reading-submit-answer").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithTag("reading-previous-answer").assertDoesNotExist()
+        click("reading-answer-${readingWrong(data)}")
+        waitFor { it.active?.fields?.get("answer") != null }
+        click("reading-submit-answer")
+        waitFor { it.active?.id != first.id }
+        compose.onNodeWithTag("reading-question-progress").assertTextContains("Question 2 of 15")
+        compose.onNodeWithTag("reading-question-result").assertDoesNotExist()
+        compose.onNodeWithTag("reading-finish").assertDoesNotExist()
+        compose.onNodeWithTag("reading-next").assertDoesNotExist()
+        val correction = "Previous question · ${first.title}\nNot quite. Correct answer: ${question.choices[question.answer]}"
+        val feedback = compose.onNodeWithTag("reading-previous-answer").performScrollTo()
+            .assertIsDisplayed().assertTextContains(correction).fetchSemanticsNode().boundsInRoot
+        val problem = compose.onNodeWithTag("reading-problem").fetchSemanticsNode().boundsInRoot
+        assertTrue(feedback.top >= problem.bottom)
+        chooseCorrectAnswer()
+        compose.onNodeWithTag("reading-previous-answer").assertTextContains(correction)
+        assertEquals(1, requireNotNull(model.data).sessionWrong(requireNotNull(data.activeSession)))
+        assertEquals(model.data, ReadingStore(file).load())
+        click("reading-submit-answer")
+        waitFor { it.activeSession?.let { session -> it.sessionAnswered(session) == 2 } == true }
+        compose.onNodeWithTag("reading-question-progress").assertTextContains("Question 3 of 15")
+        compose.onNodeWithTag("reading-previous-answer").assertTextContains("Correct! Correct answer:", substring = true)
+    }
+
+    @Test fun restoredCompletedQuestionAutomaticallyContinuesAndReadyLegacyDraftCanStillSubmit() {
+        val data = readingSolve(readingSessionFixture())
+        show(data)
+        waitFor { it.active?.id == it.activeSession?.attemptIds?.get(1) }
+        compose.onNodeWithTag("reading-question-progress").assertTextContains("Question 2 of 15")
+        val ready = readingAnswer(readingFixture(), readingCorrect(readingFixture()))
+        compose.runOnIdle { model.act { ready } }
+        waitFor { it.active?.id == "attempt-a" }
+        click("reading-submit")
+        waitFor { it.active?.finishedAt != null }
+        compose.onNodeWithTag("reading-summary").assertIsDisplayed()
+    }
+
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun mainReadingProblemHasAVisibleBorder() {
+        show(readingFixture())
+        compose.onNodeWithTag("reading-problem").performScrollTo()
+        val bounds = compose.onNodeWithTag("reading-problem").fetchSemanticsNode().boundsInRoot
+        compose.runOnIdle {
+            val view = compose.activity.findViewById<View>(android.R.id.content)
+            val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+            try {
+                view.draw(Canvas(bitmap))
+                val density = view.resources.displayMetrics.density
+                val y = bounds.center.y.toInt()
+                val edge = bitmap.getPixel((bounds.left + density).toInt(), y)
+                val inside = bitmap.getPixel((bounds.left + 6 * density).toInt(), y)
+                assertNotEquals(inside, edge)
+            } finally {
+                bitmap.recycle()
+            }
+        }
     }
 
     @Test fun partnersBatchSupportsFirstStartResumeAndCompletionWithoutAnotherReader() {
@@ -966,11 +1043,10 @@ class ReadingScreenTest {
         click("reading-reread")
         waitFor { it.active?.reread == true }
         click("reading-shared")
-        waitFor { it.active?.earned("shared") == true }
-        click("reading-finish")
         waitFor { it.stories.size == 1 }
         assertEquals(1, model.data?.profiles?.size)
-        assertTrue(requireNotNull(model.data?.active).earned("participation:reader-a"))
+        assertTrue(requireNotNull(model.data).attempts.first().earned("participation:reader-a"))
+        assertEquals(2, requireNotNull(model.data?.activeSession).attemptIds.indexOf(model.data?.active?.id) + 1)
         assertEquals(1, model.data?.sharedCompletions("reader-a"))
         assertEquals(model.data, ReadingStore(file).load())
     }
@@ -1003,11 +1079,12 @@ class ReadingScreenTest {
             val wrong = (readingCorrect(requireNotNull(model.data)) + 1) % requireNotNull(model.data?.active?.content?.question).choices.size
             click("reading-answer-$wrong")
             waitFor { it.active?.fields?.get("answer") == wrong.toString() }
-            click("reading-check-answer")
+            click("reading-submit-answer")
             waitFor { it.activeSession?.let { session -> it.sessionWrong(session) == index + 1 } == true }
             if (index == 0) {
                 assertNull(model.data?.activeSession?.finishedAt)
-                click("reading-next")
+                compose.onNodeWithTag("reading-next").assertDoesNotExist()
+                compose.onNodeWithTag("reading-question-progress").assertTextContains("Question 2 of 15")
                 waitFor { it.active?.finishedAt == null }
             }
         }
@@ -1043,7 +1120,7 @@ class ReadingScreenTest {
         assertEquals(ReadingGame.CAPTION.guidance, lastSpoken)
         assertEquals(0, model.data?.active?.narrations)
         chooseCorrectAnswer()
-        click("reading-check-answer")
+        click("reading-submit-answer")
         waitFor { it.active?.earned("answer") == true }
         assertEquals(ReadingAccuracy(1, 1, 0, 0), model.data?.accuracy("reader-a"))
 
@@ -1068,7 +1145,7 @@ class ReadingScreenTest {
         compose.onNodeWithTag("reading-stop").assertDoesNotExist()
         click("reading-instructions")
         chooseCorrectAnswer()
-        click("reading-check-answer")
+        click("reading-submit-answer")
         waitFor { it.active?.earned("answer") == true }
         assertEquals(ReadingAccuracy(0, 1, 1, 0), model.data?.accuracy("reader-a"))
         assertEquals(1, ReadingStore(file).load().active?.narrations)
@@ -1092,7 +1169,6 @@ class ReadingScreenTest {
         waitFor { it.active?.reread == true }
         click("reading-shared")
         waitFor { it.active?.earned("shared") == true }
-        click("reading-finish")
         waitFor { it.active?.finishedAt != null }
         val completed = model.data
         click("reading-listen")
@@ -1112,9 +1188,8 @@ class ReadingScreenTest {
         assertTrue(button.height >= 48)
         assertTrue(button.width > 0 && button.width <= compose.activity.resources.displayMetrics.widthPixels)
         chooseCorrectAnswer()
-        click("reading-check-answer")
+        click("reading-submit-answer")
         waitFor { it.active?.earned("answer") == true }
-        click("reading-finish")
         waitFor { it.active?.finishedAt != null }
         click("reading-back")
         waitFor { it.page == ReadingPage.MENU }

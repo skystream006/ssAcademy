@@ -281,8 +281,9 @@ class ReadingViewModel(
     fun finishActivity() {
         act { current ->
             if (current.active?.let { isDisabled(it.game) } == true) current
-            else ReadingEngine.finish(current, rewardsEnabled = settings.getBoolean(Subject.READING.rewardsPreference, true),
-                disabledRewards = disabledRewards(), random = rewardRandom)
+            else ReadingEngine.nextSessionActivity(ReadingEngine.finish(current,
+                rewardsEnabled = settings.getBoolean(Subject.READING.rewardsPreference, true),
+                disabledRewards = disabledRewards(), random = rewardRandom))
         }
     }
 
@@ -378,11 +379,16 @@ class ReadingViewModel(
     }
 
     fun submit(key: String, expectedTurn: Int? = null) {
-        act {
-            if (it.active?.let { a -> isDisabled(a.game) } == true) it
-            else ReadingEngine.submit(it, key, expectedTurn = expectedTurn,
-                rewardsEnabled = settings.getBoolean(Subject.READING.rewardsPreference, true),
-                disabledRewards = disabledRewards(), random = rewardRandom)
+        act { current ->
+            if (current.active?.let { isDisabled(it.game) } == true) current
+            else {
+                val rewardsEnabled = settings.getBoolean(Subject.READING.rewardsPreference, true)
+                val disabled = disabledRewards()
+                val submitted = ReadingEngine.submit(current, key, expectedTurn = expectedTurn,
+                    rewardsEnabled = rewardsEnabled, disabledRewards = disabled, random = rewardRandom)
+                ReadingEngine.nextSessionActivity(ReadingEngine.finish(submitted,
+                    rewardsEnabled = rewardsEnabled, disabledRewards = disabled, random = rewardRandom))
+            }
         }
     }
 

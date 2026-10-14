@@ -2,10 +2,12 @@ package com.ssmath.app
 
 import android.content.Context
 import android.content.ContextWrapper
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
@@ -287,16 +289,9 @@ internal fun ReadingModule(
                 if (session?.finishedAt != null) {
                     ReadingSessionSummary(data, model, session, appModel, back)
                 } else if (session != null && attempt.finishedAt != null) {
-                    ReadingColumn("reading-question-result") {
-                        ReadingHeading(if (attempt.checkpoints.values.any { it.objective && !it.firstCorrect })
-                            "Not quite!" else "Correct!")
-                        Text("Answered ${data.sessionAnswered(session)} of ${session.questionCount}")
-                        Text("Correct: ${data.sessionCorrect(session)} · Wrong: ${data.sessionWrong(session)}")
-                        ReadingSessionTimer(model, appModel?.showTimer == true)
-                        ReadingButton("Next question", "reading-next", enabled = !model.saving) {
-                            stop(); model.nextSessionActivity()
-                        }
-                        ReadingButton("Back to reading menu", "reading-back", action = back)
+                    LaunchedEffect(attempt.id) {
+                        stop()
+                        model.nextSessionActivity()
                     }
                 } else ReadingActivityScreen(data, model, attempt, narrationAvailable, speak, stop, back,
                     attempt.game !in disabledGames, appModel?.showTimer == true)
@@ -380,6 +375,7 @@ private fun ReadingPictureView(picture: ReadingPicture) {
 @Composable
 private fun ReadingMenu(data: ReadingData, model: ReadingViewModel, onExit: () -> Unit, stop: () -> Unit,
                         disabledGames: Set<ReadingGame>, onRewards: () -> Unit, onPokemons: () -> Unit) {
+    val context = LocalContext.current
     val profile = data.profile
     var questionCount by rememberSaveable { mutableStateOf<Int?>(null) }
     val games = listOf(ReadingGame.MISSING, ReadingGame.SEQUENCE, ReadingGame.STUDIO, ReadingGame.SCRAMBLE,
@@ -416,10 +412,16 @@ private fun ReadingMenu(data: ReadingData, model: ReadingViewModel, onExit: () -
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                                 row.forEach { game ->
                                     SubjectButton(game.title, game.backgroundImage, {
-                                        stop()
-                                        questionCount?.let { model.startSession(game, it) }
+                                       val count = questionCount
+                                       if (count == null) {
+                                           Toast.makeText(context, "Please select the number of questions.",
+                                               Toast.LENGTH_SHORT).show()
+                                       } else {
+                                           stop()
+                                           model.startSession(game, count)
+                                       }
                                     }, Modifier.weight(1f), "reading-game-${game.name}",
-                                        enabled = questionCount != null && !model.saving && !model.importing)
+                                        enabled = !model.saving && !model.importing)
                                 }
                                 if (row.size < columns) Spacer(Modifier.weight(1f))
                             }
@@ -467,6 +469,7 @@ private fun ReadingActivityScreen(data: ReadingData, model: ReadingViewModel, a:
     val content = a.content
     var instructionsUnavailable by remember(a.id) { mutableStateOf(false) }
     val scrollState = rememberScrollState()
+    LaunchedEffect(a.id) { scrollState.scrollTo(0) }
     var viewport by remember { mutableStateOf(Rect.Zero) }
     ReadingColumn("reading-activity", Modifier.onGloballyPositioned { viewport = it.boundsInRoot() }, scrollState) {
         Button(onClick = back, modifier = Modifier.heightIn(min = 56.dp).testTag("reading-back")) {
@@ -488,68 +491,73 @@ private fun ReadingActivityScreen(data: ReadingData, model: ReadingViewModel, a:
             }
         }
         if (instructionsUnavailable) Text("Instruction audio is unavailable. You can still read the instructions above.")
-        Text(content.title, style = MaterialTheme.typography.titleLarge)
-        ReadingPictureView(content.picture)
-        when (content.game) {
-            ReadingGame.MISSING, ReadingGame.CAPTION -> {
-                content.passage.forEach { Text(it, style = MaterialTheme.typography.headlineSmall) }
-                ReadingQuestionView(a, model, "answer")
-            }
-            ReadingGame.SCRAMBLE, ReadingGame.SEQUENCE -> {
-                if (content.game == ReadingGame.SCRAMBLE) SentenceScrambleTiles(a, model, scrollState, viewport)
-                else ReadingTiles(a, model, content.tiles, content.eventPictures)
-                ReadingButton("Check order", "reading-check-order", !a.earned("order") && a.orderComplete) {
-                    model.submit("order")
-                }
-                if (a.earned("order")) {
-                    Text("Order checkpoint saved")
-                    if (content.game == ReadingGame.SEQUENCE || data.activeSession == null) {
-                        if (content.game == ReadingGame.SCRAMBLE) Text("Optional extra challenge, or finish now.")
-                        ReadingQuestionView(a, model, if (content.game == ReadingGame.SCRAMBLE) "bonus" else "answer")
-                    }
-                }
-            }
-            ReadingGame.DETECTIVE -> {
-                Text("The passage · each button is one exact evidence segment")
-                content.passage.forEachIndexed { index, sentence ->
-                    ReadingChoice(sentence, "reading-evidence-$index", a.fields["evidence"] == index.toString(),
-                        a.earned("answer") && !a.earned("evidence")) {
-                        model.act { ReadingEngine.field(it, "evidence", index.toString()) }
-                    }
-                }
-                ReadingQuestionView(a, model, "answer")
-                if (a.earned("answer")) {
-                    Text("Now tap the sentence that proves your answer.")
-                    ReadingButton("Check evidence", "reading-check-evidence",
-                        !a.earned("evidence") && a.fields["evidence"] != null) {
-                        model.submit("evidence")
-                    }
-                }
-            }
-            ReadingGame.CHAPTER -> {
-                content.passage.forEach { Text(it) }
-                Text("Choose a chapter. Both choices are welcome. " +
-                    "Your branch stays fixed for this attempt.")
-                ReadingChoiceGrid(content.branches.map { it.label }, "reading-branch",
-                    selected = { a.branch == it }, enabled = a.branch == null) { index ->
-                    stop(); model.act { ReadingEngine.branch(it, index) }
-                }
-                a.branch?.let { index ->
-                    Text(content.branches[index].text, style = MaterialTheme.typography.bodyLarge)
+        Column(Modifier.fillMaxWidth().testTag("reading-problem")
+            .border(2.dp, MaterialTheme.colorScheme.outline, MaterialTheme.shapes.medium).padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(content.title, style = MaterialTheme.typography.titleLarge)
+            ReadingPictureView(content.picture)
+            when (content.game) {
+                ReadingGame.MISSING, ReadingGame.CAPTION -> {
+                    content.passage.forEach { Text(it, style = MaterialTheme.typography.headlineSmall) }
                     ReadingQuestionView(a, model, "answer")
                 }
+                ReadingGame.SCRAMBLE, ReadingGame.SEQUENCE -> {
+                    if (content.game == ReadingGame.SCRAMBLE) SentenceScrambleTiles(a, model, scrollState, viewport)
+                    else ReadingTiles(a, model, content.tiles, content.eventPictures)
+                    if (!a.earned("order")) ReadingButton("Submit Answer", "reading-submit-order",
+                        !model.saving && a.orderComplete) {
+                        model.submit("order")
+                    }
+                    if (a.earned("order")) {
+                        Text("Order checkpoint saved")
+                        if (content.game == ReadingGame.SEQUENCE) {
+                            ReadingQuestionView(a, model, "answer")
+                        }
+                    }
+                }
+                ReadingGame.DETECTIVE -> {
+                    Text("The passage · each button is one exact evidence segment")
+                    content.passage.forEachIndexed { index, sentence ->
+                        ReadingChoice(sentence, "reading-evidence-$index", a.fields["evidence"] == index.toString(),
+                            a.earned("answer") && !a.earned("evidence")) {
+                            model.act { ReadingEngine.field(it, "evidence", index.toString()) }
+                        }
+                    }
+                    ReadingQuestionView(a, model, "answer")
+                    if (a.earned("answer") && !a.earned("evidence")) {
+                        Text("Now tap the sentence that proves your answer.")
+                        ReadingButton("Submit Answer", "reading-submit-evidence",
+                            !model.saving && a.fields["evidence"] != null) {
+                            model.submit("evidence")
+                        }
+                    }
+                }
+                ReadingGame.CHAPTER -> {
+                    content.passage.forEach { Text(it) }
+                    Text("Choose a chapter. Both choices are welcome. " +
+                        "Your branch stays fixed for this attempt.")
+                    ReadingChoiceGrid(content.branches.map { it.label }, "reading-branch",
+                        selected = { a.branch == it }, enabled = a.branch == null) { index ->
+                        stop(); model.act { ReadingEngine.branch(it, index) }
+                    }
+                    a.branch?.let { index ->
+                        Text(content.branches[index].text, style = MaterialTheme.typography.bodyLarge)
+                        ReadingQuestionView(a, model, "answer")
+                    }
+                }
+                ReadingGame.STUDIO -> ReadingStudio(a, model)
+                ReadingGame.PARTNERS -> ReadingPartners(data, a, model, stop)
             }
-            ReadingGame.STUDIO -> ReadingStudio(a, model)
-            ReadingGame.PARTNERS -> ReadingPartners(data, a, model, stop)
         }
         if (a.feedback.isNotBlank()) Text(a.feedback,
             Modifier.testTag("reading-feedback").semantics { liveRegion = LiveRegionMode.Polite })
         val earned = a.checkpoints.values.count { it.earned && !it.shared }
         Text("Saved checkpoints: $earned · Hints: ${a.hints} · Narrations: ${a.narrations}")
-        if (ReadingEngine.ready(a)) ReadingButton("Finish and save", "reading-finish") {
+        if (ReadingEngine.ready(a)) ReadingButton("Submit Answer", "reading-submit", enabled = !model.saving) {
             stop(); model.finishActivity()
         }
         ReadingChoice("Give me a hint", "reading-hint") { model.act { ReadingEngine.hint(it) } }
+        data.activeSession?.let { ReadingPreviousAnswer(data, it) }
     }
 }
 
@@ -561,8 +569,8 @@ private fun ReadingQuestionView(a: ReadingAttempt, model: ReadingViewModel, key:
         selected = { a.fields["answer"] == it.toString() }, enabled = !a.earned(key)) { index ->
         model.act { ReadingEngine.field(it, "answer", index.toString()) }
     }
-    ReadingButton(if (key == "bonus") "Check bonus" else "Check answer", "reading-check-$key",
-        !a.earned(key) && a.fields["answer"] != null) {
+    if (!a.earned(key)) ReadingButton("Submit Answer", "reading-submit-$key",
+        !model.saving && a.fields["answer"] != null) {
         model.submit(key)
     }
     if (a.earned(key)) Text("Answer checkpoint saved")
@@ -756,7 +764,8 @@ private fun ReadingStudio(a: ReadingAttempt, model: ReadingViewModel) {
                 }
             }
             ReadingDraftText(editor, key, "Your $key idea", !a.earned(key))
-            ReadingButton("Save $key", "reading-save-$key", !a.earned(key) && !a.fields[key].isNullOrBlank()) {
+            ReadingButton("Submit Answer", "reading-save-$key",
+                !model.saving && !a.earned(key) && !a.fields[key].isNullOrBlank()) {
                 model.submit(key)
             }
             if (a.earned(key)) Text("$key saved")
@@ -797,7 +806,7 @@ private fun ReadingPartners(data: ReadingData, a: ReadingAttempt, model: Reading
         androidx.compose.runtime.key(a.turns.size) {
             ReadingDraftText(editor, "turn", "Your sentence", true)
         }
-        ReadingButton("Save sentence and pass turn", "reading-save-turn", !a.fields["turn"].isNullOrBlank()) {
+        ReadingButton("Submit Answer", "reading-save-turn", !model.saving && !a.fields["turn"].isNullOrBlank()) {
             stop(); model.submit("turn", expectedTurn = a.turns.size)
         }
     } else {
@@ -808,7 +817,7 @@ private fun ReadingPartners(data: ReadingData, a: ReadingAttempt, model: Reading
             ReadingChoice("We have reread our story", "reading-reread", a.reread, !a.earned("shared")) {
                 model.act { ReadingEngine.reread(it) }
             }
-            ReadingButton("Complete our shared story", "reading-shared", a.reread && !a.earned("shared")) {
+            ReadingButton("Submit Answer", "reading-shared", !model.saving && a.reread && !a.earned("shared")) {
                 model.submit("shared")
             }
         }
@@ -821,6 +830,17 @@ private fun ReadingSessionTimer(model: ReadingViewModel, showTimer: Boolean) {
     if (remaining != null || showTimer) {
         Text(if (remaining != null) "Time remaining: ${formatDuration(remaining)}"
             else "Time: ${formatDuration(model.sessionElapsedMs)}", Modifier.testTag("reading-timer"))
+    }
+}
+
+@Composable
+private fun ReadingPreviousAnswer(data: ReadingData, session: ReadingSession) {
+    val previous = data.attempts.lastOrNull { it.id in session.attemptIds && it.finishedAt != null } ?: return
+    if (previous.feedback.isNotBlank()) {
+        Text("Previous question · ${previous.title}\n${previous.feedback}",
+            Modifier.testTag("reading-previous-answer").semantics { liveRegion = LiveRegionMode.Polite },
+            color = if (ReadingEngine.wrong(previous)) WrongRed else CorrectGreen,
+            style = MaterialTheme.typography.titleMedium)
     }
 }
 
@@ -854,6 +874,7 @@ private fun ReadingSessionSummary(data: ReadingData, model: ReadingViewModel, se
             }
         }
         ReadingButton("Done", "reading-session-done", enabled = !model.saving, action = back)
+        ReadingPreviousAnswer(data, session)
     }
 }
 
@@ -885,6 +906,7 @@ private fun ReadingSummary(data: ReadingData, model: ReadingViewModel, a: Readin
             stop(); model.act { it.copy(page = ReadingPage.MENU) }
         }
         ReadingButton("Back to reading menu", "reading-back", action = back)
+        if (a.feedback.isNotBlank()) Text(a.feedback, Modifier.testTag("reading-feedback"))
     }
 }
 

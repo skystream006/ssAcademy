@@ -229,8 +229,13 @@ Use **Settings → Reading Settings →
 Set Reading Level** to choose a level, and **Reading Progress** to view the private dashboard.
 Select **15**, **25**, or **50** under **How many questions would you like?**, using
 the same Poké Ball, blue gift, and purple gift buttons as Math. Then tap a game to
-reserve that many activities at your selected reading level. An activity counts as
-one question, even when it contains several checkpoints. The first incorrect required
+reserve that many activities at your selected reading level.
+Tapping a game before choosing a count shows a reminder toast.
+Tap **Submit Answer** to save your response and move straight to the next question;
+the previous correct answer appears below the bordered activity. Activities with
+multiple parts advance through their required checkpoints before the next activity.
+Completed activities and stories save automatically, with no separate check or finish step.
+An activity counts as one question, even when it contains several checkpoints. The first incorrect required
 answer marks that activity wrong; it cannot be retried to change the session score.
 The game ends when **more than 10% of the selected count** is wrong (2 for 15,
 3 for 25, or 6 for 50). Finish every assigned activity to receive a completion
