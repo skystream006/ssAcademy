@@ -35,7 +35,7 @@ class ReadingSummitTest {
         cache.deleteRecursively()
     }
 
-    private fun install(manifestFile: String = "manifest.json") = runBlocking {
+    private fun install(manifestFile: String = "manifest-v2.json") = runBlocking {
         ReadingRepositoryPack(manifestFile).importer(store.catalog, cache).importPack()
     }
 
@@ -140,7 +140,7 @@ class ReadingSummitTest {
 
     @Test fun everySummitActivityAndEveryBranchAndAcceptedOrderCanBeCompletedThroughSqlite() {
         install()
-        val activities = ReadingRepositoryPack().activities.filter { it.level == ReadingLevel.SUMMIT }
+        val activities = ReadingRepositoryPack("manifest-v2.json").activities.filter { it.level == ReadingLevel.SUMMIT }
         assertEquals(24, activities.size)
         var data = readers()
         val branches = mutableSetOf<Pair<String, Int>>()

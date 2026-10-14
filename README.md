@@ -267,11 +267,12 @@ use non-destructive migrations. Clearing app data, like uninstalling, removes lo
 The downloadable source is `datasets/reading/manifest.json`, with UTF-8 JSON Lines data
 in `datasets/reading/activities-<sha256>.jsonl` (one `ReadingActivity` JSON object per line).
 These files are outside Android resources/assets and are **not packaged in the APK**.
-Pack **v2** contains 72 reviewed activities: the unchanged 48 Sprout/Trail activities plus
-24 new Summit activities (three for each of the eight games), not a generated 8,000-question bank.
-The original v1 checksum-named file remains available and unchanged. Existing v1 installations
-can update without losing drafts, points, or presentation cycles. Older app versions without
-Summit support reject v2 safely and retain their installed library; update the app first.
+Pack **v3** contains **24,000 activities**: **1,000 per game per difficulty**, across all eight
+games and Sprout, Trail, and Summit. This includes the original 72 activities unchanged and
+23,928 new template-generated activities. The original v1/v2 checksum-named files and archived
+manifests remain available. Existing installations can update without losing drafts, points,
+or presentation cycles. Older app versions without Summit support reject the expanded pack
+safely and retain their installed library; update the app first.
 The default HTTPS source is this repository's `main` branch on `raw.githubusercontent.com`;
 the files must be merged/published there and publicly readable before the import button works.
 Private repository access is not configured, and the APK contains no GitHub credentials.
@@ -285,6 +286,24 @@ or checksums, and oversized files. It caps downloads at 64 MiB, each record at 6
 and the pack at 100,000 activities. Downloads are streamed to temporary storage, then
 validated in a transactional staging table; failure rolls back and removes the temporary file.
 Allow space for the download, staging table, and SQLite transaction journal during updates.
+
+The v3 content source lives in `datasets/reading/generation/`, outside the APK. It combines
+original vocabulary, scenes, and story prompts using difficulty-specific templates, rather
+than copying the same question under new IDs. Sprout emphasizes short concrete sentences,
+Trail adds context and cause, and Summit adds complex sentences, inference, and reasoning.
+These are reproducible template variations, not 24,000 individually hand-written lessons.
+Some vocabulary frames revisit the same target word with different concrete subjects;
+some reading passages have separate activities for different comprehension questions.
+Structural checks and engine tests verify the catalogue; they do not replace educational
+review of the generated wording.
+
+To reproduce the committed v3 pack, run
+`python3 /home/runner/work/ssAcademy/ssAcademy/datasets/reading/generate.py`;
+add `--check` to verify it without writing files. Python 3 and its standard library are the
+only requirements. Generation preserves the exact v2 file as a prefix, rejects duplicate
+learning tasks even when titles or answer order differ, checks importer size/count limits,
+and derives stable new IDs from task content. Editing a template requires publishing a
+new immutable pack, not replacing an already published checksum-named file.
 
 SQLite stores immutable content revisions separately from the current selectable catalogue.
 Imports are additive: omitted activities remain installed; the same activity ID cannot move

@@ -23,18 +23,25 @@ internal class ReadingRepositoryPack(manifestFile: String = "manifest.json") {
     private val root = listOf(File("../datasets/reading"), File("datasets/reading")).first { it.isDirectory }
     private val manifestBytes = File(root, manifestFile).readBytes()
     val manifest = readingPackJson.decodeFromString<ReadingPackManifest>(manifestBytes.toString(Charsets.UTF_8))
-    val bytes = File(root, manifest.file).readBytes()
-    val activities = bytes.toString(Charsets.UTF_8).lineSequence().filter { it.isNotBlank() }
-        .map { readingPackJson.decodeFromString<ReadingActivity>(it) }.toList()
+    val contentFile = File(root, manifest.file)
+    val bytes by lazy { contentFile.readBytes() }
+    val activities by lazy {
+        buildList { forEachRecord { _, activity -> add(activity) } }
+    }
+
+    fun forEachRecord(consume: (String, ReadingActivity) -> Unit) {
+        contentFile.bufferedReader(Charsets.UTF_8).useLines { lines ->
+            lines.forEach { line -> consume(line, readingPackJson.decodeFromString<ReadingActivity>(line)) }
+        }
+    }
 
     fun importer(catalog: ReadingCatalog, cache: File) = ReadingPackImporter(catalog, cache,
         ReadingPackTransport { url, consume ->
             requireReadingPackUrl(url)
-            val data = if (url == READING_PACK_MANIFEST_URL) manifestBytes else {
+            if (url == READING_PACK_MANIFEST_URL) manifestBytes.inputStream().use(consume) else {
                 assertEquals(READING_PACK_MANIFEST_URL.removeSuffix("manifest.json") + manifest.file, url)
-                bytes
+                contentFile.inputStream().use(consume)
             }
-            data.inputStream().use(consume)
         })
 }
 
@@ -116,12 +123,16 @@ class ReadingPackTest {
     }
 
     @Test fun repositoryPackPreservesAll48LegacyActivitiesAndAdds24SummitActivities() {
-        val pack = ReadingRepositoryPack()
+        val pack = ReadingRepositoryPack("manifest-v2.json")
         val manifest = pack.manifest
         val bytes = pack.bytes
         val activities = pack.activities
         val legacy = ReadingRepositoryPack("manifest-v1.json")
         assertEquals(1, manifest.schemaVersion)
+        assertEquals("v2", manifest.version)
+        assertEquals(51947L, manifest.bytes)
+        assertEquals("94f362261369268e43127460a1caa749785068f3357cdb10fbcf844894e227e4",
+            manifest.sha256)
         assertEquals(72, manifest.counts.values.sum())
         assertEquals(72, activities.size)
         assertEquals(72, activities.map { it.id }.distinct().size)
