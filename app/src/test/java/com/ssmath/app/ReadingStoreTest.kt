@@ -72,6 +72,23 @@ class ReadingStoreTest {
         assertEquals(ReadingAccuracy(0, 1, 0, 1), result.accuracy("reader-a"))
     }
 
+    @Test fun sentenceSpacesAndLegacyCompactOrdersRoundTripAndResume() {
+        val store = ReadingStore(file)
+        store.load()
+        val base = readingFixture(ReadingContent.find("scramble-cats"))
+        for (order in listOf(emptyList(), listOf(1), listOf(1, 2), listOf(-1, -1, 0), listOf(1, -1, 0))) {
+            val data = base.copy(attempts = listOf(requireNotNull(base.active).copy(order = order)))
+            store.save(data)
+            var restored = ReadingEngine.start(ReadingStore(file).load(), ReadingGame.SCRAMBLE, ReadingLevel.SPROUT)
+            assertEquals(data, restored)
+            listOf(1, 2, 0).forEach { restored = ReadingEngine.placeTile(restored, it) }
+            restored = ReadingEngine.submit(restored, "order")
+            assertEquals(1, restored.points("reader-a"))
+            store.save(restored)
+            assertEquals(restored, ReadingEngine.submit(ReadingStore(file).load(), "order"))
+        }
+    }
+
     @Test fun legacyCheckpointsWithoutRewardFlagsKeepOnlyPreviouslyEarnedPoints() {
         val dataSets = listOf(
             readingSolve(readingFixture()),

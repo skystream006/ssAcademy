@@ -24,7 +24,7 @@ internal fun readingWrong(data: ReadingData): Int =
 internal fun readingOrder(data: ReadingData, order: List<Int>): ReadingData {
     var result = data
     while (requireNotNull(result.active).order.isNotEmpty())
-        result = ReadingEngine.removeTile(result, requireNotNull(result.active).order.first())
+        result = ReadingEngine.removeTile(result, requireNotNull(result.active).order.first { it >= 0 })
     order.forEach { result = ReadingEngine.placeTile(result, it) }
     return result
 }
@@ -66,6 +66,65 @@ internal fun readingSolve(data: ReadingData, rewardsEnabled: Boolean = true): Re
 }
 
 class ReadingModelTest {
+    @Test fun sentenceTilesCanFillAnySpaceAndMoveWithoutShiftingOtherWords() {
+        var data = readingFixture(ReadingContent.find("scramble-cats"))
+        data = ReadingEngine.placeTileInSpace(data, 0, 2)
+        assertEquals(listOf(-1, -1, 0), data.active?.order)
+        assertFalse(requireNotNull(data.active).orderComplete)
+        val incomplete = ReadingEngine.submit(data, "order")
+        assertTrue(requireNotNull(incomplete.active).checkpoints.isEmpty())
+        assertEquals("Place every tile before checking.", incomplete.active?.feedback)
+        data = ReadingEngine.placeTile(data, 1)
+        assertEquals(listOf(1, -1, 0), data.active?.order)
+        data = ReadingEngine.placeTileInSpace(data, 0, 1)
+        assertEquals(listOf(1, 0), data.active?.order)
+        data = ReadingEngine.removeTile(data, 1)
+        assertEquals(listOf(-1, 0), data.active?.order)
+        data = ReadingEngine.placeTile(data, 1)
+        data = ReadingEngine.placeTile(data, 2)
+        assertEquals(listOf(1, 0, 2), data.active?.order)
+        assertTrue(requireNotNull(data.active).orderComplete)
+        data = ReadingEngine.submit(data, "order")
+        assertEquals(1, data.points("reader-a"))
+        assertEquals(data, ReadingEngine.removeTile(data, 1))
+        assertEquals(data, ReadingEngine.placeTileInSpace(data, 1, 2))
+        assertEquals(data, ReadingEngine.submit(data, "order"))
+        ReadingEngine.validate(data)
+    }
+
+    @Test fun sentenceDropsRejectInvalidOrOccupiedSpacesWithoutLosingTiles() {
+        val data = ReadingEngine.placeTileInSpace(readingFixture(ReadingContent.find("scramble-cats")), 1, 0)
+        listOf(-1 to 1, 3 to 1, 0 to -1, 0 to 3, 0 to 0, 1 to 0).forEach { (tile, space) ->
+            assertEquals(data, ReadingEngine.placeTileInSpace(data, tile, space))
+        }
+        assertEquals(data, ReadingEngine.placeTile(data, 1))
+        assertEquals(data, ReadingEngine.removeTile(data, -1))
+        assertEquals(emptyList<Int>(), ReadingEngine.removeTile(data, 1).active?.order)
+        val sequence = readingFixture(ReadingContent.find("sequence-seed"))
+        assertEquals(sequence, ReadingEngine.placeTileInSpace(sequence, 0, 0))
+        val finished = ReadingEngine.finish(ReadingEngine.submit(
+            readingOrder(data, listOf(1, 2, 0)), "order"))
+        assertEquals(finished, ReadingEngine.placeTileInSpace(finished, 0, 0))
+    }
+
+    @Test fun onlySentenceScrambleAllowsEmptySpacesAndNeverDuplicateOrOutOfRangeTiles() {
+        val data = readingFixture(ReadingContent.find("scramble-cats"))
+        listOf(emptyList(), listOf(1), listOf(-1, -1, 0), listOf(1, -1, 0)).forEach { order ->
+            ReadingEngine.validate(data.copy(attempts = listOf(requireNotNull(data.active).copy(order = order))))
+        }
+        listOf(listOf(0, -1, 0), listOf(-2), listOf(3), listOf(-1, -1, -1, -1)).forEach { order ->
+            assertThrows(IllegalArgumentException::class.java) {
+                ReadingEngine.validate(data.copy(attempts = listOf(requireNotNull(data.active).copy(order = order))))
+            }
+        }
+        for (game in listOf(ReadingGame.SEQUENCE, ReadingGame.PARTNERS)) {
+            val other = readingFixture(ReadingContent.forGame(game, ReadingLevel.SPROUT).first())
+            assertThrows(IllegalArgumentException::class.java) {
+                ReadingEngine.validate(other.copy(attempts = listOf(requireNotNull(other.active).copy(order = listOf(-1)))))
+            }
+        }
+    }
+
     @Test fun renamingOnlyChangesTheSelectedProfilesName() {
         val draft = readingFixture()
         val completedStory = readingSolve(readingFixture(

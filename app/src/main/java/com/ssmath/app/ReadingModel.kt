@@ -45,6 +45,7 @@ data class ReadingAttempt(
     val finishedAt: Long? = null,
     val abandoned: Boolean = false,
     val fields: Map<String, String> = emptyMap(),
+    // Sentence Scramble uses -1 for empty spaces; missing trailing entries are also empty.
     val order: List<Int> = emptyList(),
     val branch: Int? = null,
     val partnerId: String? = null,
@@ -58,6 +59,7 @@ data class ReadingAttempt(
     val content: ReadingActivity get() = ReadingContent.find(contentId)
     val open: Boolean get() = finishedAt == null && !abandoned
     val supported: Boolean get() = hints > 0 || narrations > 0
+    val orderComplete: Boolean get() = order.size == content.tiles.size && order.all { it in content.tiles.indices }
     fun earned(key: String) = checkpoints[key]?.earned == true
     fun includes(readerId: String) = ownerId == readerId || partnerId == readerId
 }
@@ -201,11 +203,31 @@ object ReadingEngine {
     fun placeTile(data: ReadingData, index: Int): ReadingData = edit(data) { a ->
         val size = if (a.content.game == ReadingGame.PARTNERS) a.turns.size else a.content.tiles.size
         if (a.earned("order") || a.earned("shared") || index !in 0 until size || index in a.order) a
+        else if (a.content.game == ReadingGame.SCRAMBLE) {
+            val position = a.order.indexOf(-1).takeIf { it >= 0 } ?: a.order.size
+            placeSentenceTile(a, index, position)
+        }
         else a.copy(order = a.order + index, reread = false, feedback = "")
     }
 
+    fun placeTileInSpace(data: ReadingData, tileId: Int, position: Int): ReadingData =
+        edit(data) { placeSentenceTile(it, tileId, position) }
+
+    private fun placeSentenceTile(a: ReadingAttempt, tileId: Int, position: Int): ReadingAttempt {
+        if (a.content.game != ReadingGame.SCRAMBLE || a.earned("order") ||
+            tileId !in a.content.tiles.indices || position !in a.content.tiles.indices ||
+            (a.order.getOrNull(position) ?: -1) != -1) return a
+        val order = MutableList(a.content.tiles.size) { a.order.getOrNull(it) ?: -1 }
+        order.replaceAll { if (it == tileId) -1 else it }
+        order[position] = tileId
+        return a.copy(order = order.dropLastWhile { it == -1 }, reread = false, feedback = "")
+    }
+
     fun removeTile(data: ReadingData, tileId: Int): ReadingData = edit(data) { a ->
-        if (a.earned("order") || a.earned("shared") || tileId !in a.order) a
+        if (a.earned("order") || a.earned("shared") || tileId < 0 || tileId !in a.order) a
+        else if (a.content.game == ReadingGame.SCRAMBLE)
+            a.copy(order = a.order.map { if (it == tileId) -1 else it }.dropLastWhile { it == -1 },
+                reread = false, feedback = "")
         else a.copy(order = a.order.filterNot { it == tileId }, reread = false, feedback = "")
     }
 
@@ -270,7 +292,7 @@ object ReadingEngine {
         val game = a.content.game
         when {
             key == "order" && game in listOf(ReadingGame.SCRAMBLE, ReadingGame.SEQUENCE) -> {
-                if (a.order.size != a.content.tiles.size) a.copy(feedback = "Place every tile before checking.")
+                if (!a.orderComplete) a.copy(feedback = "Place every tile before checking.")
                 else award(a, key, a.order in a.content.validOrders, now, rewardsEnabled)
             }
             (key == "answer" && game in listOf(ReadingGame.MISSING, ReadingGame.SEQUENCE, ReadingGame.DETECTIVE,
@@ -343,7 +365,8 @@ object ReadingEngine {
                 a.partnerId in profileIds && a.partnerId != a.ownerId))
             require(a.branch == null || a.branch in a.content.branches.indices)
             val size = if (a.content.game == ReadingGame.PARTNERS) a.turns.size else a.content.tiles.size
-            require(a.order.distinct().size == a.order.size && a.order.all { it in 0 until size })
+            val placed = if (a.content.game == ReadingGame.SCRAMBLE) a.order.filterNot { it == -1 } else a.order
+            require(a.order.size <= size && placed.distinct().size == placed.size && placed.all { it in 0 until size })
             require(a.turns.size <= 4 && a.turns.withIndex().all { (i, turn) ->
                 turn.text.isNotBlank() && turn.readerId == if (i % 2 == 0) a.ownerId else a.partnerId ?: a.ownerId
             })

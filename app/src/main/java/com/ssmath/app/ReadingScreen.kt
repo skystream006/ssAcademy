@@ -4,16 +4,24 @@ import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -33,18 +41,30 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -55,6 +75,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.round
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -233,8 +254,9 @@ internal fun ReadingModule(
 }
 
 @Composable
-private fun ReadingColumn(tag: String, content: @Composable ColumnScope.() -> Unit) {
-    Column(Modifier.fillMaxSize().testTag(tag).verticalScroll(rememberScrollState())
+private fun ReadingColumn(tag: String, modifier: Modifier = Modifier,
+                          scrollState: ScrollState = rememberScrollState(), content: @Composable ColumnScope.() -> Unit) {
+    Column(modifier.fillMaxSize().testTag(tag).verticalScroll(scrollState)
         .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 64.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
 }
@@ -272,7 +294,8 @@ private val ReadingChoiceColors = listOf(
 private fun ReadingChoiceGrid(choices: List<String>, tagPrefix: String,
                               selected: (Int) -> Boolean = { false }, enabled: Boolean = true,
                               indices: List<Int> = choices.indices.toList(),
-                              pictures: List<ReadingPicture> = emptyList(), onChoose: (Int) -> Unit) {
+                              pictures: List<ReadingPicture> = emptyList(),
+                              tileModifier: (Int) -> Modifier = { Modifier }, onChoose: (Int) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         indices.chunked(2).forEach { row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -280,6 +303,7 @@ private fun ReadingChoiceGrid(choices: List<String>, tagPrefix: String,
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (index in pictures.indices) ReadingPictureView(pictures[index])
                         ReadingChoice(choices[index], "$tagPrefix-$index", selected(index), enabled,
+                            modifier = tileModifier(index),
                             colors = ButtonDefaults.outlinedButtonColors(
                                 containerColor = ReadingChoiceColors[index % ReadingChoiceColors.size],
                                 contentColor = Color(0xFF18212F))) {
@@ -415,7 +439,9 @@ private fun ReadingActivityScreen(data: ReadingData, model: ReadingViewModel, a:
     }
     val content = a.content
     var instructionsUnavailable by remember(a.id) { mutableStateOf(false) }
-    ReadingColumn("reading-activity") {
+    val scrollState = rememberScrollState()
+    var viewport by remember { mutableStateOf(Rect.Zero) }
+    ReadingColumn("reading-activity", Modifier.onGloballyPositioned { viewport = it.boundsInRoot() }, scrollState) {
         Button(onClick = back, modifier = Modifier.heightIn(min = 56.dp).testTag("reading-back")) {
             Text("Back to reading menu", Modifier.padding(vertical = 4.dp))
         }
@@ -437,8 +463,9 @@ private fun ReadingActivityScreen(data: ReadingData, model: ReadingViewModel, a:
                 ReadingQuestionView(a, model, "answer")
             }
             ReadingGame.SCRAMBLE, ReadingGame.SEQUENCE -> {
-                ReadingTiles(a, model, content.tiles, content.eventPictures)
-                ReadingButton("Check order", "reading-check-order", !a.earned("order") && a.order.size == content.tiles.size) {
+                if (content.game == ReadingGame.SCRAMBLE) SentenceScrambleTiles(a, model, scrollState, viewport)
+                else ReadingTiles(a, model, content.tiles, content.eventPictures)
+                ReadingButton("Check order", "reading-check-order", !a.earned("order") && a.orderComplete) {
                     model.submit("order")
                 }
                 if (a.earned("order")) {
@@ -506,6 +533,135 @@ private fun ReadingQuestionView(a: ReadingAttempt, model: ReadingViewModel, key:
     }
     if (a.earned(key)) Text(if (a.checkpoints[key]?.awardedPoint == true)
         "Answer checkpoint earned · +1" else "Answer checkpoint saved")
+}
+
+private class SentenceDragState {
+    var tile by mutableStateOf<Int?>(null)
+    var position by mutableStateOf(Offset.Zero)
+    val sources = mutableMapOf<Int, LayoutCoordinates>()
+    val spaces = mutableMapOf<Int, LayoutCoordinates>()
+    var bank: LayoutCoordinates? = null
+    var board: LayoutCoordinates? = null
+
+    fun spaceAt(point: Offset): Int? = spaces.entries.firstOrNull {
+        it.value.isAttached && it.value.boundsInRoot().contains(point)
+    }?.key
+
+    fun overBank(point: Offset) = bank?.let { it.isAttached && it.boundsInRoot().contains(point) } == true
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SentenceScrambleTiles(a: ReadingAttempt, model: ReadingViewModel,
+                                  scrollState: ScrollState, viewport: Rect) {
+    val tiles = a.content.tiles
+    val locked = a.earned("order")
+    val drag = remember(a.id, locked) { SentenceDragState() }
+    val drop by rememberUpdatedState<(Int, Offset) -> Unit> { tile, point ->
+        val space = drag.spaceAt(point)
+        if (space != null) model.act { ReadingEngine.placeTileInSpace(it, tile, space) }
+        else if (drag.overBank(point)) model.act { ReadingEngine.removeTile(it, tile) }
+    }
+    val density = LocalDensity.current
+    val edge = with(density) { 48.dp.toPx() }
+    val speed = with(density) { 360.dp.toPx() }
+    val currentViewport by rememberUpdatedState(viewport)
+    LaunchedEffect(drag.tile) {
+        if (drag.tile == null) return@LaunchedEffect
+        var previousFrame = withFrameNanos { it }
+        while (drag.tile != null) {
+            val frame = withFrameNanos { it }
+            val bounds = currentViewport
+            val point = drag.position
+            val direction = when {
+                point.x !in bounds.left..bounds.right -> 0f
+                point.y < bounds.top + edge -> -1f
+                point.y > bounds.bottom - edge -> 1f
+                else -> 0f
+            }
+            scrollState.scrollBy(direction * speed * ((frame - previousFrame) / 1_000_000_000f).coerceAtMost(0.05f))
+            previousFrame = frame
+        }
+    }
+    fun draggable(tile: Int): Modifier = Modifier
+        .onGloballyPositioned { drag.sources[tile] = it }
+        .alpha(if (drag.tile == tile) 0.35f else 1f)
+        .pointerInput(a.id, tile, locked) {
+            if (!locked) detectDragGesturesAfterLongPress(
+                onDragStart = { local ->
+                    drag.sources[tile]?.takeIf { it.isAttached }?.let {
+                        drag.position = it.positionInRoot() + local
+                        drag.tile = tile
+                    }
+                },
+                onDrag = { change, amount ->
+                    change.consume()
+                    drag.position += amount
+                },
+                onDragEnd = {
+                    val dragged = drag.tile
+                    drag.tile = null
+                    if (dragged != null) drop(dragged, drag.position)
+                },
+                onDragCancel = { drag.tile = null }
+            )
+        }
+    Box(Modifier.fillMaxWidth().onGloballyPositioned { drag.board = it }) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Your sentence", style = MaterialTheme.typography.titleLarge)
+            FlowRow(Modifier.fillMaxWidth().testTag("reading-sentence"),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                tiles.indices.forEach { position ->
+                    val tile = a.order.getOrNull(position)?.takeIf { it >= 0 }
+                    val highlighted = drag.tile != null && tile == null && drag.spaceAt(drag.position) == position
+                    val color = if (tile == null) MaterialTheme.colorScheme.surface
+                        else ReadingChoiceColors[tile % ReadingChoiceColors.size]
+                    Box(Modifier.onGloballyPositioned { drag.spaces[position] = it }
+                        .testTag("reading-space-$position")) {
+                        OutlinedButton(onClick = { if (tile != null) model.act { ReadingEngine.removeTile(it, tile) } },
+                            enabled = !locked,
+                            modifier = Modifier.widthIn(min = 88.dp).heightIn(min = 56.dp)
+                                .then(if (tile == null) Modifier else draggable(tile))
+                                .then(if (tile == null) Modifier else Modifier.testTag("reading-placed-$position"))
+                                .semantics {
+                                    contentDescription = if (tile == null) "Empty sentence space ${position + 1}"
+                                        else "Sentence space ${position + 1}: ${tiles[tile]}. Tap to remove."
+                                },
+                            border = BorderStroke(if (highlighted) 3.dp else 1.dp,
+                                if (highlighted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline),
+                            colors = ButtonDefaults.outlinedButtonColors(containerColor = color,
+                                contentColor = if (tile == null) MaterialTheme.colorScheme.onSurface else Color(0xFF18212F))) {
+                            Text(tile?.let { tiles[it] } ?: "___", Modifier.padding(vertical = 4.dp))
+                        }
+                    }
+                }
+            }
+            Surface(Modifier.fillMaxWidth().testTag("reading-tile-bank")
+                .onGloballyPositioned { drag.bank = it },
+                shape = MaterialTheme.shapes.medium,
+                border = BorderStroke(if (drag.tile != null && drag.overBank(drag.position)) 3.dp else 1.dp,
+                    MaterialTheme.colorScheme.outline)) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Available tiles")
+                    ReadingChoiceGrid(tiles, "reading-tile", enabled = !locked,
+                        indices = tiles.indices.filterNot { it in a.order }, tileModifier = ::draggable) { index ->
+                        model.act { ReadingEngine.placeTile(it, index) }
+                    }
+                    Text("Drop tiles here to remove them.", style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
+        drag.tile?.let { tile ->
+            Surface(Modifier.offset {
+                (drag.position - (drag.board?.positionInRoot() ?: Offset.Zero) - Offset(edge, edge * 1.5f)).round()
+            }.widthIn(max = 240.dp).clearAndSetSemantics {}.testTag("reading-drag-preview"),
+                shape = MaterialTheme.shapes.small, shadowElevation = 8.dp,
+                color = ReadingChoiceColors[tile % ReadingChoiceColors.size], contentColor = Color(0xFF18212F)) {
+                Text(tiles[tile], Modifier.padding(12.dp))
+            }
+        }
+    }
 }
 
 @Composable
