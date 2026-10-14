@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Reproduce the v3 reading catalogue from original, difficulty-specific templates."""
+"""Reproduce the v4 reading catalogue with unique answers per game and level."""
 
 import argparse
-from collections import Counter
+from collections import Counter, defaultdict
 import hashlib
 import io
 import json
 from pathlib import Path
+import unicodedata
 
 from generation.creative_games import partners, studio
 from generation.reasoning_games import detective, sequence
@@ -50,19 +51,47 @@ def task_identity(activity):
     return encoded([game, activity["level"], task])
 
 
+def answer_keys(activity):
+    """Scope objective answers, including every chapter branch, to their pool."""
+    questions = ([activity["question"]] if activity.get("question") else [])
+    questions += [branch["question"] for branch in activity.get("branches", [])]
+    return [
+        (activity["game"], activity["level"],
+         " ".join(unicodedata.normalize("NFKC", q["choices"][q["answer"]]).lower().split()))
+        for q in questions
+    ]
+
+
 def build_pack():
-    previous = json.loads((ROOT / "manifest-v2.json").read_text(encoding="utf-8"))
-    prefix = (ROOT / previous["file"]).read_bytes()
-    if (len(prefix) != previous["bytes"] or hashlib.sha256(prefix).hexdigest() != previous["sha256"]
-            or not prefix.endswith(b"\n")):
-        raise ValueError("The immutable v2 pack does not match its manifest")
+    previous = json.loads((ROOT / "manifest-v3.json").read_text(encoding="utf-8"))
+    published = (ROOT / previous["file"]).read_bytes()
+    if (len(published) != previous["bytes"]
+            or hashlib.sha256(published).hexdigest() != previous["sha256"]
+            or not published.endswith(b"\n")):
+        raise ValueError("The immutable v3 pack does not match its manifest")
+    previous_activities = [json.loads(line) for line in published.splitlines()]
+    previous_pools = defaultdict(list)
+    for activity in previous_activities:
+        previous_pools[f'{activity["game"]}:{activity["level"]}'].append(activity)
+    expected_keys = {f"{game}:{level}" for game in GENERATORS for level in LEVELS}
+    if (set(previous_pools) != expected_keys
+            or any(len(pool) != PER_POOL for pool in previous_pools.values())
+            or len({a["id"] for a in previous_activities}) != len(previous_activities)):
+        raise ValueError("Expected the original 24,000-activity v3 catalogue")
+    prefix = b"".join(published.splitlines(keepends=True)[:72])
     original = [json.loads(line) for line in prefix.splitlines()]
     counts = Counter(f'{a["game"]}:{a["level"]}' for a in original)
-    expected_keys = {f"{game}:{level}" for game in GENERATORS for level in LEVELS}
     if len(original) != 72 or set(counts) != expected_keys or set(counts.values()) != {3}:
         raise ValueError("Expected the original 72-activity v2 catalogue")
     identities = {task_identity(a) for a in original}
     ids = {a["id"] for a in original}
+    used_answers = set()
+    for activity in original:
+        keys = answer_keys(activity)
+        if len(keys) != len(set(keys)) or used_answers.intersection(keys):
+            raise ValueError(f"Duplicate legacy answer: {activity['id']}")
+        used_answers.update(keys)
+    reserved_answers = {key for a in previous_activities for key in answer_keys(a)}
     output = io.BytesIO()
     output.write(prefix)
     for game, generate in GENERATORS.items():
@@ -73,12 +102,22 @@ def build_pack():
                     raise ValueError(f"{key}: the source produces too many activities")
                 if {"id", "game", "level"} & content.keys():
                     raise ValueError("Content templates must not assign catalogue identity")
-                activity = {"game": game, "level": level, **content}
+                activity = previous_pools[key][counts[key]]
+                answers = answer_keys(activity)
+                if len(answers) != len(set(answers)) or used_answers.intersection(answers):
+                    # Imports are additive: revise the existing ID rather than leave
+                    # its repetitive predecessor installed beside a new activity.
+                    activity = {"id": activity["id"], "game": game, "level": level, **content}
+                    answers = answer_keys(activity)
+                    if reserved_answers.intersection(answers):
+                        raise ValueError(f"{key}: replacement reuses a published answer: {activity['id']}")
+                if len(answers) != len(set(answers)) or used_answers.intersection(answers):
+                    raise ValueError(f"{key}: duplicate answer: {activity['id']}")
+                used_answers.update(answers)
                 identity = task_identity(activity)
                 if identity in identities:
                     raise ValueError(f"{key}: duplicate learning task: {activity['title']}")
                 identities.add(identity)
-                activity["id"] = f"bulk-{game.lower()}-{level.lower()}-{hashlib.sha256(identity).hexdigest()[:20]}"
                 if activity["id"] in ids:
                     raise ValueError("Activity ID collision")
                 ids.add(activity["id"])
@@ -92,7 +131,7 @@ def build_pack():
     data = output.getvalue()
     checksum = hashlib.sha256(data).hexdigest()
     manifest = {
-        "schemaVersion": 1, "version": "v3", "file": f"activities-{checksum}.jsonl",
+        "schemaVersion": 1, "version": "v4", "file": f"activities-{checksum}.jsonl",
         "sha256": checksum, "bytes": len(data), "counts": dict(counts),
     }
     return data, manifest

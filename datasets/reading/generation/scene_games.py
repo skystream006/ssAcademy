@@ -152,11 +152,11 @@ def _caption_entry(level, title, chosen, spare, variant):
             left, right = (b, a, c), (a, b, c)
             correct = (
                 f"The {an} is second in picture 1 and first in picture 2, "
-                f"while the {cn} stays third."
+                f"while the {bn} moves from first to second and the {cn} stays third."
             )
             wrong = [
-                f"The {an} is first in picture 1 and second in picture 2, while the {cn} stays third.",
-                f"The {cn} is second in picture 1 and first in picture 2, while the {an} stays third.",
+                f"The {an} is first in picture 1 and second in picture 2, while the {bn} moves from second to first and the {cn} stays third.",
+                f"The {bn} stays first, while the {an} and the {cn} exchange second and third places.",
             ]
         symbol = f"①\u00a0{_panel(left)}\n②\u00a0{_panel(right)}"
         description = f"In reading order, picture 1: {_list_names(left)}. Picture 2: {_list_names(right)}."
@@ -188,11 +188,12 @@ def _caption_entry(level, title, chosen, spare, variant):
         else:
             left, right = (a, b, b), (a, b, c)
             correct = (
-                f"Because one of the two {_plural(bn)} gives way to {_article(cn)}, "
+                f"Because one of the two {_plural(bn)} gives way to {_article(cn)} "
+                f"while the {an} stays first, "
                 f"the second picture has more kinds of symbols but the same total of three."
             )
             wrong = [
-                f"Because {_article(cn)} is added without anything being removed, the total rises from three to four.",
+                f"Because {_article(cn)} is added while the {an} and both {_plural(bn)} remain, the total rises from three to four.",
                 f"Although the total stays at three, the second picture has fewer kinds because the {an} disappears.",
                 f"The two {_plural(bn)} both remain, so only the {an}'s place in the reading order changes.",
             ]
@@ -473,16 +474,11 @@ _WORLDS = (
 )
 
 
-def _alternatives(world, job, field):
-    correct = getattr(job, field)
-    result = []
-    for other in world.jobs:
-        value = getattr(other, field)
-        if value != correct and value not in result:
-            result.append(value)
-        if len(result) == 2:
-            return result
-    raise ValueError(f"Not enough distinct {field} choices in {world.title}")
+def _shared_details(own, other):
+    return (
+        f"In your job, {own.scene[0].lower() + own.scene[1:]} "
+        f"In your friend's job, {other.scene[0].lower() + other.scene[1:]}"
+    )
 
 
 def _job_text(job, level):
@@ -498,9 +494,13 @@ def _branch(world, own, other, level, shared):
     if shared:
         text += f" Your friend chooses to {other.label}. {_job_text(other, level)}"
         if level == "SPROUT":
-            prompt = f"For your job: {own.prompt[0].lower() + own.prompt[1:]}"
-            answer = own.answer
-            distractors = _alternatives(world, own, "answer")
+            prompt = "What happens in your job, and what happens in your friend's job?"
+            answer = _shared_details(own, other)
+            spare = next(job for job in world.jobs if job not in (own, other))
+            distractors = [
+                _shared_details(other, own),
+                _shared_details(own, spare),
+            ]
         else:
             prompt = (
                 "Which explanation matches your job and your friend's job?"
@@ -516,17 +516,28 @@ def _branch(world, own, other, level, shared):
     else:
         text += f" The job to {other.label} will wait until later."
         if level == "SPROUT":
-            prompt, answer = own.prompt, own.answer
-            distractors = _alternatives(world, own, "answer")
+            prompt = "What happens in the job you do now, and which job must wait?"
+            answer = f"{own.scene} The job to {other.label} waits."
+            distractors = [
+                f"{other.scene} The job to {own.label} waits.",
+                f"{own.scene} The job to {other.label} is also done now.",
+            ]
         else:
             prompt = (
-                f"Why is it useful to {own.label}?"
+                "What does your chosen job help you do, and which job is left for later?"
                 if level == "TRAIL" else
-                f"What purpose of choosing to {own.label} is best supported by the result?"
+                "What purpose of your chosen job does the result support, "
+                "and which job is left for later?"
             )
-            answer = f"To {own.purpose}."
+            answer = (
+                f"Your choice to {own.label} helps to {own.purpose}; "
+                f"the job to {other.label} waits."
+            )
             distractors = [
-                f"To {purpose}." for purpose in _alternatives(world, own, "purpose")
+                f"Your choice to {other.label} helps to {other.purpose}; "
+                f"the job to {own.label} waits.",
+                f"Your choice to {own.label} helps to {other.purpose}; "
+                f"the job to {other.label} waits.",
             ]
     return {
         "label": own.label[0].upper() + own.label[1:],
@@ -558,9 +569,9 @@ def _chapter_entry(world, first, second, level, shared):
             _branch(world, second, first, level, shared),
         ],
         "hint": (
-            "Read only the chapter you chose. Look for the detail the question asks about."
+            "Read your chosen chapter. Check both your job and what happens to the other job."
             if level == "SPROUT" else
-            "Keep each job with its own action and result. Use your chosen chapter, not the other branch."
+            "Keep each job with its own action and result. Check whether the other job is shared or waits."
         ),
     }
 

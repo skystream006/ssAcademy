@@ -6,7 +6,9 @@ import java.io.DataInputStream
 import java.io.File
 import java.security.DigestInputStream
 import java.security.MessageDigest
+import java.text.Normalizer
 import java.util.Base64
+import java.util.Locale
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
 import org.junit.After
@@ -48,6 +50,12 @@ class ReadingBulkPackTest {
         val choices = question.choices.sorted()
         return question.copy(choices = choices, answer = choices.indexOf(question.choices[question.answer]))
     }
+
+    private fun answers(activity: ReadingActivity): List<String> =
+        (listOfNotNull(activity.question) + activity.branches.map { it.question }).map { question ->
+            Normalizer.normalize(question.choices[question.answer], Normalizer.Form.NFKC)
+                .lowercase(Locale.ROOT).trim().replace(Regex("\\s+"), " ")
+        }
 
     private fun substantive(activity: ReadingActivity): String {
         val tileIndices = activity.tiles.indices.sortedBy { activity.tiles[it] }
@@ -179,13 +187,13 @@ class ReadingBulkPackTest {
         }
     }
 
-    @Test fun v3HasOneThousandSubstantiveActivitiesPerPoolAndEveryActivityCanBeCompleted() {
+    @Test fun v4HasOneThousandDistinctAnswerActivitiesPerPoolAndEveryActivityCanBeCompleted() {
         val pack = ReadingRepositoryPack()
         val archived = ReadingRepositoryPack("manifest-v2.json")
         val oldActivities = archived.activities
         val oldIds = oldActivities.map { it.id }.toSet()
         val manifest = pack.manifest
-        assertEquals("v3", manifest.version)
+        assertEquals("v4", manifest.version)
         assertEquals(1, manifest.schemaVersion)
         assertEquals(24, expectedCounts.size)
         assertEquals(expectedCounts, manifest.counts)
@@ -211,6 +219,7 @@ class ReadingBulkPackTest {
         val ids = mutableSetOf<String>()
         val counts = mutableMapOf<String, Int>()
         val fingerprints = mutableMapOf<String, String>()
+        val poolAnswers = mutableMapOf<String, MutableSet<String>>()
         val digest = MessageDigest.getInstance("SHA-256")
         var records = 0
         var bytes = 0L
@@ -222,6 +231,10 @@ class ReadingBulkPackTest {
             assertTrue("Duplicate ID: ${activity.id}", ids.add(activity.id))
             val key = "${activity.game.name}:${activity.level.name}"
             counts[key] = counts.getOrDefault(key, 0) + 1
+            answers(activity).forEach { answer ->
+                assertTrue("Repeated answer in $key: $answer (${activity.id})",
+                    poolAnswers.getOrPut(key) { mutableSetOf() }.add(answer))
+            }
             if (records < oldActivities.size) assertEquals(oldActivities[records], activity)
             val fingerprint = Base64.getEncoder().encodeToString(
                 digest.digest(substantive(activity).toByteArray(Charsets.UTF_8)))
@@ -238,6 +251,16 @@ class ReadingBulkPackTest {
         assertEquals(expectedCounts, counts)
         assertEquals(manifest.bytes, bytes)
         assertTrue(ids.containsAll(oldIds))
+        ReadingGame.entries.forEach { game ->
+            ReadingLevel.entries.forEach { level ->
+                val expected = when (game) {
+                    ReadingGame.CHAPTER -> 2000
+                    ReadingGame.STUDIO, ReadingGame.PARTNERS -> 0
+                    else -> 1000
+                }
+                assertEquals("$game:$level", expected, poolAnswers["$game:$level"].orEmpty().size)
+            }
+        }
     }
 
     private fun install(pack: ReadingRepositoryPack) = runBlocking {
@@ -271,7 +294,7 @@ class ReadingBulkPackTest {
     private fun cycles() = rows("SELECT * FROM reading_cycles ORDER BY reader_id,game,level")
     private fun presented() = rows("SELECT * FROM reading_presented ORDER BY reader_id,game,level,activity_id")
 
-    @Test fun realV2ToV3ImportPreservesProgressAndExhaustsAThousandItemPoolAcrossReopening() {
+    @Test fun realV2ToV4ImportPreservesProgressAndExhaustsAThousandItemPoolAcrossReopening() {
         val archived = ReadingRepositoryPack("manifest-v2.json")
         assertEquals("v2", install(archived).version)
         val oldActivities = archived.activities
@@ -309,7 +332,7 @@ class ReadingBulkPackTest {
 
         val pack = ReadingRepositoryPack()
         val status = install(pack)
-        assertEquals(ReadingPackStatus("v3", expectedCounts), status)
+        assertEquals(ReadingPackStatus("v4", expectedCounts), status)
         assertEquals(before, store.load())
         assertEquals(before, reopen())
         assertEquals(oldCycles, cycles())
@@ -388,5 +411,74 @@ class ReadingBulkPackTest {
         assertEquals(1, data.attempts.count { it.loadedContent != null })
         assertEquals(data, reopen())
         assertEquals(status, store.catalog.status())
+    }
+
+    @Test fun v3ToV4ReplacesRepeatedAnswersWithoutAddingIdsOrChangingSavedAttempts() {
+        val archived = ReadingRepositoryPack("manifest-v3.json")
+        val pack = ReadingRepositoryPack()
+        val previous = archived.activities.associateBy { it.id }
+        val current = pack.activities.associateBy { it.id }
+        assertEquals(previous.keys, current.keys)
+        val revised = previous.keys.filter { previous.getValue(it) != current.getValue(it) }
+        assertTrue(revised.isNotEmpty())
+        val originalCounts = previous.values.flatMap { activity ->
+            answers(activity).map { Triple(activity.game, activity.level, it) }
+        }.groupingBy { it }.eachCount()
+        revised.forEach { id ->
+            val activity = previous.getValue(id)
+            assertTrue("Unrelated activity changed: $id", answers(activity).any {
+                originalCounts.getValue(Triple(activity.game, activity.level, it)) > 1
+            })
+        }
+        val wide = previous.values.filter {
+            it.game == ReadingGame.MISSING && it.level == ReadingLevel.TRAIL && answers(it) == listOf("wide")
+        }
+        assertTrue(wide.size > 1)
+        assertEquals(wide.first(), current.getValue(wide.first().id))
+        assertEquals(1, current.values.count {
+            it.game == ReadingGame.MISSING && it.level == ReadingLevel.TRAIL && "wide" in answers(it)
+        })
+        val changedWide = wide.filter { it.id in revised }.take(2)
+        assertEquals(2, changedWide.size)
+
+        assertEquals("v3", install(archived).version)
+        var data = persist(ReadingEngine.addProfile(store.load(), "Ari", "reader-a"))
+        data = store.startBatch(data, ReadingGame.MISSING, ReadingLevel.TRAIL, 1000)
+        fun attemptId(activity: ReadingActivity) = data.attempts.first { it.contentId == activity.id }.id
+        data = persist(ReadingEngine.resume(data, attemptId(changedWide.first())))
+        data = persist(readingSolve(data))
+        val completed = requireNotNull(data.active)
+        data = persist(ReadingEngine.resume(data, attemptId(changedWide.last())))
+        data = persist(ReadingEngine.hint(readingAnswer(data, readingWrong(data))))
+        val draft = requireNotNull(data.active)
+        val before = data
+        val oldCycles = cycles()
+        val oldPresented = presented()
+
+        val status = install(pack)
+        assertEquals(ReadingPackStatus("v4", expectedCounts), status)
+        assertEquals(before, reopen())
+        assertEquals(oldCycles, cycles())
+        assertEquals(oldPresented, presented())
+        assertEquals(24_000L, scalar("SELECT COUNT(*) FROM reading_current"))
+        assertEquals(24_000L + revised.size, scalar("SELECT COUNT(*) FROM reading_content"))
+        listOf(completed, draft).forEach { attempt ->
+            assertEquals(previous.getValue(attempt.contentId),
+                store.catalog.find(attempt.contentId, requireNotNull(attempt.activityRef).revision))
+            assertEquals(current.getValue(attempt.contentId), store.catalog.latest(attempt.contentId)?.activity)
+        }
+        assertEquals(status, install(pack))
+        assertEquals(before, reopen())
+        assertEquals(24_000L + revised.size, scalar("SELECT COUNT(*) FROM reading_content"))
+        assertEquals(oldCycles, cycles())
+        assertEquals(oldPresented, presented())
+        data = store.start(data, ReadingGame.MISSING, ReadingLevel.TRAIL, false)
+        assertEquals(draft, data.active)
+        data = persist(readingSolve(data))
+        data = store.start(data, ReadingGame.MISSING, ReadingLevel.TRAIL, true)
+        val next = requireNotNull(data.active)
+        assertEquals(current.getValue(next.contentId), next.content)
+        assertEquals(2L, scalar("SELECT cycle FROM reading_cycles WHERE game='MISSING' AND level='TRAIL'"))
+        assertEquals(data, reopen())
     }
 }
