@@ -15,14 +15,21 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonColors
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -37,6 +44,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -246,12 +254,42 @@ private fun ReadingButton(label: String, tag: String, enabled: Boolean = true, a
 
 @Composable
 private fun ReadingChoice(label: String, tag: String, selected: Boolean = false,
-                          enabled: Boolean = true, action: () -> Unit) {
-    OutlinedButton(onClick = action, enabled = enabled, modifier = Modifier.fillMaxWidth()
+                          enabled: Boolean = true, modifier: Modifier = Modifier,
+                          colors: ButtonColors = ButtonDefaults.outlinedButtonColors(), action: () -> Unit) {
+    OutlinedButton(onClick = action, enabled = enabled, colors = colors, modifier = modifier.fillMaxWidth()
         .heightIn(min = 56.dp).testTag(tag).semantics {
             stateDescription = if (selected) "Selected" else "Not selected"
         }) {
         Text(if (selected) "✓ $label" else label, Modifier.padding(vertical = 4.dp))
+    }
+}
+
+private val ReadingChoiceColors = listOf(
+    Color(0xFFD5E8FF), Color(0xFFD6F4DF), Color(0xFFFFE7AC), Color(0xFFF5D7F2)
+)
+
+@Composable
+private fun ReadingChoiceGrid(choices: List<String>, tagPrefix: String,
+                              selected: (Int) -> Boolean = { false }, enabled: Boolean = true,
+                              indices: List<Int> = choices.indices.toList(),
+                              pictures: List<ReadingPicture> = emptyList(), onChoose: (Int) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        indices.chunked(2).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                row.forEach { index ->
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (index in pictures.indices) ReadingPictureView(pictures[index])
+                        ReadingChoice(choices[index], "$tagPrefix-$index", selected(index), enabled,
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = ReadingChoiceColors[index % ReadingChoiceColors.size],
+                                contentColor = Color(0xFF18212F))) {
+                            onChoose(index)
+                        }
+                    }
+                }
+                if (row.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
     }
 }
 
@@ -378,17 +416,21 @@ private fun ReadingActivityScreen(data: ReadingData, model: ReadingViewModel, a:
     val content = a.content
     var instructionsUnavailable by remember(a.id) { mutableStateOf(false) }
     ReadingColumn("reading-activity") {
+        Button(onClick = back, modifier = Modifier.heightIn(min = 56.dp).testTag("reading-back")) {
+            Text("Back to reading menu", Modifier.padding(vertical = 4.dp))
+        }
         ReadingHeading(content.game.title)
-        Text("${data.name(a.ownerId)} · ${content.level.label}")
-        Text(content.title, style = MaterialTheme.typography.titleLarge)
-        ReadingPictureView(content.picture)
-        Text(content.game.guidance)
-        ReadingChoice("Listen to instructions", "reading-instructions", enabled = available) {
-            instructionsUnavailable = !speak(content.game.guidance)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Text(content.game.guidance, Modifier.weight(1f))
+            IconButton(onClick = { instructionsUnavailable = !speak(content.game.guidance) },
+                enabled = available, modifier = Modifier.size(48.dp).testTag("reading-instructions")) {
+                Icon(Icons.AutoMirrored.Rounded.VolumeUp, contentDescription = "Listen to instructions")
+            }
         }
         if (instructionsUnavailable) Text("Instruction audio is unavailable. You can still read the instructions above.")
-        Text("Instruction audio does not count as passage narration.")
-        Text("Draft saved automatically. +1 per checkpoint when Reading Rewards System is on; hints and retries never remove points.")
+        Text(content.title, style = MaterialTheme.typography.titleLarge)
+        ReadingPictureView(content.picture)
         when (content.game) {
             ReadingGame.MISSING, ReadingGame.CAPTION -> {
                 content.passage.forEach { Text(it, style = MaterialTheme.typography.headlineSmall) }
@@ -427,10 +469,9 @@ private fun ReadingActivityScreen(data: ReadingData, model: ReadingViewModel, a:
                 content.passage.forEach { Text(it) }
                 Text("Choose a chapter. Both choices are welcome; choosing earns no point. " +
                     "Your branch stays fixed for this attempt.")
-                content.branches.forEachIndexed { index, branch ->
-                    ReadingChoice(branch.label, "reading-branch-$index", a.branch == index, a.branch == null) {
-                        stop(); model.act { ReadingEngine.branch(it, index) }
-                    }
+                ReadingChoiceGrid(content.branches.map { it.label }, "reading-branch",
+                    selected = { a.branch == it }, enabled = a.branch == null) { index ->
+                    stop(); model.act { ReadingEngine.branch(it, index) }
                 }
                 a.branch?.let { index ->
                     Text(content.branches[index].text, style = MaterialTheme.typography.bodyLarge)
@@ -448,20 +489,6 @@ private fun ReadingActivityScreen(data: ReadingData, model: ReadingViewModel, a:
             stop(); model.act { ReadingEngine.finish(it) }
         }
         ReadingChoice("Give me a hint", "reading-hint") { model.act { ReadingEngine.hint(it) } }
-        val text = when (content.game) {
-            ReadingGame.CHAPTER -> (content.passage + listOfNotNull(a.branch?.let { content.branches[it].text })).joinToString(" ")
-            ReadingGame.SCRAMBLE, ReadingGame.SEQUENCE -> if (a.order.isEmpty())
-                content.tiles.joinToString(". ") else a.order.joinToString(" ") { content.tiles[it] }
-            ReadingGame.CAPTION -> content.question?.choices?.joinToString(". ").orEmpty()
-            ReadingGame.STUDIO -> ReadingEngine.storyText(a)
-            ReadingGame.PARTNERS -> if (a.order.isNotEmpty()) ReadingEngine.storyText(a)
-                else a.turns.joinToString(" ") { it.text }
-            else -> content.passage.joinToString(" ")
-        }
-        ReadingListen(text, available, speak, stop) {
-            model.act { ReadingEngine.narration(it, queued = true) }
-        }
-        ReadingButton("Back to reading menu", "reading-back", action = back)
     }
 }
 
@@ -469,10 +496,9 @@ private fun ReadingActivityScreen(data: ReadingData, model: ReadingViewModel, a:
 private fun ReadingQuestionView(a: ReadingAttempt, model: ReadingViewModel, key: String) {
     val question = ReadingEngine.question(a) ?: return
     Text(question.prompt, style = MaterialTheme.typography.titleLarge)
-    question.choices.forEachIndexed { index, choice ->
-        ReadingChoice(choice, "reading-answer-$index", a.fields["answer"] == index.toString(), !a.earned(key)) {
-            model.act { ReadingEngine.field(it, "answer", index.toString()) }
-        }
+    ReadingChoiceGrid(question.choices, "reading-answer",
+        selected = { a.fields["answer"] == it.toString() }, enabled = !a.earned(key)) { index ->
+        model.act { ReadingEngine.field(it, "answer", index.toString()) }
     }
     ReadingButton(if (key == "bonus") "Check bonus" else "Check answer", "reading-check-$key",
         !a.earned(key) && a.fields["answer"] != null) {
@@ -493,13 +519,9 @@ private fun ReadingTiles(a: ReadingAttempt, model: ReadingViewModel, tiles: List
             enabled = !locked) { model.act { ReadingEngine.removeTile(it, tile) } }
     }
     Text("Available tiles")
-    tiles.forEachIndexed { index, tile ->
-        if (index !in a.order) {
-            if (index in pictures.indices) ReadingPictureView(pictures[index])
-            ReadingChoice(tile, "reading-tile-$index", enabled = !locked) {
-                model.act { ReadingEngine.placeTile(it, index) }
-            }
-        }
+    ReadingChoiceGrid(tiles, "reading-tile", enabled = !locked,
+        indices = tiles.indices.filterNot { it in a.order }, pictures = pictures) { index ->
+        model.act { ReadingEngine.placeTile(it, index) }
     }
     Text("To reorder: remove a placed tile, then tap it to add it at the end. No dragging needed.")
 }
@@ -539,10 +561,9 @@ private fun ReadingStudio(a: ReadingAttempt, model: ReadingViewModel) {
         if (unlocked) {
             val editor = rememberReadingEditor(a, key, model)
             if (!a.earned(key)) {
-                a.content.writingChoices[index].forEachIndexed { choiceIndex, choice ->
-                    ReadingChoice(choice, "reading-studio-$key-$choiceIndex", editor.text == choice) {
-                        editor.update(choice)
-                    }
+                val choices = a.content.writingChoices[index]
+                ReadingChoiceGrid(choices, "reading-studio-$key", selected = { editor.text == choices[it] }) {
+                    editor.update(choices[it])
                 }
             }
             ReadingDraftText(editor, key, "Your $key idea", !a.earned(key))
@@ -586,10 +607,8 @@ private fun ReadingPartners(data: ReadingData, a: ReadingAttempt, model: Reading
                 else -> "At last, the character $it."
             }
         }
-        choices.forEachIndexed { index, choice ->
-            ReadingChoice(choice, "reading-turn-choice-$index", editor.text == choice) {
-                editor.update(choice)
-            }
+        ReadingChoiceGrid(choices, "reading-turn-choice", selected = { editor.text == choices[it] }) {
+            editor.update(choices[it])
         }
         androidx.compose.runtime.key(a.turns.size) {
             ReadingDraftText(editor, "turn", "Your sentence", true)
