@@ -86,7 +86,11 @@ private fun <T> databaseResult(
 }
 
 @Composable
-internal fun ReadingDatabaseBrowser(onDismiss: () -> Unit, databaseName: String = "reading.db") {
+internal fun ReadingDatabaseBrowser(
+    onDismiss: () -> Unit,
+    databaseName: String = "reading.db",
+    backLabel: String = "Back"
+) {
     val context = LocalContext.current.applicationContext
     val reader = remember(context, databaseName) { ReadingDatabaseReader(context, databaseName) }
     var game by rememberSaveable { mutableStateOf<ReadingGame?>(null) }
@@ -108,7 +112,7 @@ internal fun ReadingDatabaseBrowser(onDismiss: () -> Unit, databaseName: String 
         Surface(Modifier.fillMaxSize().testTag("reading-database-browser")) {
             Column(Modifier.safeDrawingPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = back, modifier = Modifier.testTag("reading-database-back")) {
-                    Text(if (selectedId == null) "Back to admin" else "Back to activities")
+                    Text(if (selectedId == null) backLabel else "Back to activities")
                 }
                 Text("Reading activities database", style = MaterialTheme.typography.titleLarge)
                 Text("Read-only · installed activities", style = MaterialTheme.typography.bodySmall)

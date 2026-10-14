@@ -131,8 +131,9 @@ class ReadingDatabaseBrowserTest {
 
     @Test fun emptyInstalledDatabaseDoesNotFallBackToBundledContent() {
         catalog.insertLegacy(first)
-        compose.setContent { ReadingDatabaseBrowser({}, databaseName) }
+        compose.setContent { ReadingDatabaseBrowser({}, databaseName, backLabel = "Back to test panel") }
         awaitTag("reading-database-empty")
+        compose.onNodeWithText("Back to test panel").assertIsDisplayed()
         compose.onNodeWithText("No reading activities installed. Import reading activities in Reading Settings first.")
             .assertIsDisplayed()
         compose.onNodeWithTag("reading-database-next").assertIsNotEnabled()

@@ -386,7 +386,7 @@ private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit) {
     var showingRemoval by rememberSaveable { mutableStateOf(false) }
     var browsingReading by rememberSaveable { mutableStateOf(false) }
     if (browsingReading) {
-        ReadingDatabaseBrowser(onDismiss = { browsingReading = false })
+        ReadingDatabaseBrowser(onDismiss = { browsingReading = false }, backLabel = "Back to admin")
         return
     }
     if (showingRemoval) {
