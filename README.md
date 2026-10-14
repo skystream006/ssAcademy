@@ -273,7 +273,7 @@ use non-destructive migrations. Clearing app data, like uninstalling, removes lo
 
 ### Reading packs and storage
 
-The downloadable source is `datasets/reading/reading_activities_import.json`, with UTF-8 JSON Lines data
+The downloadable source is `datasets/reading/reading-activities-import.json`, with UTF-8 JSON Lines data
 in `datasets/reading/activities-<sha256>.jsonl` (one `ReadingActivity` JSON object per line).
 The previous `manifest.json` entry point remains available for older app versions; checksum-named data files are unchanged.
 These files are outside Android resources/assets and are **not packaged in the APK**.

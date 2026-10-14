@@ -193,7 +193,7 @@ class ReadingBulkPackTest {
         assertTrue(manifest.counts.values.sum() <= ReadingPackImporter.MAX_ACTIVITIES)
         assertTrue(manifest.bytes in 1..ReadingPackImporter.MAX_PACK_BYTES)
         assertEquals(manifest.bytes, pack.contentFile.length())
-        assertEquals("reading_activities_import-${manifest.sha256}.jsonl", manifest.file)
+        assertEquals("activities-${manifest.sha256}.jsonl", manifest.file)
         assertEquals(72, oldActivities.size)
         DataInputStream(pack.contentFile.inputStream()).use { input ->
             val prefix = ByteArray(archived.bytes.size)
