@@ -14,10 +14,12 @@ import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ApplicationProvider
 import java.io.File
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Rule
@@ -37,12 +39,31 @@ class SubjectNavigationTest {
         DebugLog.initialize(application)
         application.getSharedPreferences("settings", 0).edit().clear().commit()
         File(application.filesDir, "practice_history.json").delete()
+        application.deleteDatabase("reading.db")
         listOf("reading_private.json", "reading_private.json.bak", "reading_private.json.new").forEach {
             File(application.filesDir, it).delete()
         }
     }
 
     private fun model() = MathViewModel(application, ioDispatcher = Dispatchers.Unconfined)
+
+    private fun readingModel(): ReadingViewModel =
+        ViewModelProvider(compose.activity, object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>): T =
+                ReadingViewModel(application, io = Dispatchers.Unconfined) as T
+        })[ReadingViewModel::class.java]
+
+    private fun installReadingPack() {
+        val database = ReadingDatabase(application)
+        try {
+            runBlocking {
+                readingTestImporter(ReadingCatalog(database), application.cacheDir, ReadingContent.activities).importPack()
+            }
+        } finally {
+            database.close()
+        }
+    }
 
     @Test fun subjectHistoriesReturnToSettingsAndNeverShowMathResults() {
         val model = model()
@@ -134,11 +155,14 @@ class SubjectNavigationTest {
     }
 
     @Test fun readingSubjectReturnsToSubjectsBeforeOpeningMathChoices() {
+        installReadingPack()
+        readingModel()
         val model = model()
         compose.setContent { MathAppContent(model) }
         repeat(2) { returnMethod ->
             compose.onNodeWithTag("subject-Reading").performScrollTo().performClick()
             compose.waitUntil(5_000) {
+                shadowOf(Looper.getMainLooper()).idle()
                 compose.onAllNodesWithTag("reading-menu").fetchSemanticsNodes().isNotEmpty()
             }
             compose.onNodeWithTag("reading-menu").assertIsDisplayed()
@@ -164,8 +188,8 @@ class SubjectNavigationTest {
         val store = ReadingStore(File(application.filesDir, "reading_private.json"))
         store.load()
         store.save(data)
-        val readingModel = ViewModelProvider(compose.activity,
-            ViewModelProvider.AndroidViewModelFactory(application))[ReadingViewModel::class.java]
+        installReadingPack()
+        val readingModel = readingModel()
         val model = model()
         model.openSettings()
         compose.setContent { MathAppContent(model) }
@@ -177,12 +201,13 @@ class SubjectNavigationTest {
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithTag("subject-Reading").performScrollTo().performClick()
         compose.waitUntil(5_000) {
+            shadowOf(Looper.getMainLooper()).idle()
             compose.onAllNodesWithTag("reading-menu").fetchSemanticsNodes().isNotEmpty()
         }
-        compose.runOnIdle { assertEquals(data, readingModel.data) }
+        compose.runOnIdle { assertEquals(data, readingModel.data?.withoutCatalogueRefs()) }
         compose.onNodeWithTag("reading-game-MISSING").assertDoesNotExist()
         compose.onNodeWithTag("reading-game-SEQUENCE").performScrollTo().assertIsDisplayed()
-        assertEquals(data, store.load())
+        assertEquals(data, ReadingSqliteStore(application).load().withoutCatalogueRefs())
     }
 
     @Test fun readingCollectionsReturnToReadingAndSettingsControlsPreserveDrafts() {
@@ -190,8 +215,7 @@ class SubjectNavigationTest {
         val store = ReadingStore(File(application.filesDir, "reading_private.json"))
         store.load()
         store.save(data)
-        val readingModel = ViewModelProvider(compose.activity,
-            ViewModelProvider.AndroidViewModelFactory(application))[ReadingViewModel::class.java]
+        val readingModel = readingModel()
         val model = model()
         model.openReading()
         compose.setContent { MathAppContent(model) }
@@ -214,8 +238,9 @@ class SubjectNavigationTest {
         }
         compose.onNodeWithTag("reading-level-TRAIL").assertIsSelected()
         compose.onNodeWithText("Done").performClick()
-        assertEquals(data.attempts, store.load().attempts)
-        assertEquals(ReadingLevel.TRAIL, store.load().profile?.level)
+        val persisted = ReadingSqliteStore(application).load().withoutCatalogueRefs()
+        assertEquals(data.attempts, persisted.attempts)
+        assertEquals(ReadingLevel.TRAIL, persisted.profile?.level)
         compose.onNodeWithTag("reading-progress").performScrollTo().performClick()
         compose.onNodeWithTag("reading-dashboard").assertIsDisplayed()
         compose.onNodeWithTag("reading-back").performScrollTo().performClick()
@@ -223,7 +248,7 @@ class SubjectNavigationTest {
         compose.onNodeWithContentDescription("Back").performClick()
         assertEquals(Overlay.READING, model.overlay)
         compose.onNodeWithTag("reading-menu").assertIsDisplayed()
-        assertEquals(data.attempts, readingModel.data?.attempts)
+        assertEquals(data.attempts, readingModel.data?.withoutCatalogueRefs()?.attempts)
         compose.onNodeWithTag("reading-progress").assertDoesNotExist()
         compose.onNodeWithTag("reading-level-SPROUT").assertDoesNotExist()
     }
@@ -233,8 +258,7 @@ class SubjectNavigationTest {
         val store = ReadingStore(File(application.filesDir, "reading_private.json"))
         store.load()
         store.save(data)
-        val readingModel = ViewModelProvider(compose.activity,
-            ViewModelProvider.AndroidViewModelFactory(application))[ReadingViewModel::class.java]
+        val readingModel = readingModel()
         var now = 0L
         val model = MathViewModel(application, clock = { now }, ioDispatcher = Dispatchers.Unconfined)
         model.selectOperation(Operation.ADDITION)
@@ -257,6 +281,6 @@ class SubjectNavigationTest {
         now += 5_000
         assertEquals(elapsed, model.elapsedMs())
         assertEquals(game, model.game)
-        assertEquals(data.active, readingModel.data?.active)
+        assertEquals(data.active, readingModel.data?.withoutCatalogueRefs()?.active)
     }
 }

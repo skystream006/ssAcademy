@@ -2,6 +2,7 @@ package com.ssmath.app
 
 import java.util.UUID
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 
 @Serializable
 enum class ReadingPage { MENU, ACTIVITY, PROFILES, PROGRESS }
@@ -37,6 +38,14 @@ data class ReadingCheckpoint(
 data class ReadingTurn(val readerId: String, val text: String)
 
 @Serializable
+data class ReadingActivityRef(
+    val revision: String,
+    val game: ReadingGame,
+    val level: ReadingLevel,
+    val title: String
+)
+
+@Serializable
 data class ReadingAttempt(
     val id: String,
     val ownerId: String,
@@ -54,9 +63,15 @@ data class ReadingAttempt(
     val hints: Int = 0,
     val narrations: Int = 0,
     val checkpoints: Map<String, ReadingCheckpoint> = emptyMap(),
-    val feedback: String = ""
+    val feedback: String = "",
+    val activityRef: ReadingActivityRef? = null,
+    @Transient val loadedContent: ReadingActivity? = null
 ) {
-    val content: ReadingActivity get() = ReadingContent.find(contentId)
+    val content: ReadingActivity get() = loadedContent ?: if (activityRef == null) ReadingContent.find(contentId)
+        else error("Activity content must be loaded before opening an attempt.")
+    val game: ReadingGame get() = activityRef?.game ?: content.game
+    val level: ReadingLevel get() = activityRef?.level ?: content.level
+    val title: String get() = activityRef?.title ?: content.title
     val open: Boolean get() = finishedAt == null && !abandoned
     val supported: Boolean get() = hints > 0 || narrations > 0
     val orderComplete: Boolean get() = order.size == content.tiles.size && order.all { it in content.tiles.indices }
@@ -97,7 +112,7 @@ data class ReadingData(
     fun milestones(id: String): List<String> = buildList {
         if (completions(id) >= 1) add("First page · finished a reading activity")
         if (completions(id) >= 5) add("Book explorer · finished five activities")
-        if (attemptsFor(id).filter { it.finishedAt != null }.map { it.content.game }.distinct().size >= 3)
+        if (attemptsFor(id).filter { it.finishedAt != null }.map { it.game }.distinct().size >= 3)
             add("Curious reader · explored three games")
         if (stories.any { id in it.readerIds }) add("Story maker · saved an original story")
         if (sharedCompletions(id) > 0) add("Reading together · completed a shared story")
@@ -113,7 +128,7 @@ data class ReadingAccuracy(
 
 fun ReadingData.accuracy(id: String, game: ReadingGame? = null, level: ReadingLevel? = null): ReadingAccuracy {
     val checks = attemptsFor(id).filter {
-        (game == null || it.content.game == game) && (level == null || it.content.level == level)
+        (game == null || it.game == game) && (level == null || it.level == level)
     }.flatMap { it.checkpoints.values }.filter { it.readerId == id && it.objective && it.tries > 0 }
     return ReadingAccuracy(checks.count { it.independent }, checks.size,
         checks.count { it.earned && it.supportedAtCompletion }, checks.count { it.retried })
@@ -155,17 +170,24 @@ object ReadingEngine {
 
     fun draft(data: ReadingData, game: ReadingGame, level: ReadingLevel): ReadingAttempt? =
         data.attempts.lastOrNull { it.includes(data.selectedProfileId ?: "") && it.open &&
-            it.content.game == game && it.content.level == level }
+            it.game == game && it.level == level }
 
     fun start(data: ReadingData, game: ReadingGame, level: ReadingLevel, newAttempt: Boolean = false,
-              id: String = UUID.randomUUID().toString(), now: Long = System.currentTimeMillis()): ReadingData {
+              id: String = UUID.randomUUID().toString(), now: Long = System.currentTimeMillis(),
+              selected: ReadingActivity? = null, activityRef: ReadingActivityRef? = null): ReadingData {
         val owner = requireNotNull(data.profile)
         val existing = draft(data, game, level)
         if (existing != null && !newAttempt) return resume(data, existing.id)
         require(data.attempts.none { it.id == id })
-        val previous = data.attempts.count { it.ownerId == owner.id && it.content.game == game && it.content.level == level }
-        val choices = ReadingContent.forGame(game, level)
-        val attempt = ReadingAttempt(id, owner.id, choices[previous % choices.size].id, now)
+        val content = selected ?: run {
+            val previous = data.attempts.count { it.ownerId == owner.id && it.game == game && it.level == level }
+            val choices = ReadingContent.forGame(game, level)
+            require(choices.isNotEmpty()) { "Import reading activities in Settings > Reading Settings." }
+            choices[previous % choices.size]
+        }
+        require(content.game == game && content.level == level)
+        val attempt = ReadingAttempt(id, owner.id, content.id, now, activityRef = activityRef,
+            loadedContent = if (activityRef == null) null else content)
         return data.copy(attempts = data.attempts.map {
             if (newAttempt && it.id == existing?.id) it.copy(abandoned = true) else it
         } + attempt, profiles = data.profiles.map {
@@ -191,19 +213,19 @@ object ReadingEngine {
     }
 
     fun field(data: ReadingData, key: String, value: String, expectedTurn: Int? = null): ReadingData = edit(data) { a ->
-        val permitted = when (a.content.game) {
+        val permitted = when (a.game) {
             ReadingGame.STUDIO -> key in studioKeys
             ReadingGame.PARTNERS -> key == "turn" && a.turns.size < 4 && expectedTurn == a.turns.size
-            else -> key == "answer" || (key == "evidence" && a.content.game == ReadingGame.DETECTIVE)
+            else -> key == "answer" || (key == "evidence" && a.game == ReadingGame.DETECTIVE)
         }
         if (!permitted || a.earned(key) || (key == "answer" && a.earned("bonus"))) a
         else a.copy(fields = a.fields + (key to value.take(500)), feedback = "")
     }
 
     fun placeTile(data: ReadingData, index: Int): ReadingData = edit(data) { a ->
-        val size = if (a.content.game == ReadingGame.PARTNERS) a.turns.size else a.content.tiles.size
+        val size = if (a.game == ReadingGame.PARTNERS) a.turns.size else a.content.tiles.size
         if (a.earned("order") || a.earned("shared") || index !in 0 until size || index in a.order) a
-        else if (a.content.game == ReadingGame.SCRAMBLE) {
+        else if (a.game == ReadingGame.SCRAMBLE) {
             val position = a.order.indexOf(-1).takeIf { it >= 0 } ?: a.order.size
             placeSentenceTile(a, index, position)
         }
@@ -214,7 +236,7 @@ object ReadingEngine {
         edit(data) { placeSentenceTile(it, tileId, position) }
 
     private fun placeSentenceTile(a: ReadingAttempt, tileId: Int, position: Int): ReadingAttempt {
-        if (a.content.game != ReadingGame.SCRAMBLE || a.earned("order") ||
+        if (a.game != ReadingGame.SCRAMBLE || a.earned("order") ||
             tileId !in a.content.tiles.indices || position !in a.content.tiles.indices ||
             (a.order.getOrNull(position) ?: -1) != -1) return a
         val order = MutableList(a.content.tiles.size) { a.order.getOrNull(it) ?: -1 }
@@ -225,7 +247,7 @@ object ReadingEngine {
 
     fun removeTile(data: ReadingData, tileId: Int): ReadingData = edit(data) { a ->
         if (a.earned("order") || a.earned("shared") || tileId < 0 || tileId !in a.order) a
-        else if (a.content.game == ReadingGame.SCRAMBLE)
+        else if (a.game == ReadingGame.SCRAMBLE)
             a.copy(order = a.order.map { if (it == tileId) -1 else it }.dropLastWhile { it == -1 },
                 reread = false, feedback = "")
         else a.copy(order = a.order.filterNot { it == tileId }, reread = false, feedback = "")
@@ -237,12 +259,12 @@ object ReadingEngine {
         if (!queued) data else edit(data) { it.copy(narrations = it.narrations + 1) }
 
     fun branch(data: ReadingData, index: Int): ReadingData = edit(data) { a ->
-        if (a.content.game != ReadingGame.CHAPTER || a.branch != null || index !in a.content.branches.indices) a
+        if (a.game != ReadingGame.CHAPTER || a.branch != null || index !in a.content.branches.indices) a
         else a.copy(branch = index, feedback = "")
     }
 
     fun partner(data: ReadingData, id: String): ReadingData = edit(data) { a ->
-        if (a.content.game != ReadingGame.PARTNERS || a.partnerId != null || a.turns.isNotEmpty()) a
+        if (a.game != ReadingGame.PARTNERS || a.partnerId != null || a.turns.isNotEmpty()) a
         else {
             require(id != a.ownerId && data.profiles.any { it.id == id }) { "Choose two different existing readers." }
             a.copy(partnerId = id, feedback = "")
@@ -250,15 +272,15 @@ object ReadingEngine {
     }
 
     fun reread(data: ReadingData): ReadingData = edit(data) { a ->
-        if (a.content.game == ReadingGame.PARTNERS && a.turns.size == 4 && a.order.size == 4)
+        if (a.game == ReadingGame.PARTNERS && a.turns.size == 4 && a.order.size == 4)
             a.copy(reread = true) else a
     }
 
     fun question(a: ReadingAttempt): ReadingQuestion? =
-        if (a.content.game == ReadingGame.CHAPTER) a.branch?.let { a.content.branches[it].question }
+        if (a.game == ReadingGame.CHAPTER) a.branch?.let { a.content.branches[it].question }
         else a.content.question
 
-    fun requiredKeys(a: ReadingAttempt): List<String> = when (a.content.game) {
+    fun requiredKeys(a: ReadingAttempt): List<String> = when (a.game) {
         ReadingGame.MISSING, ReadingGame.CAPTION, ReadingGame.CHAPTER -> listOf("answer")
         ReadingGame.SCRAMBLE -> listOf("order")
         ReadingGame.SEQUENCE -> listOf("order", "answer")
@@ -289,7 +311,7 @@ object ReadingEngine {
     fun submit(data: ReadingData, key: String, now: Long = System.currentTimeMillis(),
                expectedTurn: Int? = null, rewardsEnabled: Boolean = true): ReadingData = edit(data) { a ->
         if (a.earned(key)) return@edit a
-        val game = a.content.game
+        val game = a.game
         when {
             key == "order" && game in listOf(ReadingGame.SCRAMBLE, ReadingGame.SEQUENCE) -> {
                 if (!a.orderComplete) a.copy(feedback = "Place every tile before checking.")
@@ -334,7 +356,7 @@ object ReadingEngine {
         }
     }
 
-    fun storyText(a: ReadingAttempt): String = if (a.content.game == ReadingGame.PARTNERS)
+    fun storyText(a: ReadingAttempt): String = if (a.game == ReadingGame.PARTNERS)
         a.order.joinToString(" ") { a.turns[it].text }
     else "${a.fields["character"].orEmpty()} lived in ${a.fields["setting"].orEmpty()}. " +
         "One day, this character ${a.fields["problem"].orEmpty()}. " +
@@ -344,14 +366,14 @@ object ReadingEngine {
         val a = data.active ?: return data
         if (!a.open || !ready(a)) return data
         val updated = edit(data) { it.copy(finishedAt = now, feedback = "Congratulations! Your reading is growing.") }
-        if (a.content.game !in listOf(ReadingGame.STUDIO, ReadingGame.PARTNERS)) return updated
+        if (a.game !in listOf(ReadingGame.STUDIO, ReadingGame.PARTNERS)) return updated
         val readers = listOfNotNull(a.ownerId, a.partnerId)
         val story = ReadingStory(a.id, a.content.title, storyText(a), a.content.picture.symbol, readers,
-            if (a.content.game == ReadingGame.PARTNERS) a.order.map { a.turns[it] } else emptyList(), now)
+            if (a.game == ReadingGame.PARTNERS) a.order.map { a.turns[it] } else emptyList(), now)
         return updated.copy(stories = updated.stories.filterNot { it.attemptId == a.id } + story)
     }
 
-    fun validate(data: ReadingData) {
+    fun validate(data: ReadingData, resolve: (ReadingAttempt) -> ReadingAttempt = { it }) {
         require(data.version == 1) { "Unsupported reading data version." }
         val profileIds = data.profiles.map { it.id }
         require(profileIds.distinct().size == profileIds.size && profileIds.none { it.isBlank() })
@@ -359,26 +381,27 @@ object ReadingEngine {
         require(data.selectedProfileId == null || data.selectedProfileId in profileIds)
         require(data.profiles.isEmpty() == (data.selectedProfileId == null))
         require(data.attempts.map { it.id }.distinct().size == data.attempts.size)
-        data.attempts.forEach { a ->
+        data.attempts.forEach { stored ->
+            val a = resolve(stored)
             require(a.id.isNotBlank() && a.ownerId in profileIds && a.hints >= 0 && a.narrations >= 0)
-            require(a.partnerId == null || (a.content.game == ReadingGame.PARTNERS &&
+            require(a.partnerId == null || (a.game == ReadingGame.PARTNERS &&
                 a.partnerId in profileIds && a.partnerId != a.ownerId))
             require(a.branch == null || a.branch in a.content.branches.indices)
-            val size = if (a.content.game == ReadingGame.PARTNERS) a.turns.size else a.content.tiles.size
-            val placed = if (a.content.game == ReadingGame.SCRAMBLE) a.order.filterNot { it == -1 } else a.order
+            val size = if (a.game == ReadingGame.PARTNERS) a.turns.size else a.content.tiles.size
+            val placed = if (a.game == ReadingGame.SCRAMBLE) a.order.filterNot { it == -1 } else a.order
             require(a.order.size <= size && placed.distinct().size == placed.size && placed.all { it in 0 until size })
             require(a.turns.size <= 4 && a.turns.withIndex().all { (i, turn) ->
                 turn.text.isNotBlank() && turn.readerId == if (i % 2 == 0) a.ownerId else a.partnerId ?: a.ownerId
             })
             require(a.checkpoints.all { (key, c) ->
-                val validKeys = requiredKeys(a) + if (a.content.game == ReadingGame.SCRAMBLE) listOf("bonus") else emptyList()
-                val participation = a.content.game == ReadingGame.PARTNERS &&
+                val validKeys = requiredKeys(a) + if (a.game == ReadingGame.SCRAMBLE) listOf("bonus") else emptyList()
+                val participation = a.game == ReadingGame.PARTNERS &&
                     key in listOfNotNull("participation:${a.ownerId}", a.partnerId?.let { "participation:$it" })
                 val expectedReader = if (participation) key.removePrefix("participation:") else a.ownerId
                 (key in validKeys || participation) && c.tries > 0 &&
                     c.shared == (key == "shared") &&
                     c.readerId == (if (c.shared) null else expectedReader) &&
-                    c.objective == (a.content.game !in listOf(ReadingGame.STUDIO, ReadingGame.PARTNERS)) &&
+                    c.objective == (a.game !in listOf(ReadingGame.STUDIO, ReadingGame.PARTNERS)) &&
                     (!c.firstCorrect || (c.earned && c.tries == 1))
             })
             require(a.finishedAt == null || ready(a))

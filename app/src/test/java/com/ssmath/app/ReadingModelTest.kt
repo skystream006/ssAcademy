@@ -152,12 +152,13 @@ class ReadingModelTest {
         assertThrows(IllegalArgumentException::class.java) { ReadingEngine.renameProfile(ReadingData(), "Alex") }
     }
 
-    @Test fun everyGameHasThreeOriginalActivitiesAtEachLevelWithValidFiniteContent() {
+    @Test fun legacyCatalogueKeepsThreeOriginalActivitiesAtEachOriginalLevelWithValidFiniteContent() {
         assertEquals(48, ReadingContent.activities.size)
         assertEquals(48, ReadingContent.activities.map { it.id }.distinct().size)
-        ReadingGame.entries.forEach { game -> ReadingLevel.entries.forEach { level ->
+        ReadingGame.entries.forEach { game -> listOf(ReadingLevel.SPROUT, ReadingLevel.TRAIL).forEach { level ->
             assertEquals("$game $level", 3, ReadingContent.forGame(game, level).size)
         } }
+        assertTrue(ReadingContent.activities.none { it.level == ReadingLevel.SUMMIT })
         ReadingContent.activities.forEach { c ->
             assertTrue(c.title.isNotBlank() && c.hint.isNotBlank())
             assertTrue(c.picture.symbol.isNotBlank() && c.picture.description.isNotBlank())

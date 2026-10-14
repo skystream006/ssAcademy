@@ -366,9 +366,9 @@ class ReadingScreenTest {
     @Test
     @Config(qualifiers = "w320dp-h800dp")
     @GraphicsMode(GraphicsMode.Mode.NATIVE)
-    fun everyReadingGameUsesColoredTwoColumnChoicesThatFitAtLargeTextSizes() {
+    fun everyLegacyReadingGameUsesColoredTwoColumnChoicesThatFitAtLargeTextSizes() {
         show(readingFixture(), speech = true)
-        for (level in ReadingLevel.entries) {
+        for (level in listOf(ReadingLevel.SPROUT, ReadingLevel.TRAIL)) {
             ReadingGame.entries.forEach { game ->
                 compose.runOnIdle { model.act { ReadingEngine.start(it, game, level) } }
                 waitFor { it.active?.content?.game == game && it.active?.content?.level == level }

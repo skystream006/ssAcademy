@@ -149,6 +149,7 @@ fun SettingsScreen(model: MathViewModel) {
             }
             HorizontalDivider()
             CollapsibleSettingsSection("Reading Settings", defaultExpanded = false) {
+                ReadingPackSettings()
                 SubjectRewardsSetting(model, Subject.READING,
                     "Earn reading points for completed checkpoints. Progress and previously earned points are always saved.")
                 SubjectHistorySetting(model, Subject.READING)

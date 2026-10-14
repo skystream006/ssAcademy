@@ -57,6 +57,7 @@ class MathAppTest {
     @Before fun setup() {
         application.getSharedPreferences("settings", 0).edit().clear().commit()
         File(application.filesDir, "practice_history.json").delete()
+        application.deleteDatabase("reading.db")
         DebugLog.initialize(application)
     }
 
@@ -803,7 +804,7 @@ class MathAppTest {
         compose.onNodeWithTag("settings-name").performTextReplacement("Not saved")
         compose.onNodeWithText("Cancel").performClick()
         compose.onNodeWithTag("change-name-dialog").assertDoesNotExist()
-        assertEquals(original, ReadingStore(file).load())
+        assertEquals(original, ReadingSqliteStore(application).load().withoutCatalogueRefs())
 
         compose.onNodeWithTag("change-name").performClick()
         compose.onNodeWithTag("settings-name").assertTextContains("Ari").performTextReplacement("   ")
@@ -813,11 +814,12 @@ class MathAppTest {
         compose.waitUntil(5_000) {
             compose.onAllNodesWithText("Choose a different reader name.").fetchSemanticsNodes().isNotEmpty()
         }
-        assertEquals(original, ReadingStore(file).load())
+        assertEquals(original, ReadingSqliteStore(application).load().withoutCatalogueRefs())
         compose.onNodeWithTag("settings-name").performTextReplacement("  Alex  ")
         compose.onNodeWithTag("settings-save-name").performClick()
         compose.waitUntil(5_000) { compose.onAllNodesWithTag("change-name-dialog").fetchSemanticsNodes().isEmpty() }
-        assertEquals(ReadingEngine.renameProfile(original, "Alex"), ReadingStore(file).load())
+        assertEquals(ReadingEngine.renameProfile(original, "Alex"),
+            ReadingSqliteStore(application).load().withoutCatalogueRefs())
         compose.onNodeWithTag("change-name").performClick()
         compose.onNodeWithTag("settings-name").assertTextContains("Alex")
     }

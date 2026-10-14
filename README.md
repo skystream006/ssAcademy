@@ -12,6 +12,8 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    **Math**, **Reading**, **Science**, and **Advanced**. Tap **Math** to choose
    **Practice Game** or **Rewards Game**; the filled **Back to subjects** button or Android Back returns
    to the subject grid. Tap **Reading** for the offline reading activities described below.
+   If no activity pack has been imported, a dialog explains how to import one and offers
+   **Open Settings**; **Cancel** leaves you on Home without changing saved progress.
    **Science** and **Advanced** show the toast **More Activities are coming soon!**
    Their backgrounds are drawn with bundled vectors and work offline.
    **Practice Game** opens the question setup in a dialog. Choose **Addition**, **Subtraction**,
@@ -97,8 +99,10 @@ expand or collapse it without changing your choices. **Rewards** contains
 **Show timer** (and its conditional **Time limit**), **Show correct answers**,
 **Vertical equations**, and **Default Math Reward Game Settings**.
 **Reading Settings** contains **Reading Progress**, **Set Reading Level**, **Active Reading Games**,
-**Reading Rewards System**, and **Reading Practice History**. **Set Reading Level** opens a dialog
-with the available levels; existing drafts keep their original level.
+**Reading Rewards System**, **Reading Practice History**, and **Import / Update Reading Activities**.
+The import button shows the installed pack version, counts by game/level, and download progress.
+**Set Reading Level** opens a dialog
+with **Sprout**, **Trail**, and **Summit**, in increasing difficulty; existing drafts keep their original level.
 **Active Reading Games** opens a dialog with a switch for each reading game, all enabled by default.
 Changes are saved automatically on this device. Disabled games cannot be started or resumed,
 but their drafts, history, stories, and earned points are kept; re-enable a game to resume its drafts.
@@ -209,6 +213,12 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
 On first startup, **Welcome to the Academy! What is your name?** asks for one local
 name (a nickname is enough) to use across the app. An existing saved reader name is
 reused; there is no add-reader or switch-reader screen.
+On a new installation, open **Settings → Reading Settings → Import / Update Reading Activities**
+to install the repository's reading library. Internet is required for import/update only;
+installed activities and saved drafts work offline. Empty games explain where to import.
+**Summit**, above Trail, adds more complex sentences, vocabulary in context, inference,
+multi-step cause and effect, and story planning. Import/update the activity library to
+get Summit content; merely selecting a level does not download anything.
 Open **Reading** on the home screen to choose from illustrated square game buttons.
 **Rewards** and **Pokémon** shortcuts stay at the top, as on the Math page.
 Reading progress is separate from math history and prizes. Use **Settings → Reading Settings →
@@ -217,6 +227,12 @@ Activities use large tappable choices, not timed reading or mandatory dragging.
 Tapping a game with a draft opens resume/new-attempt choices; Story Builder Partners
 also shows this dialog before its first attempt, with resume disabled until a draft exists.
 Starting over requires confirmation before archiving a saved draft.
+Activities are selected randomly without replacement for each reader, game, and level.
+Assignment counts as presented even if the activity is later skipped; resuming never
+consumes another activity. After the eligible pool is exhausted, a new cycle begins,
+avoiding an immediate repeat when another activity exists. A larger batch exhausts the
+remaining unseen activities before continuing into a new cycle. The current UI launches
+one activity at a time. Cycle rollover never resets points, drafts, or history.
 
 | Game | Activity and completion points |
 | --- | --- |
@@ -242,7 +258,69 @@ private app storage on this tablet. There are no reading accounts, uploads, publ
 leaderboards, microphone recordings, or cloud-generated activities. Older reader records
 are retained to preserve existing history, not exposed as switchable accounts. Android backups
 and device transfer are disabled; uninstalling the app removes its local data.
-The existing app updater may still contact GitHub independently of reading.
+The reading import button and the app updater contact GitHub only when requested.
+Normal in-place APK updates retain the database and reading rotation; schema upgrades must
+use non-destructive migrations. Clearing app data, like uninstalling, removes local content.
+
+### Reading packs and storage
+
+The downloadable source is `datasets/reading/manifest.json`, with UTF-8 JSON Lines data
+in `datasets/reading/activities-<sha256>.jsonl` (one `ReadingActivity` JSON object per line).
+These files are outside Android resources/assets and are **not packaged in the APK**.
+Pack **v3** contains **24,000 activities**: **1,000 per game per difficulty**, across all eight
+games and Sprout, Trail, and Summit. This includes the original 72 activities unchanged and
+23,928 new template-generated activities. The original v1/v2 checksum-named files and archived
+manifests remain available. Existing installations can update without losing drafts, points,
+or presentation cycles. Older app versions without Summit support reject the expanded pack
+safely and retain their installed library; update the app first.
+The default HTTPS source is this repository's `main` branch on `raw.githubusercontent.com`;
+the files must be merged/published there and publicly readable before the import button works.
+Private repository access is not configured, and the APK contains no GitHub credentials.
+
+To publish a pack, add a new checksum-named JSONL file and update the manifest's
+`schemaVersion` (currently 1), `version`, `file`, `sha256`, `bytes`, and `counts`
+(`GAME:LEVEL` keys). The digest and byte size describe the exact file bytes, including
+newlines. Never edit an existing checksum-named file. The importer rejects unsupported
+schemas, malformed activities, invalid answers/orders, duplicate IDs, mismatched counts
+or checksums, and oversized files. It caps downloads at 64 MiB, each record at 64 KiB,
+and the pack at 100,000 activities. Downloads are streamed to temporary storage, then
+validated in a transactional staging table; failure rolls back and removes the temporary file.
+Allow space for the download, staging table, and SQLite transaction journal during updates.
+
+The v3 content source lives in `datasets/reading/generation/`, outside the APK. It combines
+original vocabulary, scenes, and story prompts using difficulty-specific templates, rather
+than copying the same question under new IDs. Sprout emphasizes short concrete sentences,
+Trail adds context and cause, and Summit adds complex sentences, inference, and reasoning.
+These are reproducible template variations, not 24,000 individually hand-written lessons.
+Some vocabulary frames revisit the same target word with different concrete subjects;
+some reading passages have separate activities for different comprehension questions.
+Structural checks and engine tests verify the catalogue; they do not replace educational
+review of the generated wording.
+
+To reproduce the committed v3 pack, run
+`python3 /home/runner/work/ssAcademy/ssAcademy/datasets/reading/generate.py`;
+add `--check` to verify it without writing files. Python 3.9 or newer and its standard library
+are the only requirements. Generation preserves the exact v2 file as a prefix, rejects duplicate
+learning tasks even when titles or answer order differ, checks importer size/count limits,
+and derives stable new IDs from task content. Editing a template requires publishing a
+new immutable pack, not replacing an already published checksum-named file.
+
+SQLite stores immutable content revisions separately from the current selectable catalogue.
+Imports are additive: omitted activities remain installed; the same activity ID cannot move
+to another game or level. Reimporting a pack neither duplicates content nor clears rotation.
+New IDs become unseen in the existing cycle. Changed content receives a new revision while
+old revisions stay available to drafts/history; the logical activity ID still counts as seen.
+The progress ledger and activity reservations commit in one transaction. Attempts and stories
+use separate bounded rows so a growing history cannot exceed Android's per-row cursor window.
+Schema upgrades also recover older oversized singleton ledgers without clearing history.
+History/progress
+use small activity references, and only the active attempt's full content is retained in
+the loaded reading state. Database work runs off the UI thread.
+
+On upgrade, existing `reading_private.json` data is migrated once without deleting the
+original file. The small original catalogue remains in code only for legacy-save compatibility;
+it is not installed as a selectable pack on a fresh installation. Old activity IDs, answers,
+checkpoints, attribution, and earned credit are preserved.
 
 Text size can be adjusted from 80% to 200%. Optional instruction and saved-story
 read-aloud uses an **installed offline English Android text-to-speech voice**.
