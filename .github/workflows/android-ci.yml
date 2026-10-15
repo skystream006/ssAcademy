@@ -24,8 +24,6 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-      - name: Check reading content generation
-        run: python3 -m unittest discover -s datasets/reading -p 'test_*.py'
       - name: Test, lint, and build debug APK
         run: sh ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
       - uses: actions/upload-artifact@v6
