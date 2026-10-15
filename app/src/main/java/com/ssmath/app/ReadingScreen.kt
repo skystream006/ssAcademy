@@ -947,7 +947,7 @@ private fun ReadingProgress(data: ReadingData, model: ReadingViewModel, textSize
         HorizontalDivider()
         Text("Saved story shelf", style = MaterialTheme.typography.titleLarge)
         val stories = data.stories.filter { profile.id in it.readerIds }
-        if (stories.isEmpty()) Text("Stories from Story Studio and Story Builder Partners will appear here.")
+        if (stories.isEmpty()) Text("Stories from Story Studio will appear here.")
         stories.asReversed().forEach { story ->
             ReadingPictureView(ReadingPicture(story.illustration, "An illustration for ${story.title}"))
             Text(story.title, style = MaterialTheme.typography.titleLarge)

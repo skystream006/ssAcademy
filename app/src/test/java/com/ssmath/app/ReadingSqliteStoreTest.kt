@@ -395,7 +395,7 @@ class ReadingSqliteStoreTest {
         val solved = readingSolve(store.start(reader(), ReadingGame.MISSING, ReadingLevel.SPROUT, false))
         val completed = requireNotNull(solved.active)
         val attempts = (1..3200).map { index ->
-            completed.copy(id = "history-${index.toString().padStart(32, '0')}", loadedContent = null)
+            completed.copy(id = "history-${index.toString().padStart(128, '0')}", loadedContent = null)
         }
         val history = solved.copy(attempts = attempts, profiles = solved.profiles.map {
             it.copy(activeAttemptId = attempts.last().id)
