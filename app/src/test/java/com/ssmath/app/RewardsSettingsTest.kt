@@ -201,17 +201,17 @@ class RewardsSettingsTest {
         restoration.setContent { MathTheme(textSizePercent = 200) { SettingsScreen(model) } }
         compose.onNodeWithText("Reading Settings").performScrollTo().performClick()
         compose.onNodeWithTag("active-reading-games").performScrollTo().performClick()
-        compose.onNodeWithContentDescription(ReadingGame.PARTNERS.title).performScrollTo()
+        compose.onNodeWithContentDescription(ReadingGame.STUDIO.title).performScrollTo()
             .assertIsDisplayed().performClick().assertIsOff()
         restoration.emulateSavedInstanceStateRestore()
         compose.onNodeWithTag("active-reading-games-dialog").assertIsDisplayed()
-        compose.onNodeWithContentDescription(ReadingGame.PARTNERS.title).performScrollTo().assertIsOff()
+        compose.onNodeWithContentDescription(ReadingGame.STUDIO.title).performScrollTo().assertIsOff()
         compose.runOnIdle {
             (ShadowDialog.getLatestDialog() as ComponentDialog).onBackPressedDispatcher.onBackPressed()
         }
         compose.onNodeWithTag("active-reading-games-dialog").assertDoesNotExist()
         compose.onNodeWithText("Settings").assertIsDisplayed()
-        assertEquals(setOf(ReadingGame.PARTNERS), MathViewModel(application).disabledReadingGames)
+        assertEquals(setOf(ReadingGame.STUDIO), MathViewModel(application).disabledReadingGames)
     }
 
     @Test fun readingGamePreferencesIgnoreUnknownNamesAndCanRestoreAllDefaults() {

@@ -201,7 +201,7 @@ internal fun ReadingHistoryContent(model: ReadingViewModel, appModel: MathViewMo
                     }
                 }
             }
-            Text("Reader: ${profile.name}. Only this reader's history and shared participation are shown.")
+            Text("Reader: ${profile.name}. Only this reader's history is shown.")
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("Finished activities: ${data.completions(profile.id)}", Modifier.weight(1f))
                 if (data.attemptsFor(profile.id).isNotEmpty()) {
@@ -245,7 +245,7 @@ internal fun ReadingHistoryContent(model: ReadingViewModel, appModel: MathViewMo
                 Text((if (clearing != null) "All reading history for ${clearing.name}" else if (session != null)
                     "This entire ${session.questionCount}-question game" else "This activity") +
                     " and its saved answers, drafts, stories, progress, earned reward fragments and unshared " +
-                    "My Pokémons rewards will be permanently removed. Shared activities are removed for both readers. " +
+                    "My Pokémons rewards will be permanently removed. " +
                     "Other history is kept. Used rewards cannot be recovered.")
             },
             confirmButton = {
@@ -428,7 +428,7 @@ private fun ReadingMenu(data: ReadingData, model: ReadingViewModel, onExit: () -
     val profile = data.profile
     var questionCount by rememberSaveable { mutableStateOf<Int?>(null) }
     val games = listOf(ReadingGame.MISSING, ReadingGame.SEQUENCE, ReadingGame.STUDIO, ReadingGame.SCRAMBLE,
-        ReadingGame.DETECTIVE, ReadingGame.CAPTION, ReadingGame.CHAPTER, ReadingGame.PARTNERS)
+        ReadingGame.DETECTIVE, ReadingGame.CAPTION)
         .filterNot { it in disabledGames }
     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
         CollectionButtons({ stop(); onRewards() }, { stop(); onPokemons() }, "reading")
@@ -491,8 +491,6 @@ private val ReadingGame.backgroundImage: Int
         ReadingGame.SCRAMBLE -> R.drawable.reading_scramble
         ReadingGame.DETECTIVE -> R.drawable.reading_detective
         ReadingGame.CAPTION -> R.drawable.reading_caption
-        ReadingGame.CHAPTER -> R.drawable.reading_chapter
-        ReadingGame.PARTNERS -> R.drawable.reading_partners
     }
 
 @Composable
@@ -581,26 +579,12 @@ private fun ReadingActivityScreen(data: ReadingData, model: ReadingViewModel, a:
                         }
                     }
                 }
-                ReadingGame.CHAPTER -> {
-                    content.passage.forEach { Text(it) }
-                    Text("Choose a chapter. Both choices are welcome. " +
-                        "Your branch stays fixed for this attempt.")
-                    ReadingChoiceGrid(content.branches.map { it.label }, "reading-branch",
-                        selected = { a.branch == it }, enabled = a.branch == null) { index ->
-                        stop(); model.act { ReadingEngine.branch(it, index) }
-                    }
-                    a.branch?.let { index ->
-                        Text(content.branches[index].text, style = MaterialTheme.typography.bodyLarge)
-                        ReadingQuestionView(a, model, "answer")
-                    }
-                }
                 ReadingGame.STUDIO -> ReadingStudio(a, model)
-                ReadingGame.PARTNERS -> ReadingPartners(data, a, model, stop)
             }
         }
         if (a.feedback.isNotBlank()) Text(a.feedback,
             Modifier.testTag("reading-feedback").semantics { liveRegion = LiveRegionMode.Polite })
-        val earned = a.checkpoints.values.count { it.earned && !it.shared }
+        val earned = a.checkpoints.values.count { it.earned }
         Text("Saved checkpoints: $earned · Hints: ${a.hints} · Narrations: ${a.narrations}")
         if (ReadingEngine.ready(a)) ReadingButton("Submit Answer", "reading-submit", enabled = !model.saving) {
             stop(); model.finishActivity()
@@ -757,7 +741,7 @@ private fun SentenceScrambleTiles(a: ReadingAttempt, model: ReadingViewModel,
 @Composable
 private fun ReadingTiles(a: ReadingAttempt, model: ReadingViewModel, tiles: List<String>,
                          pictures: List<ReadingPicture> = emptyList()) {
-    val locked = a.earned("order") || a.earned("shared")
+    val locked = a.earned("order")
     Text("Your order", style = MaterialTheme.typography.titleLarge)
     if (a.order.isEmpty()) Text("Tap the tiles below to begin.")
     a.order.forEachIndexed { position, tile ->
@@ -776,9 +760,8 @@ private data class ReadingEditor(val text: String, val update: (String) -> Unit)
 
 @Composable
 private fun rememberReadingEditor(a: ReadingAttempt, key: String, model: ReadingViewModel): ReadingEditor {
-    val turn = if (key == "turn") a.turns.size else -1
     // Presets and typing share one immediate value; an older disk acknowledgement cannot replace it.
-    var text by rememberSaveable(a.id, key, model.data?.selectedProfileId, turn) {
+    var text by rememberSaveable(a.id, key, model.data?.selectedProfileId) {
         mutableStateOf(a.fields[key].orEmpty())
     }
     val locked = a.game == ReadingGame.STUDIO && a.earned(key)
@@ -788,7 +771,7 @@ private fun rememberReadingEditor(a: ReadingAttempt, key: String, model: Reading
     return ReadingEditor(text) { raw ->
         val value = raw.take(500)
         text = value
-        model.act { ReadingEngine.field(it, key, value, expectedTurn = a.turns.size) }
+        model.act { ReadingEngine.field(it, key, value) }
     }
 }
 
@@ -823,53 +806,6 @@ private fun ReadingStudio(a: ReadingAttempt, model: ReadingViewModel) {
     if (ReadingEngine.ready(a)) {
         Text("Your finished story", style = MaterialTheme.typography.titleLarge)
         Text(ReadingEngine.storyText(a))
-    }
-}
-
-@Composable
-private fun ReadingPartners(data: ReadingData, a: ReadingAttempt, model: ReadingViewModel, stop: () -> Unit) {
-    Text("Reader 1: ${data.name(a.ownerId)}")
-    Text("Reader 2: ${a.partnerId?.let(data::name) ?: "Your partner"}")
-    Text("Take turns with a friend or grown-up, or write both parts yourself, then arrange and reread your story.")
-    fun authorName(index: Int) = if (index % 2 == 0) data.name(a.ownerId)
-        else a.partnerId?.let(data::name) ?: "Your partner"
-    a.turns.forEachIndexed { index, turn ->
-        Text("${index + 1}. ${authorName(index)}: ${turn.text}")
-    }
-    if (a.turns.size < 4) {
-        val editor = rememberReadingEditor(a, "turn", model)
-        Text("Turn ${a.turns.size + 1} of 4 · ${authorName(a.turns.size)} writes",
-            style = MaterialTheme.typography.titleLarge)
-        Text(listOf("Introduce a character.", "Add a place.", "Tell us the problem.", "Give the story an ending.")[a.turns.size])
-        val choices = a.content.writingChoices[a.turns.size].map {
-            when (a.turns.size) {
-                0 -> "$it began an adventure."
-                1 -> "The adventure led to $it."
-                2 -> "The character $it."
-                else -> "At last, the character $it."
-            }
-        }
-        ReadingChoiceGrid(choices, "reading-turn-choice", selected = { editor.text == choices[it] }) {
-            editor.update(choices[it])
-        }
-        androidx.compose.runtime.key(a.turns.size) {
-            ReadingDraftText(editor, "turn", "Your sentence", true)
-        }
-        ReadingButton("Submit Answer", "reading-save-turn", !model.saving && !a.fields["turn"].isNullOrBlank()) {
-            stop(); model.submit("turn", expectedTurn = a.turns.size)
-        }
-    } else {
-        Text("Arrange your four sentences and reread them together.")
-        ReadingTiles(a, model, a.turns.mapIndexed { index, turn -> "${authorName(index)}: ${turn.text}" })
-        if (a.order.size == 4) {
-            Text(ReadingEngine.storyText(a))
-            ReadingChoice("We have reread our story", "reading-reread", a.reread, !a.earned("shared")) {
-                model.act { ReadingEngine.reread(it) }
-            }
-            ReadingButton("Submit Answer", "reading-shared", !model.saving && a.reread && !a.earned("shared")) {
-                model.submit("shared")
-            }
-        }
     }
 }
 
@@ -970,14 +906,13 @@ private fun ReadingProgress(data: ReadingData, model: ReadingViewModel, textSize
     val profile = data.profile ?: return
     ReadingColumn("reading-dashboard") {
         ReadingHeading("Reading Progress")
-        Text("Reader: ${profile.name}. Only this reader's history and shared participation are shown.")
+        Text("Reader: ${profile.name}. Only this reader's history is shown.")
         Text("Finished activities: ${data.completions(profile.id)}")
-        Text("Shared team completions: ${data.sharedCompletions(profile.id)}")
         val accuracy = data.accuracy(profile.id)
         Text("First-try independent accuracy: ${accuracy.firstIndependent} / ${accuracy.attempted}")
         Text("A first incorrect try counts immediately, even before completion. Hints or successful passage narration " +
             "before a first answer prevent independent credit. " +
-            "Creative writing and partner participation are not accuracy questions.")
+            "Creative writing is not an accuracy question.")
         Text("Supported completions: ${accuracy.supportedCompletions} · Retried completions: ${accuracy.retriedCompletions}")
         Text("Support and retry counts can overlap. Eventual success is not called mastery.")
         Text("Text size: $textSizePercent%")
@@ -1018,7 +953,6 @@ private fun ReadingProgress(data: ReadingData, model: ReadingViewModel, textSize
             Text(story.title, style = MaterialTheme.typography.titleLarge)
             Text("By ${story.readerIds.joinToString(" and ") { data.name(it) }} · ${formatFinishedAt(story.savedAt)}")
             Text(story.text)
-            story.turns.forEach { Text("${data.name(it.readerId)} wrote: ${it.text}") }
             ReadingListen(story.text, available, speak, stop) {}
         }
         ReadingButton(backLabel, "reading-back", action = back)

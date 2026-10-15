@@ -6,6 +6,9 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.UUID
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
 
 /** Content, selection reservations, and the progress ledger share one commit boundary. */
 class ReadingSqliteStore(
@@ -22,7 +25,8 @@ class ReadingSqliteStore(
     override fun load(): ReadingData {
         loaded = false
         val result = transaction {
-            val existing = readState()
+            var migratedState = false
+            val existing = readState { migratedState = true }
             val data = existing ?: run {
                 val legacy = if (legacyFile.exists() || File(legacyFile.path + ".bak").exists())
                     ReadingStore(legacyFile).load() else ReadingData()
@@ -43,7 +47,7 @@ class ReadingSqliteStore(
                 migrated
             }
             ReadingEngine.validate(data, ::resolve)
-            if (existing != null && !normalizedState()) writeState(data)
+            if (existing != null && (!normalizedState() || migratedState)) writeState(data)
             prepare(data)
         }
         expectedState = encode(result)
@@ -190,7 +194,7 @@ class ReadingSqliteStore(
             it.moveToFirst() && it.getInt(0) == 1
         }
 
-    private fun SQLiteDatabase.readState(): ReadingData? {
+    private fun SQLiteDatabase.readState(onMigration: () -> Unit = {}): ReadingData? {
         val bytes = rawQuery("SELECT length(CAST(payload AS BLOB)) FROM reading_state WHERE singleton=1", null).use {
             if (!it.moveToFirst()) return null
             it.getInt(0)
@@ -206,15 +210,21 @@ class ReadingSqliteStore(
             }
             offset += 65536
         }
-        val header = json.decodeFromString<ReadingData>(output.toString(Charsets.UTF_8.name()))
-        if (!normalizedState()) return header
+        val header = json.parseToJsonElement(output.toString(Charsets.UTF_8.name())).jsonObject
+        fun decode(root: JsonObject): ReadingData {
+            val cleaned = ReadingMigration.migrate(root)
+            if (cleaned != root) onMigration()
+            return json.decodeFromJsonElement(ReadingData.serializer(), cleaned)
+        }
+        if (!normalizedState()) return decode(header)
         val attempts = rawQuery("SELECT payload FROM reading_attempts ORDER BY position", null).use {
-            buildList { while (it.moveToNext()) add(json.decodeFromString<ReadingAttempt>(it.getString(0))) }
+            buildList { while (it.moveToNext()) add(json.parseToJsonElement(it.getString(0))) }
         }
         val stories = rawQuery("SELECT payload FROM reading_stories ORDER BY position", null).use {
-            buildList { while (it.moveToNext()) add(json.decodeFromString<ReadingStory>(it.getString(0))) }
+            buildList { while (it.moveToNext()) add(json.parseToJsonElement(it.getString(0))) }
         }
-        return header.copy(attempts = attempts, stories = stories)
+        val root = JsonObject(header + mapOf("attempts" to JsonArray(attempts), "stories" to JsonArray(stories)))
+        return decode(root)
     }
 
     private fun SQLiteDatabase.writeState(data: ReadingData) {

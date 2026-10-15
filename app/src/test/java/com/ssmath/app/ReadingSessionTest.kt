@@ -135,7 +135,7 @@ class ReadingSessionTest {
     }
 
     @Test fun creativeGamesCountOnceAndOptionalScrambleBonusIsNotPartOfSessionScoring() {
-        for (game in listOf(ReadingGame.STUDIO, ReadingGame.PARTNERS, ReadingGame.SCRAMBLE)) {
+        for (game in listOf(ReadingGame.STUDIO, ReadingGame.SCRAMBLE)) {
             var data = readingSessionFixture(game)
             data = readingSolve(data)
             val session = requireNotNull(data.activeSession)

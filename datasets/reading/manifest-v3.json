@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "version": "v3",
-  "file": "activities-f7a0638c5bf63ade3b43bfb10a4748d9bc9df4e88c7883be3a3c818324b88919.jsonl",
-  "sha256": "f7a0638c5bf63ade3b43bfb10a4748d9bc9df4e88c7883be3a3c818324b88919",
-  "bytes": 29204026,
+  "file": "activities-47fbb73bb1ed7c82e4ccd33e7bf5768e58af1cebed9a2efdbc14f1910038b504.jsonl",
+  "sha256": "47fbb73bb1ed7c82e4ccd33e7bf5768e58af1cebed9a2efdbc14f1910038b504",
+  "bytes": 19675229,
   "counts": {
     "MISSING:SPROUT": 1000,
     "MISSING:TRAIL": 1000,
@@ -15,19 +15,13 @@
     "DETECTIVE:TRAIL": 1000,
     "CAPTION:SPROUT": 1000,
     "CAPTION:TRAIL": 1000,
-    "CHAPTER:SPROUT": 1000,
-    "CHAPTER:TRAIL": 1000,
     "STUDIO:SPROUT": 1000,
-    "PARTNERS:SPROUT": 1000,
     "STUDIO:TRAIL": 1000,
-    "PARTNERS:TRAIL": 1000,
     "MISSING:SUMMIT": 1000,
     "SCRAMBLE:SUMMIT": 1000,
     "SEQUENCE:SUMMIT": 1000,
     "DETECTIVE:SUMMIT": 1000,
     "CAPTION:SUMMIT": 1000,
-    "CHAPTER:SUMMIT": 1000,
-    "STUDIO:SUMMIT": 1000,
-    "PARTNERS:SUMMIT": 1000
+    "STUDIO:SUMMIT": 1000
   }
 }

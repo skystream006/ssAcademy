@@ -55,7 +55,7 @@ class ReadingReviewTest {
             visible(content.title)
             visible("Picture: ${content.picture.symbol} — ${content.picture.description}")
             content.passage.forEach(::visible)
-            if (game !in listOf(ReadingGame.STUDIO, ReadingGame.PARTNERS)) {
+            if (game != ReadingGame.STUDIO) {
                 val question = requireNotNull(ReadingEngine.question(attempt))
                 visible(question.prompt)
                 question.choices.forEachIndexed { index, choice -> visible("${index + 1}. $choice") }
@@ -71,23 +71,13 @@ class ReadingReviewTest {
                     visible("Saved answer: ${content.passage[content.evidence]}")
                     visible("Correct evidence: ${content.passage[content.evidence]}")
                 }
-                ReadingGame.CHAPTER -> {
-                    visible("Chosen chapter: ${content.branches[0].label}")
-                    visible(content.branches[0].text)
-                    compose.onNodeWithText(content.branches[1].text).assertDoesNotExist()
-                }
                 ReadingGame.STUDIO -> ReadingEngine.studioKeys.forEach {
                     visible("Your $it idea")
                     visible("Saved answer: ${attempt.fields[it]}")
                 }
-                ReadingGame.PARTNERS -> {
-                    attempt.turns.forEach { visible("Saved answer: ${it.text}") }
-                    visible("Turn 2 · Bo · Add a place.")
-                    visible("Story reread")
-                }
                 else -> Unit
             }
-            if (game in listOf(ReadingGame.STUDIO, ReadingGame.PARTNERS)) {
+            if (game == ReadingGame.STUDIO) {
                 visible("Creative writing · no single correct answer")
                 compose.onNodeWithTag("reading-review-story").performScrollTo()
                     .assertTextEquals(data.stories.single().text)

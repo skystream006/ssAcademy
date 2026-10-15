@@ -90,35 +90,10 @@ class ReadingSummitTest {
                 assertTrue(activity.id, requireNotNull(result.active).earned("order"))
                 result = answer(result, if (activity.game == ReadingGame.SCRAMBLE) "bonus" else "answer")
             }
-            ReadingGame.CHAPTER -> {
-                val branch = variant % activity.branches.size
-                result = persist(ReadingEngine.branch(result, branch))
-                assertEquals(branch, result.active?.branch)
-                assertEquals(result, ReadingEngine.branch(result, (branch + 1) % activity.branches.size))
-                result = answer(result)
-            }
             ReadingGame.STUDIO -> ReadingEngine.studioKeys.forEachIndexed { index, key ->
                 val choices = activity.writingChoices[index]
                 result = persist(ReadingEngine.submit(
                     ReadingEngine.field(result, key, choices[variant % choices.size]), key))
-            }
-            ReadingGame.PARTNERS -> {
-                result = persist(ReadingEngine.partner(result, "reader-b"))
-                activity.writingChoices.forEachIndexed { index, choices ->
-                    val idea = choices[variant % choices.size]
-                    val sentence = when (index) {
-                        0 -> "$idea began an adventure."
-                        1 -> "The adventure led to $idea."
-                        2 -> "The character $idea."
-                        else -> "At last, the character $idea."
-                    }
-                    result = persist(ReadingEngine.submit(
-                        ReadingEngine.field(result, "turn", sentence, expectedTurn = index),
-                        "turn", expectedTurn = index))
-                    assertEquals(sentence, result.active?.turns?.get(index)?.text)
-                }
-                result = persist(ReadingEngine.reread(readingOrder(result, listOf(0, 1, 2, 3))))
-                result = persist(ReadingEngine.submit(result, "shared"))
             }
         }
         if (activity.game == ReadingGame.DETECTIVE) {
@@ -138,12 +113,11 @@ class ReadingSummitTest {
         return result
     }
 
-    @Test fun everySummitActivityAndEveryBranchAndAcceptedOrderCanBeCompletedThroughSqlite() {
+    @Test fun everySummitActivityAndAcceptedOrderCanBeCompletedThroughSqlite() {
         install()
         val activities = ReadingRepositoryPack("manifest-v2.json").activities.filter { it.level == ReadingLevel.SUMMIT }
-        assertEquals(24, activities.size)
+        assertEquals(18, activities.size)
         var data = readers()
-        val branches = mutableSetOf<Pair<String, Int>>()
         val orders = mutableSetOf<Pair<String, List<Int>>>()
         repeat(2) { variant ->
             ReadingGame.entries.forEach { game ->
@@ -156,24 +130,20 @@ class ReadingSummitTest {
                     assertEquals(game, content.game)
                     data = solve(data, variant)
                     val completed = requireNotNull(data.active)
-                    completed.branch?.let { branches.add(content.id to it) }
                     if (content.validOrders.isNotEmpty()) orders.add(content.id to completed.order)
                     assertTrue(completed.checkpoints.values.all { it.earned && it.tries == 1 })
                 }
                 assertEquals(activities.filter { it.game == game }.map { it.id }.toSet(), seen)
             }
         }
-        assertEquals(activities.flatMap { a -> a.branches.indices.map { a.id to it } }.toSet(), branches)
         assertEquals(activities.flatMap { a -> a.validOrders.map { a.id to it } }.toSet(), orders)
-        assertEquals(48, data.attempts.size)
-        assertEquals(48, data.completions("reader-a"))
-        assertEquals(84, data.checkpointCount("reader-a"))
-        assertEquals(6, data.checkpointCount("reader-b"))
+        assertEquals(36, data.attempts.size)
+        assertEquals(36, data.completions("reader-a"))
+        assertEquals(72, data.checkpointCount("reader-a"))
+        assertEquals(0, data.checkpointCount("reader-b"))
         assertTrue(data.attempts.flatMap { it.checkpoints.values }.none { it.rewardGranted })
-        assertEquals(6, data.completions("reader-b"))
-        assertEquals(6, data.sharedCompletions("reader-a"))
-        assertEquals(6, data.sharedCompletions("reader-b"))
-        assertEquals(12, data.stories.size)
+        assertEquals(0, data.completions("reader-b"))
+        assertEquals(6, data.stories.size)
         assertEquals(data, reopen())
     }
 
@@ -249,7 +219,7 @@ class ReadingSummitTest {
             assertEquals(revision, store.catalog.latest(id)?.revision)
             assertEquals(oldActivities.first { it.id == id }, store.catalog.find(id, revision))
         }
-        assertEquals(listOf(listOf("72")), rows("SELECT COUNT(*) FROM reading_content"))
+        assertEquals(listOf(listOf("54")), rows("SELECT COUNT(*) FROM reading_content"))
         data = store.start(data, ReadingGame.MISSING, ReadingLevel.SPROUT, false)
         assertEquals(unfinished, data.active)
         assertEquals(oldCycles, cycles())

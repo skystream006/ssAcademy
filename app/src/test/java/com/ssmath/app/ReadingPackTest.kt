@@ -293,6 +293,8 @@ class ReadingPackTest {
         val corrupt = listOf(
             "{not json}\n",
             readingPackJson.encodeToString(first.copy(id = "bad-game")).replace("\"MISSING\"", "\"UNKNOWN\"") + "\n",
+            readingPackJson.encodeToString(first.copy(id = "retired-game")).replace("\"MISSING\"", "\"CHAPTER\"") + "\n",
+            readingPackJson.encodeToString(first.copy(id = "retired-game")).replace("\"MISSING\"", "\"PARTNERS\"") + "\n",
             readingPackJson.encodeToString(first.copy(id = "bad-level")).replace("\"SPROUT\"", "\"EXPERT\"") + "\n",
             readingPackJson.encodeToString(first.copy(id = "bad-field")).replace("\"title\":", "\"surprise\":") + "\n"
         )
@@ -312,8 +314,7 @@ class ReadingPackTest {
                 ReadingGame.SEQUENCE -> activity.copy(validOrders = listOf(listOf(0, 1, 2)))
                 ReadingGame.DETECTIVE -> activity.copy(evidence = activity.passage.size)
                 ReadingGame.CAPTION -> activity.copy(question = null)
-                ReadingGame.CHAPTER -> activity.copy(branches = listOf(activity.branches.first(), activity.branches.first()))
-                ReadingGame.STUDIO, ReadingGame.PARTNERS -> activity.copy(writingChoices = listOf(listOf("Only one")))
+                ReadingGame.STUDIO -> activity.copy(writingChoices = listOf(listOf("Only one")))
             }
         } + listOf(
             first.copy(question = requireNotNull(first.question).copy(answer = 4)),
@@ -324,10 +325,7 @@ class ReadingPackTest {
             first.copy(hint = "bad\u0000text"),
             ReadingContent.find("sequence-seed").copy(eventPictures = emptyList()),
             ReadingContent.find("scramble-cats").copy(validOrders = emptyList()),
-            ReadingContent.find("scramble-cats").copy(validOrders = listOf(listOf(1, 2, 3))),
-            ReadingContent.find("chapter-path").let { activity ->
-                activity.copy(branches = activity.branches.map { it.copy(question = it.question.copy(answer = -1)) })
-            }
+            ReadingContent.find("scramble-cats").copy(validOrders = listOf(listOf(1, 2, 3)))
         )
         install()
         invalid.forEach { activity ->

@@ -64,7 +64,7 @@ class ReadingCatalogBrowserTest {
         assertEquals(3, page.total)
         assertTrue(page.entries.all { it.game == ReadingGame.MISSING && it.level == ReadingLevel.SPROUT })
         assertEquals(6, catalog.browse(game = ReadingGame.CAPTION).total)
-        assertEquals(24, catalog.browse(level = ReadingLevel.TRAIL).total)
+        assertEquals(18, catalog.browse(level = ReadingLevel.TRAIL).total)
         assertEquals(0, catalog.browse(level = ReadingLevel.SUMMIT).total)
         val selected = page.entries.first { it.id == first.id }
         install(listOf(first.copy(title = "Updated installed title")), "test-2")

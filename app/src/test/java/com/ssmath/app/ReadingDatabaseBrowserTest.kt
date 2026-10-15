@@ -5,9 +5,6 @@ import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
-import androidx.compose.ui.test.hasAnyAncestor
-import androidx.compose.ui.test.hasTestTag
-import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
@@ -200,17 +197,4 @@ class ReadingDatabaseBrowserTest {
         }
     }
 
-    @Test fun detailShowsEveryBranchWithItsOwnQuestionAndAnswer() {
-        val activity = ReadingContent.activities.first { it.game == ReadingGame.CHAPTER }
-        compose.setContent { ReadingDatabaseDetail(activity, "test-revision") }
-        activity.branches.forEachIndexed { index, branch ->
-            compose.onNodeWithText("Branch ${index + 1}: ${branch.label}").performScrollTo().assertIsDisplayed()
-            compose.onNodeWithText(branch.text).performScrollTo().assertIsDisplayed()
-            val inBranch = hasAnyAncestor(hasTestTag("reading-database-branch-$index"))
-            compose.onNode(hasText(branch.question.prompt) and inBranch).performScrollTo().assertIsDisplayed()
-            val question = branch.question
-            compose.onNode(hasText("Correct answer: ${question.answer + 1}. ${question.choices[question.answer]} " +
-                "(index ${question.answer})") and inBranch).performScrollTo().assertIsDisplayed()
-        }
-    }
 }

@@ -4,9 +4,12 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 class ReadingDatabase(context: Context, name: String = "reading.db") :
-    SQLiteOpenHelper(context.applicationContext, name, null, 2) {
+    SQLiteOpenHelper(context.applicationContext, name, null, 3) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("""CREATE TABLE reading_content (
             id TEXT NOT NULL, revision TEXT NOT NULL, payload TEXT NOT NULL,
@@ -30,11 +33,46 @@ class ReadingDatabase(context: Context, name: String = "reading.db") :
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        check(oldVersion == 1 && newVersion == 2) {
+        check(oldVersion in 1..2 && newVersion == 3) {
             "A non-destructive reading database migration is required: $oldVersion to $newVersion"
         }
-        db.execSQL("ALTER TABLE reading_state ADD COLUMN normalized INTEGER NOT NULL DEFAULT 0")
-        createHistoryTables(db)
+        if (oldVersion == 1) {
+            db.execSQL("ALTER TABLE reading_state ADD COLUMN normalized INTEGER NOT NULL DEFAULT 0")
+            createHistoryTables(db)
+        }
+        ReadingMigration.retiredGames.forEach { game ->
+            listOf("reading_current", "reading_cycles", "reading_presented").forEach { table ->
+                db.delete(table, "game=?", arrayOf(game))
+            }
+        }
+        var lastId = ""
+        var lastRevision = ""
+        while (true) {
+            // Finish each bounded read before deleting rows so CursorWindow refills cannot skip content.
+            val rows = db.rawQuery(
+                """SELECT id,revision,payload FROM reading_content
+                    WHERE id>? OR (id=? AND revision>?) ORDER BY id,revision LIMIT 100""",
+                arrayOf(lastId, lastId, lastRevision)
+            ).use { cursor ->
+                buildList {
+                    while (cursor.moveToNext()) add(Triple(cursor.getString(0), cursor.getString(1), cursor.getString(2)))
+                }
+            }
+            if (rows.isEmpty()) break
+            rows.forEach { (id, revision, text) ->
+                val payload = readingPackJson.parseToJsonElement(text).jsonObject
+                val keys = arrayOf(id, revision)
+                if (payload.getValue("game").jsonPrimitive.content in ReadingMigration.retiredGames) {
+                    db.delete("reading_content", "id=? AND revision=?", keys)
+                } else if ("branches" in payload) {
+                    // Keep revision identifiers so surviving attempts still resolve their assigned content.
+                    db.execSQL("UPDATE reading_content SET payload=? WHERE id=? AND revision=?",
+                        arrayOf(JsonObject(payload - "branches").toString(), keys[0], keys[1]))
+                }
+            }
+            lastId = rows.last().first
+            lastRevision = rows.last().second
+        }
     }
 
     private fun createHistoryTables(db: SQLiteDatabase) {

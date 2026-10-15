@@ -112,8 +112,8 @@ with dated activity records. Older installations with multiple readers retain a 
 history selector, without changing the local user or interrupting a saved reading draft.
 Use the delete button on a game or older standalone activity, or **Clear history** to remove
 the displayed reader's history. Confirmation is required. Deleting a game removes all its
-questions, drafts, stories, progress, and linked reward fragments; shared activities are
-removed for both readers. Linked celebrations are removed unless another saved result also
+questions, drafts, stories, progress, and linked reward fragments.
+Linked celebrations are removed unless another saved result also
 earned them. Other readers' unrelated history, Math history, and imported activities are kept.
 Rewards whose ownership records were already discarded by older app versions cannot be
 linked back to deleted games and are kept.
@@ -235,8 +235,8 @@ Reading history is separate from math history; prizes and Pokémon use the share
 Open **Settings → Reading Settings → Reading Practice History**, then **Review questions and answers**
 on a game or activity to review it without changing your current draft. The same review is
 available from Results. Use **Previous** and **Next** to see each assigned question, its
-original passage, choices, saved response, and correct answer or accepted orders. Evidence,
-chosen chapters, and creative stories are included; creative writing has no single correct answer.
+original passage, choices, saved response, and correct answer or accepted orders. Evidence
+and creative stories are included; creative writing has no single correct answer.
 Unsubmitted drafts and unfinished questions are labeled separately from incorrect answers.
 Games and responses are saved automatically on this device and remain reviewable offline after
 restarting or updating the activity library, using the activity revision assigned at launch.
@@ -273,9 +273,7 @@ including activity revisions, is saved at launch. Cycle rollover never resets dr
 | Story Sequencer | Arrange illustrated story parts and answer a comprehension question. |
 | Reading Detective | Answer a passage question and select its evidence. |
 | Caption Quest | Match an illustration with a written caption. |
-| Choose the Next Chapter | Choose a story branch freely, then answer its comprehension question. |
 | Story Studio | Create a story with character, setting, problem, and ending checkpoints. Use suggested tiles or type your own words. |
-| Story Builder Partners | Take turns with a friend or grown-up (no extra profile needed), or write both parts yourself, then arrange and reread the story. Existing two-reader stories keep their original attribution. |
 
 Hints remain available, and there are no speed bonuses. The Reading Progress view
 distinguishes completed activities from independent first-try answers, legacy retries,
@@ -296,23 +294,24 @@ use non-destructive migrations. Clearing app data, like uninstalling, removes lo
 
 The downloadable source is `datasets/reading/reading-activities-import.json`, with UTF-8 JSON Lines data
 in `datasets/reading/activities-<sha256>.jsonl` (one `ReadingActivity` JSON object per line).
-The previous `manifest.json` entry point remains available for older app versions; checksum-named data files are unchanged.
+The previous `manifest.json` entry point remains available for older app versions.
 These files are outside Android resources/assets and are **not packaged in the APK**.
-Pack **v5** contains **24,000 activities**: **1,000 per game per difficulty**, across all eight
-games and Sprout, Trail, and Summit. This includes the original 72 activities unchanged and
-23,928 template-generated activities. Repeated correct answers from v3 are replaced with
+Pack **v6** contains **18,000 activities**: **1,000 per game per difficulty**, across six
+games and Sprout, Trail, and Summit. This includes 54 original activities and
+17,946 template-generated activities. Repeated correct answers from v3 are replaced with
 context-supported word or phrase choices and comprehension questions. Each correct answer
-appears only once per game and difficulty, including questions on both chapter branches;
-open-ended Studio and Partners stories do not have a single correct answer.
+appears only once per game and difficulty;
+open-ended Studio stories do not have a single correct answer.
 Sentence Scramble now uses **50 sentence structures per difficulty** (150 total), varying
 clause order, sentence openings, coordination, explanations, and contrasts rather than
 only substituting nouns. Structures rotate across topics and situations, with each used
 19 or 20 times among the 997 generated activities per level. The original three activities
-per level remain unchanged, and all other games retain their v4 content.
-All v4 activity IDs are retained, so updating replaces repetitive activities rather than
-adding them alongside their predecessors. The v4 checksum-named file and `manifest-v4.json`
-remain available as the revision baseline. Existing installations can update without losing drafts, progress,
-or presentation cycles. Older app versions without Summit support reject the expanded pack
+per level retain their content, and the other remaining games retain their v4 content.
+All remaining activity IDs are retained, so updating replaces repetitive activities rather than
+adding them alongside their predecessors. Archived packs have also been reduced to the remaining
+games and republished under new checksum filenames. `manifest-v4.json` identifies the revision
+baseline. Existing installations retain the remaining games' drafts, progress,
+and presentation cycles. Older app versions without Summit support reject the expanded pack
 safely and retain their installed library; update the app first.
 The default HTTPS source is this repository's `main` branch on `raw.githubusercontent.com`;
 the files must be merged/published there and publicly readable before the import button works.
@@ -328,22 +327,22 @@ and the pack at 100,000 activities. Downloads are streamed to temporary storage,
 validated in a transactional staging table; failure rolls back and removes the temporary file.
 Allow space for the download, staging table, and SQLite transaction journal during updates.
 
-The v5 content source lives in `datasets/reading/generation/`, outside the APK. It combines
+The v6 content source lives in `datasets/reading/generation/`, outside the APK. It combines
 original vocabulary, scenes, and story prompts using difficulty-specific templates, rather
 than copying the same question under new IDs. Sprout emphasizes short concrete sentences,
 Trail adds context and cause, and Summit adds complex sentences, inference, and reasoning.
-These are reproducible template variations, not 24,000 individually hand-written lessons.
+These are reproducible template variations, not 18,000 individually hand-written lessons.
 Vocabulary can occur in more than one passage, but correct answer choices must be distinct
 within each game and difficulty, ignoring capitalization and whitespace.
 Some reading passages have separate activities for different comprehension questions.
 Structural checks and engine tests verify the catalogue; they do not replace educational
 review of the generated wording.
 
-To reproduce the committed v5 pack, run
+To reproduce the committed v6 pack, run
 `python3 datasets/reading/generate.py` from the repository root;
 add `--check` to verify it without writing files. Python 3.9 or newer and its standard library
 are the only requirements. Generation uses the archived v4 pack as its revision baseline,
-preserves the original 72 activities as an exact prefix and retains unaffected activities. It rejects duplicate
+preserves the remaining 54 original activities as an exact prefix and retains unaffected activities. It rejects duplicate
 answers and learning tasks even when titles or answer order differ, checks importer size/count
 limits, and preserves existing IDs when revising Sentence Scramble activities. Run
 `python3 -m unittest discover -s datasets/reading -p 'test_*.py'` to check structure coverage,
@@ -363,8 +362,10 @@ History/progress
 use small activity references, and only the active attempt's full content is retained in
 the loaded reading state. Database work runs off the UI thread.
 
-On upgrade, existing `reading_private.json` data is migrated once without deleting the
-original file. The small original catalogue remains in code only for legacy-save compatibility;
+On upgrade, retired games and their installed content, drafts, sessions, saved stories, and
+linked rewards are removed. Other games' progress, reader profiles, and rotation are preserved.
+Existing `reading_private.json` data is cleaned before migration to SQLite.
+The small remaining original catalogue remains in code only for legacy-save compatibility;
 it is not installed as a selectable pack on a fresh installation. Old activity IDs, answers,
 checkpoints, attribution, and earned credit are preserved.
 
@@ -374,7 +375,7 @@ If one is unavailable, reading still works without audio; install an offline
 English voice using the device's text-to-speech settings to enable narration.
 All reading activities offer instruction audio only, via the speaker icon beside
 the instructions below the title, with back navigation at the upper left.
-Answers, available tiles, chapter choices, and writing prompts use colored
+Answers, available tiles, and writing prompts use colored
 two-column layouts. Ordered tiles and evidence passages remain in reading order.
 Saved stories can still be read aloud from their summary or the story shelf.
 Previously recorded passage narration remains in progress as support;

@@ -9,9 +9,7 @@ enum class ReadingGame(val title: String, val guidance: String) {
     SEQUENCE("Story Sequencer", "Put the illustrated events in order, then answer a question."),
     DETECTIVE("Reading Detective", "Answer the question, then tap the exact sentence that proves it."),
     CAPTION("Caption Quest", "Look at the picture. Match it to a caption."),
-    CHAPTER("Choose Next Chapter", "Choose what happens next. Read your chapter and answer its question."),
-    STUDIO("Story Studio", "Create a character, a setting, a problem, and an ending. Save each part."),
-    PARTNERS("Story Builder Partners", "Two readers take turns writing. Arrange and reread your shared story.")
+    STUDIO("Story Studio", "Create a character, a setting, a problem, and an ending. Save each part.")
 }
 
 @Serializable
@@ -26,8 +24,6 @@ data class ReadingPicture(val symbol: String, val description: String)
 @Serializable
 data class ReadingQuestion(val prompt: String, val choices: List<String>, val answer: Int)
 @Serializable
-data class ReadingBranch(val label: String, val text: String, val question: ReadingQuestion)
-@Serializable
 data class ReadingActivity(
     val id: String,
     val game: ReadingGame,
@@ -40,7 +36,6 @@ data class ReadingActivity(
     val validOrders: List<List<Int>> = emptyList(),
     val eventPictures: List<ReadingPicture> = emptyList(),
     val evidence: Int = 0,
-    val branches: List<ReadingBranch> = emptyList(),
     val writingChoices: List<List<String>> = emptyList(),
     val hint: String
 )
@@ -202,46 +197,6 @@ object ReadingContent {
             "The team uses timber to build a crossing.", "Think about the material and what the people are making.",
             "One person bakes bread alone.", "The team plants flowers in a boat.", "Two people paint the moon.")
 
-        fun chapter(level: ReadingLevel, id: String, title: String, intro: String, a: ReadingBranch,
-                    b: ReadingBranch, picture: ReadingPicture) {
-            add(ReadingActivity(id, ReadingGame.CHAPTER, level, title, picture,
-                passage = listOf(intro), branches = listOf(a, b),
-                hint = "Read the chapter you chose again. Your answer must come from this branch."))
-        }
-        chapter(ReadingLevel.SPROUT, "chapter-path", "Two little paths", "Kit sees two paths. Where will Kit go?",
-            ReadingBranch("Go to the pond", "Kit goes to the pond. A frog hops onto a rock.",
-                q("What does Kit see?", "A frog", "A fox", "A hen")),
-            ReadingBranch("Go to the hill", "Kit goes up the hill. A fox rests in the sun.",
-                q("What does Kit see?", "A fox", "A frog", "A hen")), p("🛤️", "A fork in a path"))
-        chapter(ReadingLevel.SPROUT, "chapter-box", "The craft box", "Uma opens a craft box. What will she make?",
-            ReadingBranch("Make a crown", "Uma cuts a crown. She puts a star on it.",
-                q("What is on the crown?", "A star", "A leaf", "A shell")),
-            ReadingBranch("Make a boat", "Uma folds a boat. She puts a leaf in it.",
-                q("What is in the boat?", "A leaf", "A star", "A shell")), p("✂️", "Craft materials"))
-        chapter(ReadingLevel.SPROUT, "chapter-visit", "A friendly visit", "Mo has time to visit a friend. Who will Mo visit?",
-            ReadingBranch("Visit Sal", "Sal has a pup. Mo and Sal roll a ball to the pup.",
-                q("What do the friends roll?", "A ball", "A hoop", "A cart")),
-            ReadingBranch("Visit Ren", "Ren has a cart. Mo and Ren pull it to the gate.",
-                q("What do the friends pull?", "A cart", "A ball", "A kite")), p("🏡", "A friendly neighborhood"))
-        chapter(ReadingLevel.TRAIL, "chapter-signal", "The island message",
-            "A paper message washes ashore: meet at sunset. Nia can follow either clue.",
-            ReadingBranch("Follow the shell trail", "The shells lead Nia to a sheltered cove. Friends have brought blankets because the evening breeze is chilly.",
-                q("Why did the friends bring blankets?", "To keep warm", "To catch fish", "To mark the trail")),
-            ReadingBranch("Follow the ribbon trail", "Ribbons lead Nia to a hilltop. Friends have brought binoculars to watch migrating birds before dark.",
-                q("Why did the friends bring binoculars?", "To see distant birds", "To keep warm", "To tie ribbons")), p("🏝️", "An island shore"))
-        chapter(ReadingLevel.TRAIL, "chapter-garden", "The empty garden",
-            "A community garden has an unused corner. Jules offers to help choose its future.",
-            ReadingBranch("Plant night flowers", "Jules plants pale flowers that open at dusk. Soon moths visit them to sip nectar.",
-                q("Why do moths visit at dusk?", "The flowers open then", "The soil freezes then", "The gates close then")),
-            ReadingBranch("Build a shallow pool", "Jules makes a shallow pool with rough stones at its edge. Bees land on the stones to drink without falling in.",
-                q("Why are stones placed at the edge?", "To give bees a safe landing", "To hide the water", "To stop flowers growing")), p("🌿", "A garden corner"))
-        chapter(ReadingLevel.TRAIL, "chapter-music", "The street concert",
-            "A sudden breeze scatters the musicians' pages. Sol can help in two different ways.",
-            ReadingBranch("Gather the pages", "Sol gathers the pages and clips them in order. The musicians can read the whole tune again.",
-                q("How do the clips help?", "They keep pages together", "They make the tune louder", "They call the audience")),
-            ReadingBranch("Find a sheltered spot", "Sol leads the players behind a broad wall. Out of the wind, their pages stay still.",
-                q("Why do the pages stay still?", "The wall blocks the wind", "The notes are heavy", "The audience is silent")), p("🎵", "Musical notes"))
-
         val sproutSets = listOf(
             listOf(listOf("A kind fox", "A tiny robot", "A brave duck"), listOf("a leafy park", "a cozy boat", "a sunny hill"),
                 listOf("lost a hat", "found a locked box", "needed a friend"),
@@ -270,14 +225,12 @@ object ReadingContent {
         listOf(ReadingLevel.SPROUT, ReadingLevel.TRAIL).forEach { level ->
             val sets = if (level == ReadingLevel.SPROUT) sproutSets else trailSets
             sets.forEachIndexed { index, choices ->
-                listOf(ReadingGame.STUDIO, ReadingGame.PARTNERS).forEach { game ->
-                    add(ReadingActivity("${game.name.lowercase()}-${level.name.lowercase()}-$index",
-                        game, level, listOf("A surprising day", "An unexpected helper", "A new beginning")[index],
-                        p(listOf("🦊", "🏰", "🌈")[index], "A story-making illustration"),
-                        writingChoices = choices, hint = if (level == ReadingLevel.SPROUT)
-                            "Say your idea aloud, then pick a tile or type it. Every story needs an ending."
-                        else "Connect the ending to the problem. What changes because of your character's choices?"))
-                }
+                add(ReadingActivity("studio-${level.name.lowercase()}-$index",
+                    ReadingGame.STUDIO, level, listOf("A surprising day", "An unexpected helper", "A new beginning")[index],
+                    p(listOf("🦊", "🏰", "🌈")[index], "A story-making illustration"),
+                    writingChoices = choices, hint = if (level == ReadingLevel.SPROUT)
+                        "Say your idea aloud, then pick a tile or type it. Every story needs an ending."
+                    else "Connect the ending to the problem. What changes because of your character's choices?"))
             }
         }
     }
