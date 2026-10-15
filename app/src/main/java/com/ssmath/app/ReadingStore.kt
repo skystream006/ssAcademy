@@ -26,6 +26,7 @@ interface ReadingStorage {
     fun load(): ReadingData
     fun save(data: ReadingData)
     fun prepare(data: ReadingData): ReadingData = data
+    fun review(attempt: ReadingAttempt): ReadingAttempt = attempt
     fun start(data: ReadingData, game: ReadingGame, level: ReadingLevel, newAttempt: Boolean): ReadingData =
         ReadingEngine.start(data, game, level, newAttempt).also(::save)
     fun startSession(data: ReadingData, game: ReadingGame, level: ReadingLevel, count: Int,
@@ -252,6 +253,10 @@ class ReadingViewModel(
         val current = data
         if (current != null && storageError == null)
             commands.trySend(Command.Edit(current.selectedProfileId, current.profile?.activeAttemptId, block))
+    }
+
+    suspend fun review(attempt: ReadingAttempt): ReadingAttempt = withContext(io) {
+        storage.review(attempt)
     }
 
     fun start(game: ReadingGame, level: ReadingLevel? = null, newAttempt: Boolean = false) {
