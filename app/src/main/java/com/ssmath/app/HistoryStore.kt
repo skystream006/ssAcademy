@@ -264,6 +264,23 @@ class HistoryStore(private val file: File) {
         return emptyList()
     }
 
+    fun deleteReadingResults(sessionIds: Set<String>): PracticeSnapshot {
+        val snapshot = loadSnapshot()
+        val removed = snapshot.readingResults.filter { it.sessionId in sessionIds }
+        if (removed.isEmpty() && snapshot.recordedReadingSessionIds.containsAll(sessionIds)) return snapshot
+        val remaining = snapshot.readingResults.filterNot { it.sessionId in sessionIds }
+        val fragments = removed.mapNotNull { it.prize?.type }.groupingBy { it }.eachCount()
+        val pokemonsToRemove = removed.mapNotNull { it.pokemonReward }.toSet() -
+            remaining.mapNotNull { it.pokemonReward }.toSet() -
+            snapshot.history.mapNotNull { it.pokemonReward }.toSet()
+        return save(snapshot.copy(
+            readingResults = remaining,
+            recordedReadingSessionIds = snapshot.recordedReadingSessionIds + sessionIds,
+            rewards = snapshot.rewards.mapValues { (type, balance) -> balance.removeFragments(fragments[type] ?: 0) },
+            pokemons = snapshot.pokemons - pokemonsToRemove
+        ))
+    }
+
     private fun withoutResults(snapshot: PracticeSnapshot, removed: List<PracticeResult>): PracticeSnapshot {
         val ids = removed.map { it.id }.toSet()
         val fragments = removed.mapNotNull { it.prize?.type }.groupingBy { it }.eachCount()

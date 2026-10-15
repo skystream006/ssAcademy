@@ -16,6 +16,26 @@ internal fun readingSessionFixture(
 )
 
 class ReadingSessionTest {
+    @Test fun deletingAnySessionMemberRemovesTheWholeGameAndKeepsADurableReceipt() {
+        var data = readingSessionFixture(ReadingGame.STUDIO)
+        data = ReadingEngine.nextSessionActivity(readingSolve(data))
+        assertEquals(1, data.stories.size)
+        val deleted = ReadingEngine.deleteHistory(data, setOf(data.attempts.first().id))
+        assertTrue(deleted.sessions.isEmpty())
+        assertTrue(deleted.attempts.isEmpty())
+        assertTrue(deleted.stories.isEmpty())
+        assertEquals(setOf("session-a"), deleted.deletedSessionIds)
+        assertNull(deleted.active)
+        assertEquals(ReadingPage.MENU, deleted.page)
+        ReadingEngine.validate(deleted)
+        assertThrows(IllegalArgumentException::class.java) {
+            ReadingEngine.startSession(deleted, ReadingGame.MISSING, ReadingLevel.SPROUT, 15, id = "session-a")
+        }
+        val next = ReadingEngine.startSession(deleted, ReadingGame.MISSING, ReadingLevel.SPROUT, 15, id = "new")
+        assertEquals(deleted.deletedSessionIds, next.deletedSessionIds)
+        ReadingEngine.validate(next)
+    }
+
     @Test fun sessionsAllocateExactlyTheSelectedCountAndOnlyNextAdvances() {
         for (count in listOf(15, 25, 50)) {
             var data = readingSessionFixture(count = count)

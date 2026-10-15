@@ -129,6 +129,11 @@ fun MathApp(model: MathViewModel) {
 
 @Composable
 internal fun MathAppContent(model: MathViewModel) {
+    val readingModel = rememberReadingViewModel()
+    val deletedReadingSessions = readingModel.data?.deletedSessionIds
+    LaunchedEffect(deletedReadingSessions) {
+        deletedReadingSessions?.let(model::deleteReadingResults)
+    }
     MathTheme(model.theme, model.mode, model.waveAppearance, if (model.skinsEnabled) model.skin else null,
         textSizePercent = model.textSizePercent) {
         val snackbar = remember { SnackbarHostState() }

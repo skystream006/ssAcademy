@@ -389,6 +389,60 @@ class HistoryStoreTest {
         assertEquals(listOf(reading()), store.loadSnapshot().readingResults)
     }
 
+    @Test fun readingDeletionRemovesOnlyLinkedRewardsAndKeepsMathOtherReadersAndSharedCelebrations() {
+        store.add(eligible(1))
+        store.claimReward(1)
+        store.collectPokemon(1, Celebration.PIKACHU)
+        store.collectPokemon(Celebration.SQUIRTLE)
+        for (id in listOf("first", "second", "other-reader")) {
+            store.addReadingResult(reading(id).copy(ownerId = if (id == "other-reader") "other" else "reader",
+                celebration = if (id == "other-reader") Celebration.PIKACHU else Celebration.PARTY))
+            store.claimReadingReward(id)
+            store.collectReadingCelebration(id, if (id == "other-reader") Celebration.PIKACHU else Celebration.PARTY)
+        }
+        val before = store.loadSnapshot()
+        val first = store.deleteReadingResults(setOf("first"))
+        assertEquals(before.history, first.history)
+        assertEquals(RewardBalance(1, 0), first.rewards[RewardType.LOLLIPOP])
+        assertEquals(before.pokemons, first.pokemons)
+        val second = store.deleteReadingResults(setOf("second", "unrecorded"))
+        assertEquals(before.history, second.history)
+        assertEquals(listOf("other-reader"), second.readingResults.map { it.sessionId })
+        assertEquals(RewardBalance(0, 2), second.rewards[RewardType.LOLLIPOP])
+        assertEquals(setOf(Celebration.PIKACHU, Celebration.SQUIRTLE), second.pokemons)
+        assertEquals(before.claimedResultIds, second.claimedResultIds)
+        assertEquals(before.recordedReadingSessionIds + "unrecorded", second.recordedReadingSessionIds)
+        val restored = HistoryStore(file)
+        assertEquals(second, restored.loadSnapshot())
+        assertEquals(second, restored.deleteReadingResults(setOf("first", "second")))
+        assertEquals(second, restored.addReadingResult(reading("first")))
+        assertEquals(second, restored.addReadingResult(reading("unrecorded")))
+        assertEquals(second, restored.claimReadingReward("first"))
+        assertEquals(second, restored.collectReadingCelebration("first", Celebration.PARTY))
+        val last = restored.deleteReadingResults(setOf("other-reader"))
+        assertEquals(RewardBalance(0, 1), last.rewards[RewardType.LOLLIPOP])
+        assertEquals(second.pokemons, last.pokemons)
+    }
+
+    @Test fun failedReadingDeletionLeavesRewardsTogetherAndRetryCannotSubtractUsedRewardsTwice() {
+        repeat(3) {
+            store.addReadingResult(reading("reading-$it"))
+            store.claimReadingReward("reading-$it")
+        }
+        store.useReward(RewardType.LOLLIPOP)
+        val before = store.loadSnapshot()
+        val blocked = File(directory, "${file.name}.tmp").apply { mkdir() }
+        assertThrows(IOException::class.java) { store.deleteReadingResults(setOf("reading-0")) }
+        assertEquals(before, store.loadSnapshot())
+        assertTrue(blocked.delete())
+        val deleted = store.deleteReadingResults(setOf("reading-0"))
+        assertEquals(RewardBalance(), deleted.rewards[RewardType.LOLLIPOP])
+        store.addReadingResult(reading("new"))
+        store.claimReadingReward("new")
+        val after = store.deleteReadingResults(setOf("reading-0"))
+        assertEquals(RewardBalance(0, 1), after.rewards[RewardType.LOLLIPOP])
+    }
+
     @Test fun readingRetentionKeepsDurableReceiptsSoOldSessionsCannotRecreateRewards() {
         val results = List(MAX_HISTORY_RESULTS) { reading("reading-$it") }
         file.writeText(Json { encodeDefaults = true }.encodeToString(PracticeSnapshot.serializer(), PracticeSnapshot(

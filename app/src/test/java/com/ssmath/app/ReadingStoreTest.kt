@@ -257,6 +257,42 @@ class ReadingStoreTest {
         assertEquals(ReadingEngine.renameProfile(original, "Alex"), storage.saved)
     }
 
+    @Test fun failedHistoryDeletionKeepsTheGameUntilRetryAndRejectsStaleEdits() {
+        val original = readingSessionFixture()
+        val storage = RecordingStorage(original)
+        val model = ReadingViewModel(application, storage)
+        await { model.data != null }
+        storage.failSave = true
+        model.deleteHistory(setOf(requireNotNull(original.active).id))
+        model.act { ReadingEngine.hint(it) }
+        await { model.storageError != null && !model.saving }
+        assertEquals(original, model.data)
+        assertEquals(original, storage.saved)
+        storage.failSave = false
+        model.retry()
+        await { model.storageError == null && model.data?.attempts?.isEmpty() == true && !model.saving }
+        assertEquals(ReadingEngine.clearHistory(original, "reader-a"), storage.saved)
+    }
+
+    @Test fun disabledGamesCanBeDeletedWithoutChangingOtherReadersDrafts() {
+        var original = ReadingEngine.selectProfile(readingFixture(), "reader-b")
+        original = ReadingEngine.start(original, ReadingGame.MISSING, ReadingLevel.SPROUT, true, "attempt-b")
+        original = ReadingEngine.selectProfile(original, "reader-a")
+        settings.edit().putStringSet("disabled_reading_games", setOf(ReadingGame.MISSING.name)).commit()
+        val store = ReadingStore(file)
+        store.load()
+        store.save(original)
+        val model = ReadingViewModel(application, store)
+        await { model.data != null }
+        model.clearHistory("reader-b")
+        await { model.data?.attempts?.size == 1 && !model.saving }
+        assertEquals(original.active, model.data?.active)
+        model.clearHistory("reader-a")
+        await { model.data?.attempts?.isEmpty() == true && !model.saving }
+        assertEquals(model.data, ReadingStore(file).load())
+        assertNull(model.message)
+    }
+
     @Test fun failedSaveBlocksEditsAndRetryCommitsTheSamePendingCheckpointExactlyOnce() {
         val storage = RecordingStorage(ReadingEngine.field(readingFixture(), "answer", readingCorrect(readingFixture()).toString()))
         val model = ReadingViewModel(application, storage)
