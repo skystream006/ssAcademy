@@ -8,3 +8,4 @@ local.properties
 *.keystore
 !app/debug.keystore
 captures/
+__pycache__/
