@@ -55,6 +55,8 @@ class ReadingEntryTest {
     @After fun close() {
         compose.activity.viewModelStore.clear()
         store.database.close()
+        application.deleteDatabase("reading.db")
+        listOf(legacy, File(legacy.path + ".bak"), File(legacy.path + ".new")).forEach { it.delete() }
     }
 
     private fun reading(io: CoroutineDispatcher = Dispatchers.IO): ReadingViewModel =
@@ -154,6 +156,48 @@ class ReadingEntryTest {
         assertEquals(1, snapshot.readingResults.size)
         assertNotNull(snapshot.readingResults.single().prize)
         assertEquals(1, snapshot.pokemons.size)
+    }
+
+    @Test fun deletingReadingHistoryFromSettingsReconcilesRewardsWithoutLeavingTheScreen() {
+        var data = readingSessionFixture(count = 25)
+        repeat(25) { data = ReadingEngine.nextSessionActivity(readingSolve(data)) }
+        ReadingStore(legacy).also { it.load(); it.save(data) }
+        val session = requireNotNull(data.activeSession)
+        val rewards = HistoryStore(File(application.filesDir, "practice_history.json"))
+        rewards.addReadingResult(ReadingRewardResult(session.id, session.ownerId, session.game, session.level,
+            requireNotNull(session.finishedAt), 25, 25, 25,
+            prizeType = RewardType.LOLLIPOP, celebration = Celebration.PIKACHU))
+        rewards.claimReadingReward(session.id)
+        rewards.collectReadingCelebration(session.id, Celebration.PIKACHU)
+        val reading = reading()
+        val app = show()
+        await { reading.data != null && !reading.saving && app.readingRewardResults.isNotEmpty() }
+        compose.runOnIdle { app.openSubjectHistory(Subject.READING) }
+        compose.onNodeWithTag("reading-delete-session-${session.id}").performScrollTo().performClick()
+        compose.onNodeWithText("Delete").performClick()
+        await { reading.data?.sessions?.isEmpty() == true }
+        compose.onNodeWithText("No reading practice results yet for this reader.").assertIsDisplayed()
+        await { app.readingRewardResults.isEmpty() }
+        compose.onNodeWithTag("reading-practice-history-screen").assertIsDisplayed()
+        assertEquals(RewardBalance(), app.rewardBalances[RewardType.LOLLIPOP])
+        assertTrue(app.pokemons.isEmpty())
+        assertEquals(setOf(session.id), store.load().deletedSessionIds)
+        assertEquals(setOf(session.id), rewards.loadSnapshot().recordedReadingSessionIds)
+    }
+
+    @Test fun homeFinishesPersistedReadingRewardDeletionAfterRestart() {
+        val rewards = HistoryStore(File(application.filesDir, "practice_history.json"))
+        rewards.addReadingResult(ReadingRewardResult("deleted", "reader-a", ReadingGame.MISSING,
+            ReadingLevel.SPROUT, 1, 25, 25, 25, prizeType = RewardType.LOLLIPOP))
+        rewards.claimReadingReward("deleted")
+        store.save(ReadingEngine.addProfile(store.load(), "Ari", "reader-a")
+            .copy(deletedSessionIds = setOf("deleted")))
+        val reading = reading()
+        val app = show()
+        await { reading.data != null && app.rewardBalances[RewardType.LOLLIPOP] == RewardBalance() }
+        compose.onNodeWithTag("subject-grid").assertIsDisplayed()
+        assertTrue(app.readingRewardResults.isEmpty())
+        assertEquals(setOf("deleted"), rewards.loadSnapshot().recordedReadingSessionIds)
     }
 
     @Test fun earlyClickWaitsForCatalogueAndCancelDoesNotNavigateAfterLoading() {

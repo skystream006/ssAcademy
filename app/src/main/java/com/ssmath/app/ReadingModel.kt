@@ -118,7 +118,9 @@ data class ReadingData(
     val page: ReadingPage = ReadingPage.MENU,
     val attempts: List<ReadingAttempt> = emptyList(),
     val stories: List<ReadingStory> = emptyList(),
-    val sessions: List<ReadingSession> = emptyList()
+    val sessions: List<ReadingSession> = emptyList(),
+    // Durable deletion receipts allow shared rewards to be cleaned up after a failed write or restart.
+    val deletedSessionIds: Set<String> = emptySet()
 ) {
     val profile: ReadingProfile? get() = profiles.find { it.id == selectedProfileId }
     val active: ReadingAttempt? get() = attempts.find { it.id == profile?.activeAttemptId }
@@ -193,6 +195,26 @@ object ReadingEngine {
         if (it.id == data.selectedProfileId) it.copy(level = level) else it
     })
 
+    fun deleteHistory(data: ReadingData, attemptIds: Set<String>): ReadingData {
+        val sessions = data.sessions.filter { session -> session.attemptIds.any { it in attemptIds } }
+        val removed = attemptIds + sessions.flatMap { it.attemptIds }
+        if (data.attempts.none { it.id in removed }) return data
+        val activeRemoved = data.profile?.activeAttemptId in removed
+        return data.copy(
+            attempts = data.attempts.filterNot { it.id in removed },
+            sessions = data.sessions - sessions.toSet(),
+            stories = data.stories.filterNot { it.attemptId in removed },
+            profiles = data.profiles.map {
+                if (it.activeAttemptId in removed) it.copy(activeAttemptId = null) else it
+            },
+            page = if (activeRemoved && data.page == ReadingPage.ACTIVITY) ReadingPage.MENU else data.page,
+            deletedSessionIds = data.deletedSessionIds + sessions.map { it.id }
+        )
+    }
+
+    fun clearHistory(data: ReadingData, readerId: String): ReadingData =
+        deleteHistory(data, data.attemptsFor(readerId).map { it.id }.toSet())
+
     fun draft(data: ReadingData, game: ReadingGame, level: ReadingLevel): ReadingAttempt? {
         fun matches(attempt: ReadingAttempt) = attempt.includes(data.selectedProfileId ?: "") &&
             attempt.game == game && attempt.level == level &&
@@ -210,7 +232,7 @@ object ReadingEngine {
     ): ReadingData {
         require(count in listOf(15, 25, 50)) { "Choose 15, 25, or 50 questions." }
         val owner = requireNotNull(data.profile)
-        require(data.sessions.none { it.id == id } && id.isNotBlank())
+        require(data.sessions.none { it.id == id } && id !in data.deletedSessionIds && id.isNotBlank())
         require(timeLimitMs == null || (rewardsEnabledAtStart && timeLimitMs > 0))
         val attempts = assigned ?: run {
             val choices = ReadingContent.forGame(game, level)
@@ -260,7 +282,7 @@ object ReadingEngine {
     }
 
     fun resume(data: ReadingData, id: String): ReadingData {
-        val attempt = data.attempts.first { it.id == id }
+        val attempt = data.attempts.find { it.id == id } ?: return data
         require(attempt.includes(requireNotNull(data.selectedProfileId)) && !attempt.abandoned)
         val session = data.sessions.find { id in it.attemptIds }
         val activeId = if (session != null && session.finishedAt == null) {
@@ -515,6 +537,8 @@ object ReadingEngine {
         require(data.attempts.map { it.id }.distinct().size == data.attempts.size)
         val attemptsById = data.attempts.associateBy { it.id }
         require(data.sessions.map { it.id }.distinct().size == data.sessions.size)
+        require(data.deletedSessionIds.none { it.isBlank() })
+        require(data.sessions.none { it.id in data.deletedSessionIds })
         val sessionAttempts = data.sessions.flatMap { it.attemptIds }
         require(sessionAttempts.distinct().size == sessionAttempts.size)
         data.sessions.forEach { session ->

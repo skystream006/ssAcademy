@@ -684,6 +684,7 @@ class MathViewModel(
     }
 
     private fun prepareReadingReward(data: ReadingData, session: ReadingSession, automatic: Boolean) {
+        if (session.id in deletedReadingSessionIds || session.id in data.deletedSessionIds) return
         val current = data.sessions.find { it.id == session.id } ?: return
         val finishedAt = current.finishedAt ?: return
         if (current.abandoned || current.attemptIds.isEmpty()) return
@@ -730,6 +731,7 @@ class MathViewModel(
 
     /** Returns true only for the first durable receipt, not a resumed or retained session. */
     private suspend fun persistReadingResult(pending: PendingReadingResult): Boolean {
+        if (pending.result.sessionId in deletedReadingSessionIds) return false
         if (pending.saved) return false
         var snapshot = withContext(ioDispatcher) { store.loadSnapshot() }
         val id = pending.result.sessionId
@@ -927,6 +929,31 @@ class MathViewModel(
         pokemons = snapshot.pokemons
         collectionLoaded = true
         latestResultId = maxOf(latestResultId, snapshot.lastResultId, snapshot.history.maxOfOrNull { it.id } ?: 0L)
+    }
+
+    var readingHistoryError by mutableStateOf<String?>(null)
+        private set
+    private var deletedReadingSessionIds = emptySet<String>()
+
+    fun deleteReadingResults(sessionIds: Set<String>) {
+        if (sessionIds.isEmpty()) return
+        deletedReadingSessionIds = deletedReadingSessionIds + sessionIds
+        if (pendingReadingResult?.result?.sessionId in sessionIds ||
+            readingRewardResult?.sessionId in sessionIds) dismissReadingSessionReward()
+        viewModelScope.launch {
+            try {
+                storeLock.withLock {
+                    applySnapshot(withContext(ioDispatcher) { store.deleteReadingResults(sessionIds) })
+                    readingHistoryError = null
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                DebugLog.event(DebugEvent.HISTORY_FAILURE, error = error)
+                readingHistoryError = "Reading history was deleted, but its rewards could not be removed. Retry to finish."
+                message = readingHistoryError
+            }
+        }
     }
 
     fun deleteResult(id: Long) {

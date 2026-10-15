@@ -110,6 +110,13 @@ You can disable every game; the reading menu will explain where to enable them a
 **Reading Practice History** opens
 with dated activity records. Older installations with multiple readers retain a read-only
 history selector, without changing the local user or interrupting a saved reading draft.
+Use the delete button on a game or older standalone activity, or **Clear history** to remove
+the displayed reader's history. Confirmation is required. Deleting a game removes all its
+questions, drafts, stories, progress, and linked reward fragments; shared activities are
+removed for both readers. Linked celebrations are removed unless another saved result also
+earned them. Other readers' unrelated history, Math history, and imported activities are kept.
+Rewards whose ownership records were already discarded by older app versions cannot be
+linked back to deleted games and are kept.
 **Science Settings** and **Advanced Subject Settings** each have their own rewards switch
 and practice history; these show an empty state until their activities are available.
 All four reward switches are independent and on by default. Existing Math reward

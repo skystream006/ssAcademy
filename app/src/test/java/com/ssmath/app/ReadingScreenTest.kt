@@ -131,6 +131,52 @@ class ReadingScreenTest {
         assertEquals(before, model.data)
     }
 
+    @Test fun historyDeletionRequiresConfirmationAndRemovesWholeSessionsIncludingDrafts() {
+        val data = ReadingEngine.nextSessionActivity(readingSolve(readingSessionFixture()))
+        show(data, history = true)
+        val session = requireNotNull(data.activeSession)
+        compose.onNodeWithTag("reading-delete-attempt-${data.attempts.first().id}").assertDoesNotExist()
+        click("reading-delete-session-${session.id}")
+        compose.onNodeWithText("Delete this result?").assertIsDisplayed()
+        compose.onNodeWithText("Cancel").performClick()
+        assertEquals(data, model.data)
+        assertEquals(data, ReadingStore(file).load())
+        click("reading-delete-session-${session.id}")
+        compose.onNodeWithText("Delete").performClick()
+        waitFor { it.attempts.isEmpty() }
+        assertTrue(requireNotNull(model.data).sessions.isEmpty())
+        assertEquals(setOf(session.id), model.data?.deletedSessionIds)
+        compose.onNodeWithTag("reading-clear-history").assertDoesNotExist()
+        compose.onNodeWithText("No reading practice results yet for this reader.").assertIsDisplayed()
+        assertEquals(model.data, ReadingStore(file).load())
+    }
+
+    @Test fun historyCanDeleteLegacyActivityAndClearOnlyTheDisplayedReader() {
+        var data = ReadingEngine.selectProfile(readingFixture(), "reader-b")
+        data = ReadingEngine.start(data, ReadingGame.MISSING, ReadingLevel.SPROUT, true, "attempt-b")
+        data = ReadingEngine.start(data, ReadingGame.MISSING, ReadingLevel.SPROUT, true, "attempt-c")
+        data = ReadingEngine.selectProfile(data, "reader-a")
+        show(data, history = true)
+        click("reading-history-reader-reader-b")
+        click("reading-delete-attempt-attempt-b")
+        compose.onNodeWithText("Delete").performClick()
+        waitFor { it.attempts.size == 2 }
+        assertEquals(data.active, model.data?.active)
+        assertEquals(data.selectedProfileId, model.data?.selectedProfileId)
+        click("reading-clear-history")
+        compose.onNodeWithText("Clear reading history?").assertIsDisplayed()
+        compose.onNodeWithText("Cancel").performClick()
+        assertEquals(2, model.data?.attempts?.size)
+        click("reading-clear-history")
+        compose.onNodeWithText("Clear").performClick()
+        waitFor { it.attempts.size == 1 }
+        assertEquals(listOf("attempt-a"), model.data?.attempts?.map { it.id })
+        assertEquals(data.active, model.data?.active)
+        assertEquals(data.selectedProfileId, model.data?.selectedProfileId)
+        assertEquals(model.data, ReadingStore(file).load())
+        compose.onNodeWithTag("reading-clear-history").assertDoesNotExist()
+    }
+
     private fun chooseCorrectAnswer() {
         val answer = readingCorrect(requireNotNull(model.data))
         click("reading-answer-$answer")

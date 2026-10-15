@@ -177,8 +177,9 @@ class HistoryStore(private val file: File) {
             }
         )
         return save(snapshot.copy(
-            readingResults = (listOf(saved) + snapshot.readingResults).take(MAX_HISTORY_RESULTS),
-            // Retain receipts even after result retention, so old sessions cannot grant another reward.
+            // Reading sessions are not capped; keep their reward ownership until explicitly deleted.
+            readingResults = listOf(saved) + snapshot.readingResults,
+            // Retain receipts after deletion so old sessions cannot grant another reward.
             recordedReadingSessionIds = snapshot.recordedReadingSessionIds + result.sessionId
         ))
     }
@@ -262,6 +263,23 @@ class HistoryStore(private val file: File) {
             save(withoutResults(snapshot, snapshot.history))
         } else if (file.exists() && !file.delete()) throw IOException("Unable to clear practice history.")
         return emptyList()
+    }
+
+    fun deleteReadingResults(sessionIds: Set<String>): PracticeSnapshot {
+        val snapshot = loadSnapshot()
+        val removed = snapshot.readingResults.filter { it.sessionId in sessionIds }
+        if (removed.isEmpty() && snapshot.recordedReadingSessionIds.containsAll(sessionIds)) return snapshot
+        val remaining = snapshot.readingResults.filterNot { it.sessionId in sessionIds }
+        val fragments = removed.mapNotNull { it.prize?.type }.groupingBy { it }.eachCount()
+        val pokemonsToRemove = removed.mapNotNull { it.pokemonReward }.toSet() -
+            remaining.mapNotNull { it.pokemonReward }.toSet() -
+            snapshot.history.mapNotNull { it.pokemonReward }.toSet()
+        return save(snapshot.copy(
+            readingResults = remaining,
+            recordedReadingSessionIds = snapshot.recordedReadingSessionIds + sessionIds,
+            rewards = snapshot.rewards.mapValues { (type, balance) -> balance.removeFragments(fragments[type] ?: 0) },
+            pokemons = snapshot.pokemons - pokemonsToRemove
+        ))
     }
 
     private fun withoutResults(snapshot: PracticeSnapshot, removed: List<PracticeResult>): PracticeSnapshot {

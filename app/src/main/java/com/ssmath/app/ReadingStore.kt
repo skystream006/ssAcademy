@@ -124,7 +124,8 @@ class ReadingViewModel(
             val profileId: String?,
             val attemptId: String?,
             val block: (ReadingData) -> ReadingData,
-            val start: Start? = null
+            val start: Start? = null,
+            val historyDeletion: Boolean = false
         ) : Command
         data class Start(val game: ReadingGame, val level: ReadingLevel?, val newAttempt: Boolean,
                          val count: Int? = null, val rewardsEnabled: Boolean = false, val timeLimitMs: Long? = null)
@@ -201,10 +202,10 @@ class ReadingViewModel(
             message = error.message ?: "Please check that choice."
             return
         }
-        if ((next.active?.open == true && isDisabled(requireNotNull(next.active).game) &&
+        if (!command.historyDeletion && ((next.active?.open == true && isDisabled(requireNotNull(next.active).game) &&
             (next.page == ReadingPage.ACTIVITY || next.active != current.active)) ||
             (current.active?.open == true && isDisabled(requireNotNull(current.active).game) &&
-                next.attempts != current.attempts)) {
+                next.attempts != current.attempts))) {
             message = "This reading game is disabled in Settings."
             return
         }
@@ -253,6 +254,17 @@ class ReadingViewModel(
         val current = data
         if (current != null && storageError == null)
             commands.trySend(Command.Edit(current.selectedProfileId, current.profile?.activeAttemptId, block))
+    }
+
+    fun deleteHistory(attemptIds: Set<String>) {
+        val current = data ?: return
+        if (!saving && storageError == null) commands.trySend(Command.Edit(
+            current.selectedProfileId, current.profile?.activeAttemptId,
+            { ReadingEngine.deleteHistory(it, attemptIds) }, historyDeletion = true))
+    }
+
+    fun clearHistory(readerId: String) {
+        deleteHistory(data?.attemptsFor(readerId)?.map { it.id }?.toSet() ?: return)
     }
 
     suspend fun review(attempt: ReadingAttempt): ReadingAttempt = withContext(io) {

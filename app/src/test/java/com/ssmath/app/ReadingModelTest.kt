@@ -70,6 +70,42 @@ internal fun readingSolve(data: ReadingData, rewardsEnabled: Boolean = true): Re
 }
 
 class ReadingModelTest {
+    @Test fun deletingSharedHistoryRemovesStoriesAndBothReadersProgressButKeepsUnrelatedDrafts() {
+        val shared = readingSolve(readingFixture(
+            ReadingContent.forGame(ReadingGame.PARTNERS, ReadingLevel.SPROUT).first()))
+        val data = ReadingEngine.start(shared, ReadingGame.MISSING, ReadingLevel.SPROUT, true, "other")
+        val deleted = ReadingEngine.deleteHistory(data, setOf("attempt-a"))
+        assertEquals(listOf("other"), deleted.attempts.map { it.id })
+        assertEquals(data.active, deleted.active)
+        assertEquals(data.page, deleted.page)
+        assertEquals(data.profiles, deleted.profiles)
+        assertTrue(deleted.stories.isEmpty())
+        assertEquals(0, deleted.sharedCompletions("reader-a"))
+        assertEquals(0, deleted.sharedCompletions("reader-b"))
+        assertEquals(0, deleted.checkpointCount("reader-a"))
+        assertEquals(0, deleted.checkpointCount("reader-b"))
+        ReadingEngine.validate(deleted)
+        assertEquals(deleted, ReadingEngine.deleteHistory(deleted, setOf("attempt-a", "missing")))
+    }
+
+    @Test fun clearingAnotherReadersHistoryPreservesSelectedReaderAndTheirUnrelatedDraft() {
+        var data = ReadingEngine.selectProfile(readingFixture(), "reader-b")
+        data = ReadingEngine.start(data, ReadingGame.MISSING, ReadingLevel.SPROUT, true, "attempt-b")
+        data = ReadingEngine.selectProfile(data, "reader-a").copy(page = ReadingPage.ACTIVITY)
+        val deleted = ReadingEngine.clearHistory(data, "reader-b")
+        assertEquals(data.active, deleted.active)
+        assertEquals(data.page, deleted.page)
+        assertEquals(data.selectedProfileId, deleted.selectedProfileId)
+        assertNull(deleted.profiles.first { it.id == "reader-b" }.activeAttemptId)
+        ReadingEngine.validate(deleted)
+        val empty = ReadingEngine.clearHistory(deleted, "reader-a")
+        assertTrue(empty.attempts.isEmpty())
+        assertNull(empty.active)
+        assertEquals(ReadingPage.MENU, empty.page)
+        assertEquals(2, empty.profiles.size)
+        ReadingEngine.validate(empty)
+    }
+
     @Test fun sentenceTilesCanFillAnySpaceAndMoveWithoutShiftingOtherWords() {
         var data = readingFixture(ReadingContent.find("scramble-cats"))
         data = ReadingEngine.placeTileInSpace(data, 0, 2)

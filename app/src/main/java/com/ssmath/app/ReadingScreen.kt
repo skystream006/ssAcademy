@@ -31,6 +31,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
@@ -172,7 +174,15 @@ fun ReadingHistoryScreen(appModel: MathViewModel? = null) {
 internal fun ReadingHistoryContent(model: ReadingViewModel, appModel: MathViewModel? = null) {
     val data = model.data
     var readerId by rememberSaveable { mutableStateOf<String?>(null) }
+    var deleteAttemptId by rememberSaveable { mutableStateOf<String?>(null) }
+    var clearReaderId by rememberSaveable { mutableStateOf<String?>(null) }
     ReadingColumn("reading-practice-history-screen") {
+        appModel?.readingHistoryError?.let { error ->
+            Text(error, Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+            ReadingButton("Retry reward cleanup", "reading-history-retry-rewards") {
+                data?.deletedSessionIds?.let(appModel::deleteReadingResults)
+            }
+        }
         if (model.storageError != null) {
             Text(requireNotNull(model.storageError), Modifier.semantics { liveRegion = LiveRegionMode.Polite })
             ReadingButton("Retry storage", "reading-retry", action = model::retry)
@@ -192,7 +202,15 @@ internal fun ReadingHistoryContent(model: ReadingViewModel, appModel: MathViewMo
                 }
             }
             Text("Reader: ${profile.name}. Only this reader's history and shared participation are shown.")
-            Text("Finished activities: ${data.completions(profile.id)}")
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Finished activities: ${data.completions(profile.id)}", Modifier.weight(1f))
+                if (data.attemptsFor(profile.id).isNotEmpty()) {
+                    IconButton(onClick = { clearReaderId = profile.id }, enabled = !model.saving,
+                        modifier = Modifier.testTag("reading-clear-history")) {
+                        Icon(Icons.Rounded.DeleteSweep, contentDescription = "Clear history")
+                    }
+                }
+            }
             data.sessions.filter { it.ownerId == profile.id }.asReversed().forEach { session ->
                 Card(Modifier.fillMaxWidth().testTag("reading-session-history-${session.id}")) {
                     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -201,6 +219,10 @@ internal fun ReadingHistoryContent(model: ReadingViewModel, appModel: MathViewMo
                         Text(session.finishedAt?.let { formatFinishedAt(it) } ?:
                             if (session.abandoned) "Archived game" else "In progress")
                         ReadingReviewButton(data, model, session.attemptIds, "reading-review-session-${session.id}")
+                        IconButton(onClick = { deleteAttemptId = session.attemptIds.first() }, enabled = !model.saving,
+                            modifier = Modifier.testTag("reading-delete-session-${session.id}")) {
+                            Icon(Icons.Rounded.Delete, contentDescription = "Delete result")
+                        }
                         if (session.prizeType != null && appModel != null) {
                             TextButton(onClick = { appModel.showReadingRewardForSession(data, session) }) {
                                 Text("View gift")
@@ -209,8 +231,34 @@ internal fun ReadingHistoryContent(model: ReadingViewModel, appModel: MathViewMo
                     }
                 }
             }
-            ReadingHistoryEntries(data, profile.id, reviewModel = model)
+            ReadingHistoryEntries(data, profile.id, reviewModel = model, deletionEnabled = !model.saving,
+                onDelete = { deleteAttemptId = it.id })
         }
+    }
+    val deleting = data?.attempts?.find { it.id == deleteAttemptId }
+    val clearing = data?.profiles?.find { it.id == clearReaderId }
+    if (deleting != null || clearing != null) {
+        val session = data?.sessions?.find { deleting?.id in it.attemptIds }
+        AlertDialog(onDismissRequest = { deleteAttemptId = null; clearReaderId = null },
+            title = { Text(if (clearing != null) "Clear reading history?" else "Delete this result?") },
+            text = {
+                Text((if (clearing != null) "All reading history for ${clearing.name}" else if (session != null)
+                    "This entire ${session.questionCount}-question game" else "This activity") +
+                    " and its saved answers, drafts, stories, progress, earned reward fragments and unshared " +
+                    "My Pokémons rewards will be permanently removed. Shared activities are removed for both readers. " +
+                    "Other history is kept. Used rewards cannot be recovered.")
+            },
+            confirmButton = {
+                TextButton(enabled = !model.saving && model.storageError == null, onClick = {
+                    if (clearing != null) model.clearHistory(clearing.id)
+                    else deleting?.let { model.deleteHistory(setOf(it.id)) }
+                    deleteAttemptId = null
+                    clearReaderId = null
+                }) { Text(if (clearing != null) "Clear" else "Delete") }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteAttemptId = null; clearReaderId = null }) { Text("Cancel") }
+            })
     }
 }
 
@@ -980,6 +1028,8 @@ private fun ReadingProgress(data: ReadingData, model: ReadingViewModel, textSize
 @Composable
 private fun ReadingHistoryEntries(data: ReadingData, readerId: String, disabledGames: Set<ReadingGame> = emptySet(),
                                   reviewModel: ReadingViewModel? = null,
+                                  deletionEnabled: Boolean = true,
+                                  onDelete: ((ReadingAttempt) -> Unit)? = null,
                                   onOpen: ((ReadingAttempt) -> Unit)? = null) {
     Text("Dated activity history", style = MaterialTheme.typography.titleLarge)
     val attemptsById = data.attempts.associateBy { it.id }
@@ -1005,6 +1055,12 @@ private fun ReadingHistoryEntries(data: ReadingData, readerId: String, disabledG
                     "${objective.count { it.earned && it.supportedAtCompletion }} supported · ${objective.count { it.retried }} retried")
                 if (reviewModel != null) ReadingReviewButton(data, reviewModel, listOf(a.id),
                     "reading-review-attempt-${a.id}")
+                if (onDelete != null && a.id !in sessionsByAttempt) {
+                    IconButton(onClick = { onDelete(a) }, enabled = deletionEnabled,
+                        modifier = Modifier.testTag("reading-delete-attempt-${a.id}")) {
+                        Icon(Icons.Rounded.Delete, contentDescription = "Delete result")
+                    }
+                }
                 if (onOpen != null && !a.abandoned) ReadingChoice(
                     if (a.finishedAt != null) "Read summary" else "Resume draft", "reading-history-${a.id}",
                     enabled = a.finishedAt != null || a.game !in disabledGames

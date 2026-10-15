@@ -77,6 +77,30 @@ class ReadingSqliteStoreTest {
         assertEquals(0L, scalar("SELECT COUNT(*) FROM reading_content"))
     }
 
+    @Test fun deletedSessionsStayDeletedAfterRestartWithoutResettingInstalledContentOrRotation() {
+        install()
+        val data = store.startSession(reader(), ReadingGame.MISSING, ReadingLevel.SPROUT, 15, true)
+        val sessionId = requireNotNull(data.activeSession).id
+        val presented = scalar("SELECT COUNT(*) FROM reading_presented")
+        val cycle = scalar("SELECT cycle FROM reading_cycles")
+        val contentCount = scalar("SELECT COUNT(*) FROM reading_content")
+        val deleted = ReadingEngine.clearHistory(data, "reader-a")
+        store.save(deleted)
+        database.close()
+        database = ReadingDatabase(application, "rotation.db")
+        store = ReadingSqliteStore(application, database, legacy)
+        val restored = store.load()
+        assertEquals(deleted, restored)
+        assertEquals(setOf(sessionId), restored.deletedSessionIds)
+        assertEquals(0L, scalar("SELECT COUNT(*) FROM reading_attempts"))
+        assertEquals(0L, scalar("SELECT COUNT(*) FROM reading_stories"))
+        assertEquals(presented, scalar("SELECT COUNT(*) FROM reading_presented"))
+        assertEquals(cycle, scalar("SELECT cycle FROM reading_cycles"))
+        assertEquals(contentCount, scalar("SELECT COUNT(*) FROM reading_content"))
+        assertEquals(pool.size, store.catalog.status().counts.values.sum())
+        assertEquals(15, store.startSession(restored, ReadingGame.MISSING, ReadingLevel.SPROUT, 15, true).attempts.size)
+    }
+
     @Test fun randomCyclesExhaustPoolAndAvoidImmediateBoundaryRepeats() {
         install()
         val data = store.startBatch(reader(), ReadingGame.MISSING, ReadingLevel.SPROUT, 11)
