@@ -9,6 +9,8 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -28,7 +30,7 @@ import org.robolectric.annotation.Config
 class ReadingReviewTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
-    private fun visible(text: String) = compose.onNodeWithText(text).performScrollTo().assertIsDisplayed()
+    private fun visible(text: String) = compose.onAllNodesWithText(text).onFirst().performScrollTo().assertIsDisplayed()
 
     private fun show(data: ReadingData, ids: List<String> = data.attempts.map { it.id },
                      load: suspend (ReadingAttempt) -> ReadingAttempt = { it }) {
@@ -156,6 +158,29 @@ class ReadingReviewTest {
         visible("This older activity includes retries. Only the latest saved answer is available, not each earlier response.")
         visible("Correct after retry")
         compose.onNodeWithTag("reading-review-outcome").assertTextEquals("Completed after retry")
+    }
+
+    @Test fun editedLegacyDraftIsNotLabeledWithThePreviousSubmissionVerdict() {
+        var data = readingFixture()
+        data = readingAnswer(data, readingWrong(data))
+        data = ReadingEngine.field(data, "answer", readingCorrect(data).toString())
+        show(data)
+        val question = requireNotNull(data.active?.content?.question)
+        visible("Saved answer: ${question.choices[question.answer]}")
+        visible("Previous submissions: 1 incorrect; the saved draft may have changed.")
+        compose.onNodeWithText("Incorrect submission").assertDoesNotExist()
+    }
+
+    @Test fun finishedLegacyScrambleIncludesAnUnsubmittedBonusSelection() {
+        var data = readingFixture(ReadingContent.find("scramble-cats"))
+        data = ReadingEngine.submit(readingOrder(data, requireNotNull(data.active).content.validOrders.first()), "order")
+        data = ReadingEngine.field(data, "answer", readingWrong(data).toString())
+        data = ReadingEngine.finish(data)
+        show(data)
+        val question = requireNotNull(data.active?.content?.question)
+        visible(question.prompt)
+        visible("Saved answer: ${question.choices[requireNotNull(data.active).fields.getValue("answer").toInt()]}")
+        visible("Unsubmitted draft")
     }
 
     @Test fun loadingFailureCanBeRetriedWithoutSavingOrShowingAnotherQuestion() {

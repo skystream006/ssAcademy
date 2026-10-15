@@ -145,7 +145,7 @@ internal fun ReadingAttemptReview(data: ReadingData, attempt: ReadingAttempt) {
             Text("Accepted orders:")
             content.validOrders.forEach { order -> Text(order.joinToString(" → ") { content.tiles[it] }) }
             if (attempt.game == ReadingGame.SEQUENCE) ReviewQuestion(attempt, "answer")
-            else if ("bonus" in attempt.checkpoints) ReviewQuestion(attempt, "bonus")
+            else if ("bonus" in attempt.checkpoints || "answer" in attempt.fields) ReviewQuestion(attempt, "bonus")
         }
         ReadingGame.DETECTIVE -> {
             ReviewQuestion(attempt, "answer")
@@ -211,6 +211,8 @@ private fun ReviewResponse(attempt: ReadingAttempt, key: String, response: Strin
         !check.objective && check.earned -> "Checkpoint completed"
         check.earned && check.tries > 1 -> "Correct after retry"
         check.earned -> "Correct"
+        attempt.finishedAt == null || key == "bonus" ->
+            "Previous submissions: ${check.tries} incorrect; the saved draft may have changed."
         else -> "Incorrect submission"
     })
 }

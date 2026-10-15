@@ -172,10 +172,6 @@ class ReadingSqliteStoreTest {
                 data = data.copy(profiles = data.profiles + ReadingProfile("reader-b", "Bo"))
             }
             data = readingSolve(data)
-            // Database assignments use today's start time, unlike the legacy fixture.
-            data = data.copy(attempts = data.attempts.map {
-                if (it.id == data.active?.id) it.copy(finishedAt = System.currentTimeMillis()) else it
-            })
             completed += requireNotNull(data.active)
             data = ReadingEngine.endSession(data, requireNotNull(data.activeSession).id, abandoned = true)
             store.save(data)
