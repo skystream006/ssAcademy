@@ -200,6 +200,7 @@ internal fun ReadingHistoryContent(model: ReadingViewModel, appModel: MathViewMo
                         Text("Correct: ${data.sessionCorrect(session)} · Wrong: ${data.sessionWrong(session)}")
                         Text(session.finishedAt?.let { formatFinishedAt(it) } ?:
                             if (session.abandoned) "Archived game" else "In progress")
+                        ReadingReviewButton(data, model, session.attemptIds, "reading-review-session-${session.id}")
                         if (session.prizeType != null && appModel != null) {
                             TextButton(onClick = { appModel.showReadingRewardForSession(data, session) }) {
                                 Text("View gift")
@@ -208,7 +209,7 @@ internal fun ReadingHistoryContent(model: ReadingViewModel, appModel: MathViewMo
                     }
                 }
             }
-            ReadingHistoryEntries(data, profile.id)
+            ReadingHistoryEntries(data, profile.id, reviewModel = model)
         }
     }
 }
@@ -874,6 +875,7 @@ private fun ReadingSessionSummary(data: ReadingData, model: ReadingViewModel, se
             }
         }
         ReadingButton("Done", "reading-session-done", enabled = !model.saving, action = back)
+        ReadingReviewButton(data, model, session.attemptIds, "reading-review-session-${session.id}")
         ReadingPreviousAnswer(data, session)
     }
 }
@@ -894,6 +896,7 @@ private fun ReadingSummary(data: ReadingData, model: ReadingViewModel, a: Readin
                 "Completed after retry: ${checks.count { it.retried }}")
         } else Text("Creative checkpoints celebrate participation, not independent reading accuracy.")
         Text("Hints used: ${a.hints} · Narrations: ${a.narrations}")
+        ReadingReviewButton(data, model, listOf(a.id), "reading-review-attempt-${a.id}")
         data.stories.find { it.attemptId == a.id }?.let { story ->
             Text("Saved to your private story shelf", style = MaterialTheme.typography.titleLarge)
             ReadingPictureView(ReadingPicture(story.illustration, "Your story's illustration"))
@@ -976,6 +979,7 @@ private fun ReadingProgress(data: ReadingData, model: ReadingViewModel, textSize
 
 @Composable
 private fun ReadingHistoryEntries(data: ReadingData, readerId: String, disabledGames: Set<ReadingGame> = emptySet(),
+                                  reviewModel: ReadingViewModel? = null,
                                   onOpen: ((ReadingAttempt) -> Unit)? = null) {
     Text("Dated activity history", style = MaterialTheme.typography.titleLarge)
     val attemptsById = data.attempts.associateBy { it.id }
@@ -999,6 +1003,8 @@ private fun ReadingHistoryEntries(data: ReadingData, readerId: String, disabledG
                 val objective = checks.filter { it.objective && it.tries > 0 }
                 if (objective.isNotEmpty()) Text("${objective.count { it.independent }}/${objective.size} first-try independent · " +
                     "${objective.count { it.earned && it.supportedAtCompletion }} supported · ${objective.count { it.retried }} retried")
+                if (reviewModel != null) ReadingReviewButton(data, reviewModel, listOf(a.id),
+                    "reading-review-attempt-${a.id}")
                 if (onOpen != null && !a.abandoned) ReadingChoice(
                     if (a.finishedAt != null) "Read summary" else "Resume draft", "reading-history-${a.id}",
                     enabled = a.finishedAt != null || a.game !in disabledGames

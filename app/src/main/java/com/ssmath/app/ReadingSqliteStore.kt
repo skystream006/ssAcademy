@@ -68,6 +68,9 @@ class ReadingSqliteStore(
         if (it.id == data.profile?.activeAttemptId) resolve(it) else it.copy(loadedContent = null)
     })
 
+    @Synchronized
+    override fun review(attempt: ReadingAttempt): ReadingAttempt = resolve(attempt)
+
     override fun start(data: ReadingData, game: ReadingGame, level: ReadingLevel, newAttempt: Boolean): ReadingData =
         startBatch(data, game, level, 1, newAttempt)
 

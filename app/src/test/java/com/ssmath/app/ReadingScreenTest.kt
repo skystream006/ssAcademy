@@ -110,6 +110,27 @@ class ReadingScreenTest {
         compose.waitForIdle()
     }
 
+    @Test fun historyReviewsSavedGamesWithoutChangingTheActiveReaderDraftOrScores() {
+        var data = readingSessionFixture()
+        data = readingSolve(data)
+        data = ReadingEngine.nextSessionActivity(data)
+        show(data, history = true)
+        val before = requireNotNull(model.data)
+        click("reading-review-session-${before.activeSession?.id}")
+        compose.onNodeWithTag("reading-review").assertIsDisplayed()
+        compose.onNodeWithTag("reading-review-position").assertTextContains("Question 1 of 15")
+        compose.onNodeWithTag("reading-review-next").performClick()
+        compose.onNodeWithTag("reading-review-position").assertTextContains("Question 2 of 15")
+        compose.onNodeWithTag("reading-review-back").performClick()
+        compose.onNodeWithTag("reading-practice-history-screen").assertIsDisplayed()
+        assertEquals(before, model.data)
+        assertEquals(before, ReadingStore(file).load())
+        click("reading-review-attempt-${before.attempts.first().id}")
+        compose.onNodeWithTag("reading-review-position").assertTextContains("Question 1 of 1")
+        compose.onNodeWithTag("reading-review-back").performClick()
+        assertEquals(before, model.data)
+    }
+
     private fun chooseCorrectAnswer() {
         val answer = readingCorrect(requireNotNull(model.data))
         click("reading-answer-$answer")

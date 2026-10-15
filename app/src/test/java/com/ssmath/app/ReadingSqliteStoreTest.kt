@@ -129,6 +129,70 @@ class ReadingSqliteStoreTest {
         assertEquals(4L, scalar("SELECT COUNT(*) FROM reading_content"))
     }
 
+    @Test fun reviewAfterRestartUsesAssignedRevisionAndKeepsTheCurrentDraftAndRotation() {
+        val original = pool.first()
+        install(listOf(original))
+        var data = store.startSession(reader(), ReadingGame.MISSING, ReadingLevel.SPROUT, 15, false, null)
+        data = ReadingEngine.submit(ReadingEngine.field(data, "answer", readingWrong(data).toString()), "answer")
+        val answered = requireNotNull(data.active)
+        assertNotNull(answered.finishedAt)
+        data = store.prepare(ReadingEngine.nextSessionActivity(data))
+        store.save(data)
+        val question = requireNotNull(original.question)
+        val changed = original.copy(title = "Updated activity", passage = listOf("A different ___"),
+            question = question.copy(prompt = "Updated question?", choices = question.choices.map { "New $it" }))
+        install(listOf(changed), "updated")
+        database.close()
+        database = ReadingDatabase(application, "rotation.db")
+        store = ReadingSqliteStore(application, database, legacy)
+        val reopened = store.load()
+        val saved = reopened.attempts.first()
+        assertNull(saved.loadedContent)
+        val presented = scalar("SELECT COUNT(*) FROM reading_presented")
+        val cycle = scalar("SELECT cycle FROM reading_cycles")
+        val review = store.review(saved)
+        assertEquals(original, review.content)
+        assertEquals(answered, review)
+        assertNotEquals(changed.question, review.content.question)
+        assertEquals(reopened, store.load())
+        assertEquals(data.active?.id, reopened.active?.id)
+        assertEquals(presented, scalar("SELECT COUNT(*) FROM reading_presented"))
+        assertEquals(cycle, scalar("SELECT cycle FROM reading_cycles"))
+        assertEquals(1, reopened.attempts.count { it.loadedContent != null })
+    }
+
+    @Test fun allGameResponsesAndStoriesRemainReviewableWithoutReactivatingThem() {
+        install(ReadingContent.activities)
+        var data = reader()
+        val completed = mutableListOf<ReadingAttempt>()
+        for (game in ReadingGame.entries) {
+            data = store.startSession(data, game, ReadingLevel.SPROUT, 15, false, null)
+            // The shared-story fixture uses the second legacy reader.
+            if (game == ReadingGame.PARTNERS) {
+                data = data.copy(profiles = data.profiles + ReadingProfile("reader-b", "Bo"))
+            }
+            data = readingSolve(data)
+            // Database assignments use today's start time, unlike the legacy fixture.
+            data = data.copy(attempts = data.attempts.map {
+                if (it.id == data.active?.id) it.copy(finishedAt = System.currentTimeMillis()) else it
+            })
+            completed += requireNotNull(data.active)
+            data = ReadingEngine.endSession(data, requireNotNull(data.activeSession).id, abandoned = true)
+            store.save(data)
+        }
+        val reopened = store.load()
+        for (expected in completed) {
+            val stored = reopened.attempts.single { it.id == expected.id }
+            val review = store.review(stored)
+            assertEquals(expected, review)
+            assertEquals(expected.content, review.content)
+            assertTrue(ReadingEngine.ready(review))
+        }
+        assertEquals(2, reopened.stories.size)
+        assertEquals(data.stories, reopened.stories)
+        assertEquals(reopened, store.load())
+    }
+
     @Test fun singleActivityMayRepeatButEachAttemptAndScoreRemainsSeparate() {
         install(pool.take(1))
         var data = store.start(reader(), ReadingGame.MISSING, ReadingLevel.SPROUT, false)

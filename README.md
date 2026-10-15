@@ -225,6 +225,15 @@ get Summit content; merely selecting a level does not download anything.
 Open **Reading** on the home screen to choose from illustrated square game buttons.
 **Rewards** and **Pokémon** shortcuts stay at the top, as on the Math page.
 Reading history is separate from math history; prizes and Pokémon use the shared collections.
+Open **Settings → Reading Settings → Reading Practice History**, then **Review questions and answers**
+on a game or activity to review it without changing your current draft. The same review is
+available from Results. Use **Previous** and **Next** to see each assigned question, its
+original passage, choices, saved response, and correct answer or accepted orders. Evidence,
+chosen chapters, and creative stories are included; creative writing has no single correct answer.
+Unsubmitted drafts and unfinished questions are labeled separately from incorrect answers.
+Games and responses are saved automatically on this device and remain reviewable offline after
+restarting or updating the activity library, using the activity revision assigned at launch.
+Older single-activity results show their latest saved response, not every earlier retry.
 Use **Settings → Reading Settings →
 Set Reading Level** to choose a level, and **Reading Progress** to view the private dashboard.
 Select **15**, **25**, or **50** under **How many questions would you like?**, using
