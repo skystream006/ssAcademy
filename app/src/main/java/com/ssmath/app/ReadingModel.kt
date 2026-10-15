@@ -282,7 +282,7 @@ object ReadingEngine {
     }
 
     fun resume(data: ReadingData, id: String): ReadingData {
-        val attempt = data.attempts.first { it.id == id }
+        val attempt = data.attempts.find { it.id == id } ?: return data
         require(attempt.includes(requireNotNull(data.selectedProfileId)) && !attempt.abandoned)
         val session = data.sessions.find { id in it.attemptIds }
         val activeId = if (session != null && session.finishedAt == null) {

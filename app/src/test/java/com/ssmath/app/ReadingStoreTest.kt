@@ -293,6 +293,30 @@ class ReadingStoreTest {
         assertNull(model.message)
     }
 
+    @Test fun resumingANonActiveResultQueuedBehindDeletionDoesNotCrashOrRestoreIt() {
+        val original = ReadingEngine.start(readingFixture(), ReadingGame.MISSING, ReadingLevel.SPROUT,
+            true, "current")
+        val storage = RecordingStorage(original)
+        val model = ReadingViewModel(application, storage)
+        await { model.data != null }
+        val gate = CountDownLatch(1)
+        storage.writeGate = gate
+        storage.writeStarted = CountDownLatch(1)
+        try {
+            model.deleteHistory(setOf("attempt-a"))
+            await { storage.writeStarted?.count == 0L }
+            model.act { ReadingEngine.resume(it, "attempt-a") }
+            model.act { ReadingEngine.hint(it) }
+        } finally {
+            storage.writeGate = null
+            gate.countDown()
+        }
+        await { model.data?.active?.hints == 1 && !model.saving }
+        assertEquals(listOf("current"), model.data?.attempts?.map { it.id })
+        assertEquals("current", model.data?.active?.id)
+        assertNull(model.storageError)
+    }
+
     @Test fun failedSaveBlocksEditsAndRetryCommitsTheSamePendingCheckpointExactlyOnce() {
         val storage = RecordingStorage(ReadingEngine.field(readingFixture(), "answer", readingCorrect(readingFixture()).toString()))
         val model = ReadingViewModel(application, storage)

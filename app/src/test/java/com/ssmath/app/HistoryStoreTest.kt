@@ -443,22 +443,28 @@ class HistoryStoreTest {
         assertEquals(RewardBalance(0, 1), after.rewards[RewardType.LOLLIPOP])
     }
 
-    @Test fun readingRetentionKeepsDurableReceiptsSoOldSessionsCannotRecreateRewards() {
+    @Test fun readingRewardsRemainLinkedBeyondMathRetentionUntilExplicitDeletion() {
         val results = List(MAX_HISTORY_RESULTS) { reading("reading-$it") }
         file.writeText(Json { encodeDefaults = true }.encodeToString(PracticeSnapshot.serializer(), PracticeSnapshot(
             readingResults = results, recordedReadingSessionIds = results.map { it.sessionId }.toSet(),
             rewards = mapOf(RewardType.LOLLIPOP to RewardBalance(1, 0)), pokemons = setOf(Celebration.PIKACHU)
         )))
+        val oldest = results.last()
+        store.claimReadingReward(oldest.sessionId)
+        store.collectReadingCelebration(oldest.sessionId, Celebration.PIKACHU)
         val newest = reading("newest").copy(finishedAt = 1)
         val saved = store.addReadingResult(newest)
-        assertEquals(MAX_HISTORY_RESULTS, saved.readingResults.size)
+        assertEquals(MAX_HISTORY_RESULTS + 1, saved.readingResults.size)
         assertEquals(newest, saved.readingResults.first())
-        val pruned = results.last()
-        assertFalse(saved.readingResults.any { it.sessionId == pruned.sessionId })
-        assertTrue(pruned.sessionId in saved.recordedReadingSessionIds)
-        assertEquals(saved, HistoryStore(file).addReadingResult(pruned))
-        assertEquals(saved, store.claimReadingReward(pruned.sessionId))
-        assertEquals(saved, store.collectReadingCelebration(pruned.sessionId, Celebration.PIKACHU))
+        assertTrue(saved.readingResults.any { it.sessionId == oldest.sessionId })
+        assertEquals(saved, HistoryStore(file).addReadingResult(oldest))
+        assertEquals(saved, store.claimReadingReward(oldest.sessionId))
+        assertEquals(saved, store.collectReadingCelebration(oldest.sessionId, Celebration.PIKACHU))
+        val deleted = store.deleteReadingResults(setOf(oldest.sessionId))
+        assertEquals(RewardBalance(1, 0), deleted.rewards[RewardType.LOLLIPOP])
+        assertTrue(deleted.pokemons.isEmpty())
+        assertEquals(deleted, HistoryStore(file).addReadingResult(oldest))
+        assertEquals(deleted, store.claimReadingReward(oldest.sessionId))
     }
 
     @Test fun readingClaimAndCollectionWriteFailuresAreAtomicAndRetryable() {

@@ -115,6 +115,8 @@ the displayed reader's history. Confirmation is required. Deleting a game remove
 questions, drafts, stories, progress, and linked reward fragments; shared activities are
 removed for both readers. Linked celebrations are removed unless another saved result also
 earned them. Other readers' unrelated history, Math history, and imported activities are kept.
+Rewards whose ownership records were already discarded by older app versions cannot be
+linked back to deleted games and are kept.
 **Science Settings** and **Advanced Subject Settings** each have their own rewards switch
 and practice history; these show an empty state until their activities are available.
 All four reward switches are independent and on by default. Existing Math reward

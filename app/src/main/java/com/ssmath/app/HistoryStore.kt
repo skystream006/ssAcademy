@@ -177,8 +177,9 @@ class HistoryStore(private val file: File) {
             }
         )
         return save(snapshot.copy(
-            readingResults = (listOf(saved) + snapshot.readingResults).take(MAX_HISTORY_RESULTS),
-            // Retain receipts even after result retention, so old sessions cannot grant another reward.
+            // Reading sessions are not capped; keep their reward ownership until explicitly deleted.
+            readingResults = listOf(saved) + snapshot.readingResults,
+            // Retain receipts after deletion so old sessions cannot grant another reward.
             recordedReadingSessionIds = snapshot.recordedReadingSessionIds + result.sessionId
         ))
     }
