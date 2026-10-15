@@ -320,11 +320,11 @@ class ReadingSqliteStoreTest {
                 db.execSQL("DELETE FROM reading_stories")
                 (raw.getValue("attempts") as JsonArray).forEachIndexed { index, value ->
                     db.execSQL("INSERT INTO reading_attempts VALUES(?,?,?)",
-                        arrayOf(value.jsonObject.getValue("id").jsonPrimitive.content, index, value.toString()))
+                        arrayOf<Any>(value.jsonObject.getValue("id").jsonPrimitive.content, index, value.toString()))
                 }
                 (raw.getValue("stories") as JsonArray).forEachIndexed { index, value ->
                     db.execSQL("INSERT INTO reading_stories VALUES(?,?,?)",
-                        arrayOf(value.jsonObject.getValue("attemptId").jsonPrimitive.content, index, value.toString()))
+                        arrayOf<Any>(value.jsonObject.getValue("attemptId").jsonPrimitive.content, index, value.toString()))
                 }
                 db.execSQL("UPDATE reading_state SET payload=?", arrayOf(JsonObject(raw + mapOf(
                     "attempts" to JsonArray(emptyList()), "stories" to JsonArray(emptyList()))).toString()))

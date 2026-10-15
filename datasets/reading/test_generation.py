@@ -123,7 +123,7 @@ class PublishedPackTest(unittest.TestCase):
         cls.previous = [json.loads(line) for line in cls.previous_data.splitlines()]
 
     def test_published_files_reproduce_exactly(self):
-        self.assertEqual("v5", self.manifest["version"])
+        self.assertEqual("v6", self.manifest["version"])
         self.assertEqual(self.data, (generate.ROOT / self.manifest["file"]).read_bytes())
         self.assertEqual(len(self.data), self.manifest["bytes"])
         self.assertEqual(hashlib.sha256(self.data).hexdigest(), self.manifest["sha256"])

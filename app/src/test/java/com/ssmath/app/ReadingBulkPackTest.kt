@@ -148,7 +148,7 @@ class ReadingBulkPackTest {
         }
     }
 
-    @Test fun v5HasOneThousandDistinctAnswerActivitiesPerPoolAndEveryActivityCanBeCompleted() {
+    @Test fun v6HasOneThousandDistinctAnswerActivitiesPerPoolAndEveryActivityCanBeCompleted() {
         val pack = ReadingRepositoryPack()
         val archived = ReadingRepositoryPack("manifest-v4.json")
         val oldActivities = archived.activities.take(54)
@@ -157,7 +157,7 @@ class ReadingBulkPackTest {
         }
         val oldIds = oldActivities.map { it.id }.toSet()
         val manifest = pack.manifest
-        assertEquals("v5", manifest.version)
+        assertEquals("v6", manifest.version)
         assertEquals(1, manifest.schemaVersion)
         assertEquals(18, expectedCounts.size)
         assertEquals(expectedCounts, manifest.counts)
@@ -445,7 +445,7 @@ class ReadingBulkPackTest {
         assertEquals(data, reopen())
     }
 
-    @Test fun v4ToV5ReplacesScrambleStructuresWithoutChangingSavedAttempts() {
+    @Test fun v4ToV6ReplacesScrambleStructuresWithoutChangingSavedAttempts() {
         val archived = ReadingRepositoryPack("manifest-v4.json")
         val pack = ReadingRepositoryPack()
         val previous = archived.activities.associateBy { it.id }
@@ -479,7 +479,7 @@ class ReadingBulkPackTest {
         val oldPresented = presented()
 
         val status = install(pack)
-        assertEquals(ReadingPackStatus("v5", expectedCounts), status)
+        assertEquals(ReadingPackStatus("v6", expectedCounts), status)
         assertEquals(before, reopen())
         assertEquals(oldCycles, cycles())
         assertEquals(oldPresented, presented())

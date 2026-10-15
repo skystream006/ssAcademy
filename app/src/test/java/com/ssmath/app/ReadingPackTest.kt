@@ -122,7 +122,7 @@ class ReadingPackTest {
         ).use { assertFalse(it.moveToFirst()) }
     }
 
-    @Test fun repositoryPackPreservesAll48LegacyActivitiesAndAdds24SummitActivities() {
+    @Test fun repositoryPackPreservesAll36LegacyActivitiesAndAdds18SummitActivities() {
         val pack = ReadingRepositoryPack("manifest-v2.json")
         val manifest = pack.manifest
         val bytes = pack.bytes
@@ -130,19 +130,19 @@ class ReadingPackTest {
         val legacy = ReadingRepositoryPack("manifest-v1.json")
         assertEquals(1, manifest.schemaVersion)
         assertEquals("v2", manifest.version)
-        assertEquals(51947L, manifest.bytes)
-        assertEquals("94f362261369268e43127460a1caa749785068f3357cdb10fbcf844894e227e4",
+        assertEquals(33903L, manifest.bytes)
+        assertEquals("d4a1901f7dbb46ec28b4048ebadcf067b1b25b02157bdbe0a81ed0e06ba27fd9",
             manifest.sha256)
-        assertEquals(72, manifest.counts.values.sum())
-        assertEquals(72, activities.size)
-        assertEquals(72, activities.map { it.id }.distinct().size)
+        assertEquals(54, manifest.counts.values.sum())
+        assertEquals(54, activities.size)
+        assertEquals(54, activities.map { it.id }.distinct().size)
         assertEquals(bytes.size.toLong(), manifest.bytes)
         assertEquals(readingSha256(bytes), manifest.sha256)
         assertEquals("activities-${manifest.sha256}.jsonl", manifest.file)
         assertArrayEquals(legacy.bytes, bytes.copyOfRange(0, legacy.bytes.size))
-        assertEquals(ReadingContent.activities, activities.take(48))
+        assertEquals(ReadingContent.activities, activities.take(36))
         assertEquals(ReadingContent.activities, activities.filter { it.level != ReadingLevel.SUMMIT })
-        assertEquals(24, activities.count { it.level == ReadingLevel.SUMMIT })
+        assertEquals(18, activities.count { it.level == ReadingLevel.SUMMIT })
         assertEquals(manifest.counts, activities.groupingBy { "${it.game.name}:${it.level.name}" }.eachCount())
         activities.forEach(ReadingPackValidator::validate)
         assertEquals(manifest.counts, runBlocking { pack.importer(catalog, cache).importPack() }.counts)
@@ -158,17 +158,17 @@ class ReadingPackTest {
         }
     }
 
-    @Test fun originalManifestAndImmutable48ActivityPackRemainImportable() {
+    @Test fun archivedManifestAndRemaining36ActivityPackRemainImportable() {
         val pack = ReadingRepositoryPack("manifest-v1.json")
         assertEquals("v1", pack.manifest.version)
         assertEquals(1, pack.manifest.schemaVersion)
-        assertEquals(24839L, pack.manifest.bytes)
-        assertEquals("5f006e54debdad7b6334ec5f5ec80ad50a3d5c1f011ad044f82f90c4ba41f1ea",
+        assertEquals(16751L, pack.manifest.bytes)
+        assertEquals("e209a1a88ef41bdf02396085e732a64848c7c56d03e561106cf9c22bf95741cc",
             pack.manifest.sha256)
         assertEquals(pack.manifest.bytes, pack.bytes.size.toLong())
         assertEquals(pack.manifest.sha256, readingSha256(pack.bytes))
         assertEquals(ReadingContent.activities, pack.activities)
-        assertEquals(48, pack.activities.size)
+        assertEquals(36, pack.activities.size)
         assertEquals(pack.manifest.counts, runBlocking { pack.importer(catalog, cache).importPack() }.counts)
         assertEquals("v1", catalog.status().version)
         assertEquals(pack.manifest.sha256, storedChecksum())

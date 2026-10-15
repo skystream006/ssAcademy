@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reproduce the v5 reading catalogue with varied Sentence Scramble structures."""
+"""Reproduce the six-game v6 reading catalogue with varied Sentence Scramble structures."""
 
 import argparse
 from collections import Counter, defaultdict
@@ -123,7 +123,7 @@ def build_pack():
     data = output.getvalue()
     checksum = hashlib.sha256(data).hexdigest()
     manifest = {
-        "schemaVersion": 1, "version": "v5", "file": f"activities-{checksum}.jsonl",
+        "schemaVersion": 1, "version": "v6", "file": f"activities-{checksum}.jsonl",
         "sha256": checksum, "bytes": len(data), "counts": dict(counts),
     }
     return data, manifest
