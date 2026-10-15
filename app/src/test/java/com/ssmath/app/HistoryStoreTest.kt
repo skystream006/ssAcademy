@@ -302,6 +302,61 @@ class HistoryStoreTest {
         prizeType = RewardType.LOLLIPOP, celebration = Celebration.PIKACHU
     )
 
+    @Test fun retiredReadingReceiptsMigrateBeforeEnumDecodingAndPreserveUnrelatedInventory() {
+        store.add(eligible(1))
+        store.claimReward(1)
+        store.collectPokemon(1, Celebration.PIKACHU)
+        store.collectPokemon(Celebration.SQUIRTLE)
+        val games = listOf("retired-chapter" to ReadingGame.CAPTION, "retired-partners" to ReadingGame.STUDIO,
+            "remaining" to ReadingGame.MISSING)
+        games.forEach { (id, game) ->
+            val celebration = if (game == ReadingGame.STUDIO) Celebration.PARTY else Celebration.PIKACHU
+            store.addReadingResult(reading(id).copy(game = game, celebration = celebration))
+            store.claimReadingReward(id)
+            store.collectReadingCelebration(id, celebration)
+        }
+        val before = file.readText().replace("\"game\":\"CAPTION\"", "\"game\":\"CHAPTER\"")
+            .replace("\"game\":\"STUDIO\"", "\"game\":\"PARTNERS\"")
+        val expected = store.deleteReadingResults(setOf("retired-chapter", "retired-partners"))
+        file.writeText(before)
+        assertEquals(expected, HistoryStore(file).loadSnapshot())
+        assertEquals(RewardBalance(0, 2), expected.rewards[RewardType.LOLLIPOP])
+        assertEquals(setOf(Celebration.PIKACHU, Celebration.SQUIRTLE), expected.pokemons)
+        val cleaned = file.readText()
+        assertFalse(cleaned.contains("\"game\":\"CHAPTER\""))
+        assertFalse(cleaned.contains("\"game\":\"PARTNERS\""))
+        assertEquals(expected, store.loadSnapshot())
+        assertEquals(expected, store.deleteReadingResults(setOf("retired-chapter", "retired-partners")))
+        assertEquals(expected, store.addReadingResult(reading("retired-chapter")))
+        assertEquals(cleaned, file.readText())
+        assertEquals(2, store.add(eligible(2)).size)
+    }
+
+    @Test fun failedRetiredRewardMigrationKeepsTheOriginalFileAndRetriesWithoutDoubleSubtraction() {
+        store.addReadingResult(reading("retired"))
+        store.claimReadingReward("retired")
+        val original = file.readText().replace("\"game\":\"MISSING\"", "\"game\":\"PARTNERS\"")
+        file.writeText(original)
+        val blocked = File(directory, "${file.name}.tmp").apply { mkdir() }
+        assertThrows(IOException::class.java) { store.loadSnapshot() }
+        assertEquals(original, file.readText())
+        assertTrue(blocked.delete())
+        val migrated = store.loadSnapshot()
+        assertTrue(migrated.readingResults.isEmpty())
+        assertEquals(RewardBalance(), migrated.rewards[RewardType.LOLLIPOP])
+        assertEquals(setOf("retired"), migrated.recordedReadingSessionIds)
+        assertEquals(migrated, store.loadSnapshot())
+        assertEquals(migrated, store.claimReadingReward("retired"))
+    }
+
+    @Test fun unknownReadingReceiptGamesStillFailWithoutOverwritingRewards() {
+        store.addReadingResult(reading())
+        val original = file.readText().replace("\"game\":\"MISSING\"", "\"game\":\"UNKNOWN\"")
+        file.writeText(original)
+        assertThrows(IOException::class.java) { store.loadSnapshot() }
+        assertEquals(original, file.readText())
+    }
+
     @Test fun readingRewardsMigrateLegacySnapshotsWithoutBecomingMathHistory() {
         val math = eligible(1)
         listOf(

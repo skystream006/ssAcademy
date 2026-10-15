@@ -13,7 +13,10 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 const val MAX_HISTORY_RESULTS = 500
 
@@ -105,20 +108,43 @@ class HistoryStore(private val file: File) {
     fun loadSnapshot(): PracticeSnapshot {
         if (!file.exists()) return PracticeSnapshot()
         val text = file.readText(Charsets.UTF_8)
+        var migrated = false
         val snapshot = try {
             val element = json.parseToJsonElement(text)
             if (element is JsonArray) PracticeSnapshot(history = json.decodeFromJsonElement(serializer, element))
             else {
                 // A damaged inventory must never be treated as an empty legacy history.
                 require(element is JsonObject && "history" in element && "rewards" in element)
-                json.decodeFromJsonElement(PracticeSnapshot.serializer(), element)
+                val receipts = element["readingResults"]?.let { it as JsonArray }.orEmpty()
+                val retired = receipts.filter {
+                    it.jsonObject["game"]?.jsonPrimitive?.content in ReadingMigration.retiredGames
+                }
+                val cleaned = if (retired.isEmpty()) element else JsonObject(element +
+                    ("readingResults" to JsonArray(receipts - retired.toSet())))
+                val decoded = json.decodeFromJsonElement(PracticeSnapshot.serializer(), cleaned)
+                migrated = retired.isNotEmpty()
+                if (!migrated) decoded else {
+                    val ids = retired.map { it.jsonObject.getValue("sessionId").jsonPrimitive.content }.toSet()
+                    val fragments = retired.mapNotNull {
+                        it.jsonObject["prize"]?.takeUnless { prize -> prize == JsonNull }?.let { prize ->
+                            json.decodeFromJsonElement(PrizeAward.serializer(), prize).type
+                        }
+                    }.groupingBy { it }.eachCount()
+                    val collected = retired.mapNotNull {
+                        it.jsonObject["pokemonReward"]?.takeUnless { reward -> reward == JsonNull }?.let { reward ->
+                            json.decodeFromJsonElement(Celebration.serializer(), reward)
+                        }
+                    }.toSet()
+                    withoutReadingResults(decoded, ids, fragments, collected)
+                }
             }
         } catch (error: Exception) {
             if (text.trimStart().startsWith("{")) throw IOException("Unable to read rewards and practice history.", error)
             return PracticeSnapshot()
         }
-        return snapshot.copy(history = snapshot.history.sortedWith(
+        val sorted = snapshot.copy(history = snapshot.history.sortedWith(
             compareByDescending<PracticeResult> { it.finishedAt }.thenByDescending { it.id }))
+        return if (migrated) save(sorted) else sorted
     }
 
     fun add(result: PracticeResult): List<PracticeResult> {
@@ -269,17 +295,24 @@ class HistoryStore(private val file: File) {
         val snapshot = loadSnapshot()
         val removed = snapshot.readingResults.filter { it.sessionId in sessionIds }
         if (removed.isEmpty() && snapshot.recordedReadingSessionIds.containsAll(sessionIds)) return snapshot
-        val remaining = snapshot.readingResults.filterNot { it.sessionId in sessionIds }
         val fragments = removed.mapNotNull { it.prize?.type }.groupingBy { it }.eachCount()
-        val pokemonsToRemove = removed.mapNotNull { it.pokemonReward }.toSet() -
+        return save(withoutReadingResults(snapshot, sessionIds, fragments, removed.mapNotNull { it.pokemonReward }.toSet()))
+    }
+
+    private fun withoutReadingResults(
+        snapshot: PracticeSnapshot, sessionIds: Set<String>, fragments: Map<RewardType, Int>,
+        collected: Set<Celebration>
+    ): PracticeSnapshot {
+        val remaining = snapshot.readingResults.filterNot { it.sessionId in sessionIds }
+        val pokemonsToRemove = collected -
             remaining.mapNotNull { it.pokemonReward }.toSet() -
             snapshot.history.mapNotNull { it.pokemonReward }.toSet()
-        return save(snapshot.copy(
+        return snapshot.copy(
             readingResults = remaining,
             recordedReadingSessionIds = snapshot.recordedReadingSessionIds + sessionIds,
             rewards = snapshot.rewards.mapValues { (type, balance) -> balance.removeFragments(fragments[type] ?: 0) },
             pokemons = snapshot.pokemons - pokemonsToRemove
-        ))
+        )
     }
 
     private fun withoutResults(snapshot: PracticeSnapshot, removed: List<PracticeResult>): PracticeSnapshot {

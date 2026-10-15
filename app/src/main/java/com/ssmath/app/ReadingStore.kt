@@ -63,7 +63,12 @@ class ReadingStore(file: File) : ReadingStorage {
             throw IOException("Reading data needs repair. The existing file has been kept.", error)
         }
         loaded = true
-        if (migrated) save(data)
+        try {
+            if (migrated) save(data)
+        } catch (error: Exception) {
+            loaded = false
+            throw error
+        }
         return data
     }
 
