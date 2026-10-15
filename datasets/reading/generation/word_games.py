@@ -11,12 +11,15 @@ selection scenes require a meaningful noun phrase, not an object label appended
 to an old vocabulary answer. Each object is selected for five different reasons.
 Scramble tiles describe the selected object without quoting the answer phrase,
 so the bonus still requires understanding the description and the selection rule.
+Sentence Scramble uses fifty sentence structures per level, rotated
+across both subjects and situations without changing Missing Word Mission.
 """
 
 from dataclasses import dataclass
 from typing import Iterator
 
 from .common import picture, question, scramble_tiles
+from .scramble_structures import STRUCTURES
 
 
 @dataclass(frozen=True)
@@ -1211,9 +1214,11 @@ _SELECTION_GROUPS = {
 }
 
 
-def _selection_situations(level: str) -> Iterator[tuple[_Family, str, _Frame, str]]:
+def _selection_situations(
+    level: str, *, varied_structure: bool = False,
+) -> Iterator[tuple[_Family, str, _Frame, str]]:
     seen = set()
-    for family, item, original in _situations(level):
+    for index, (family, item, original) in enumerate(_situations(level)):
         group, role = _SELECTION_GROUPS[family.title]
         frame_index = getattr(family, level.lower()).index(original)
         scene = _SELECTIONS[group][frame_index]
@@ -1226,7 +1231,16 @@ def _selection_situations(level: str) -> Iterator[tuple[_Family, str, _Frame, st
         if answer in seen:
             raise ValueError(f"Repeated selection answer at {level}: {answer}")
         seen.add(answer)
-        if level == "SPROUT":
+        if varied_structure:
+            structures = STRUCTURES[level]
+            # Each family traverses the whole bank; neighboring families start
+            # at different frames instead of sharing one structure per scene.
+            structure_index = (index % len(_FAMILIES) + index // len(_FAMILIES)) % len(structures)
+            parts = tuple(
+                part.format(answer="{answer}", reason=reason, role=role)
+                for part in structures[structure_index].split("|")
+            )
+        elif level == "SPROUT":
             parts = ("I", "choose {answer}", f"because {reason}.")
         elif level == "TRAIL":
             parts = (f"Because {reason},", f"the {role}", "chooses", "{answer}.")
@@ -1259,8 +1273,9 @@ def missing(level: str) -> Iterator[dict]:
 
 def scramble(level: str) -> Iterator[dict]:
     """Yield exactly 997 phrase-tile activities with text-supported bonuses."""
-    for family, item, frame, description in _selection_situations(level):
+    for family, item, frame, description in _selection_situations(level, varied_structure=True):
         ordered = [part.format(item=item, answer=description) for part in frame.parts]
+        ordered[0] = ordered[0][0].upper() + ordered[0][1:]
         if len(set(ordered)) != len(ordered):
             raise ValueError(f"Repeated phrase tile in {family.title}: {item}")
         tiles, orders = scramble_tiles(ordered)
@@ -1271,10 +1286,10 @@ def scramble(level: str) -> Iterator[dict]:
             "validOrders": orders,
             "question": question(f"Bonus: {frame.prompt}", frame.answer, frame.distractors),
             "hint": (
-                "Start with the capital letter and finish with the full stop. "
+                "Start with the opening phrase and finish with the sentence-ending tile. "
                 "Keep each phrase together and reread to check who does what."
                 if level == "SPROUT" else
-                "Start with the capitalized phrase and finish with the full stop. "
-                "Use the comma and connecting words to join the reason, action, or contrast."
+                "Find the opening phrase and the sentence-ending tile. "
+                "Use punctuation and connecting words to join the reason, action, or contrast."
             ),
         }

@@ -282,15 +282,20 @@ The downloadable source is `datasets/reading/reading-activities-import.json`, wi
 in `datasets/reading/activities-<sha256>.jsonl` (one `ReadingActivity` JSON object per line).
 The previous `manifest.json` entry point remains available for older app versions; checksum-named data files are unchanged.
 These files are outside Android resources/assets and are **not packaged in the APK**.
-Pack **v4** contains **24,000 activities**: **1,000 per game per difficulty**, across all eight
+Pack **v5** contains **24,000 activities**: **1,000 per game per difficulty**, across all eight
 games and Sprout, Trail, and Summit. This includes the original 72 activities unchanged and
 23,928 template-generated activities. Repeated correct answers from v3 are replaced with
 context-supported word or phrase choices and comprehension questions. Each correct answer
 appears only once per game and difficulty, including questions on both chapter branches;
 open-ended Studio and Partners stories do not have a single correct answer.
-All v3 activity IDs are retained, so updating replaces repetitive activities rather than
-adding them alongside their predecessors. The original v1/v2/v3 checksum-named files and archived
-manifests remain available. Existing installations can update without losing drafts, progress,
+Sentence Scramble now uses **50 sentence structures per difficulty** (150 total), varying
+clause order, sentence openings, coordination, explanations, and contrasts rather than
+only substituting nouns. Structures rotate across topics and situations, with each used
+19 or 20 times among the 997 generated activities per level. The original three activities
+per level remain unchanged, and all other games retain their v4 content.
+All v4 activity IDs are retained, so updating replaces repetitive activities rather than
+adding them alongside their predecessors. The v4 checksum-named file and `manifest-v4.json`
+remain available as the revision baseline. Existing installations can update without losing drafts, progress,
 or presentation cycles. Older app versions without Summit support reject the expanded pack
 safely and retain their installed library; update the app first.
 The default HTTPS source is this repository's `main` branch on `raw.githubusercontent.com`;
@@ -307,7 +312,7 @@ and the pack at 100,000 activities. Downloads are streamed to temporary storage,
 validated in a transactional staging table; failure rolls back and removes the temporary file.
 Allow space for the download, staging table, and SQLite transaction journal during updates.
 
-The v4 content source lives in `datasets/reading/generation/`, outside the APK. It combines
+The v5 content source lives in `datasets/reading/generation/`, outside the APK. It combines
 original vocabulary, scenes, and story prompts using difficulty-specific templates, rather
 than copying the same question under new IDs. Sprout emphasizes short concrete sentences,
 Trail adds context and cause, and Summit adds complex sentences, inference, and reasoning.
@@ -318,13 +323,16 @@ Some reading passages have separate activities for different comprehension quest
 Structural checks and engine tests verify the catalogue; they do not replace educational
 review of the generated wording.
 
-To reproduce the committed v4 pack, run
-`python3 /home/runner/work/ssAcademy/ssAcademy/datasets/reading/generate.py`;
+To reproduce the committed v5 pack, run
+`python3 datasets/reading/generate.py` from the repository root;
 add `--check` to verify it without writing files. Python 3.9 or newer and its standard library
-are the only requirements. Generation uses the archived v3 pack as its revision baseline,
-preserves the exact v2 file as a prefix and retains unaffected activities. It rejects duplicate
+are the only requirements. Generation uses the archived v4 pack as its revision baseline,
+preserves the original 72 activities as an exact prefix and retains unaffected activities. It rejects duplicate
 answers and learning tasks even when titles or answer order differ, checks importer size/count
-limits, and preserves existing IDs when replacing repeated-answer activities. Editing a template requires publishing a
+limits, and preserves existing IDs when revising Sentence Scramble activities. Run
+`python3 -m unittest discover -s datasets/reading -p 'test_*.py'` to check structure coverage,
+balanced topic rotation, tile reconstruction, answer evidence, and pack compatibility.
+Editing a template requires publishing a
 new immutable pack, not replacing an already published checksum-named file.
 
 SQLite stores immutable content revisions separately from the current selectable catalogue.
