@@ -37,7 +37,7 @@ internal fun readingSolve(data: ReadingData, rewardsEnabled: Boolean = true): Re
     var result = data
     val content = requireNotNull(data.active).content
     when (content.game) {
-        ReadingGame.MISSING, ReadingGame.DETECTIVE ->
+        ReadingGame.MISSING, ReadingGame.DETECTIVE, ReadingGame.GRAMMAR ->
             result = readingAnswer(result, requireNotNull(content.question).answer, rewardsEnabled = rewardsEnabled)
         ReadingGame.SCRAMBLE, ReadingGame.SEQUENCE -> {
             result = ReadingEngine.submit(readingOrder(result, content.validOrders.first()), "order",
@@ -180,10 +180,11 @@ class ReadingModelTest {
 
     @Test fun legacyCatalogueKeepsThreeOriginalActivitiesAtEachOriginalLevelWithValidFiniteContent() {
         assertEquals(listOf(ReadingGame.MISSING, ReadingGame.SCRAMBLE, ReadingGame.SEQUENCE,
-            ReadingGame.DETECTIVE, ReadingGame.STUDIO), ReadingGame.entries)
+            ReadingGame.DETECTIVE, ReadingGame.STUDIO, ReadingGame.GRAMMAR), ReadingGame.entries)
         assertEquals(30, ReadingContent.activities.size)
         assertEquals(30, ReadingContent.activities.map { it.id }.distinct().size)
-        ReadingGame.entries.forEach { game -> listOf(ReadingLevel.SPROUT, ReadingLevel.TRAIL).forEach { level ->
+        ReadingContent.activities.map { it.game }.distinct().forEach { game ->
+            listOf(ReadingLevel.SPROUT, ReadingLevel.TRAIL).forEach { level ->
             assertEquals("$game $level", 3, ReadingContent.forGame(game, level).size)
         } }
         assertTrue(ReadingContent.activities.none { it.level == ReadingLevel.SUMMIT })
@@ -205,12 +206,13 @@ class ReadingModelTest {
                     assertFalse(c.tiles.indices.toList() in c.validOrders)
                 }
                 ReadingGame.DETECTIVE -> assertTrue(c.evidence in c.passage.indices)
+                ReadingGame.GRAMMAR -> fail("Grammar must be imported, not added to the legacy catalogue")
                 ReadingGame.STUDIO -> {
                     assertEquals(4, c.writingChoices.size)
                     assertTrue(c.writingChoices.all { choices -> choices.size >= 3 && choices.all { it.isNotBlank() } })
                 }
             }
-            ReadingGame.entries.filter { it != ReadingGame.STUDIO }.forEach { game ->
+            ReadingContent.activities.map { it.game }.distinct().filter { it != ReadingGame.STUDIO }.forEach { game ->
                 val answers = ReadingContent.activities.filter { it.game == game }
                     .mapNotNull { it.question }
                 assertTrue("$game must vary answer positions", answers.map { it.answer }.distinct().size > 1)
@@ -223,7 +225,7 @@ class ReadingModelTest {
             val result = readingSolve(readingFixture(content))
             ReadingEngine.validate(result)
             val expected = when (content.game) {
-                ReadingGame.MISSING -> 1
+                ReadingGame.MISSING, ReadingGame.GRAMMAR -> 1
                 ReadingGame.SCRAMBLE, ReadingGame.SEQUENCE, ReadingGame.DETECTIVE -> 2
                 ReadingGame.STUDIO -> 4
             }

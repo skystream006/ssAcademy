@@ -83,7 +83,7 @@ class ReadingSummitTest {
         var result = data
         val activity = requireNotNull(data.active).content
         when (activity.game) {
-            ReadingGame.MISSING, ReadingGame.DETECTIVE -> result = answer(result)
+            ReadingGame.MISSING, ReadingGame.DETECTIVE, ReadingGame.GRAMMAR -> result = answer(result)
             ReadingGame.SCRAMBLE, ReadingGame.SEQUENCE -> {
                 val order = activity.validOrders[variant % activity.validOrders.size]
                 result = persist(ReadingEngine.submit(readingOrder(result, order), "order"))
@@ -120,7 +120,7 @@ class ReadingSummitTest {
         var data = readers()
         val orders = mutableSetOf<Pair<String, List<Int>>>()
         repeat(2) { variant ->
-            ReadingGame.entries.forEach { game ->
+            activities.map { it.game }.distinct().forEach { game ->
                 val seen = mutableSetOf<String>()
                 repeat(3) {
                     data = store.start(data, game, ReadingLevel.SUMMIT, false)

@@ -343,7 +343,7 @@ object ReadingEngine {
     fun question(a: ReadingAttempt): ReadingQuestion? = a.content.question
 
     fun requiredKeys(a: ReadingAttempt): List<String> = when (a.game) {
-        ReadingGame.MISSING -> listOf("answer")
+        ReadingGame.MISSING, ReadingGame.GRAMMAR -> listOf("answer")
         ReadingGame.SCRAMBLE -> listOf("order")
         ReadingGame.SEQUENCE -> listOf("order", "answer")
         ReadingGame.DETECTIVE -> listOf("answer", "evidence")
@@ -373,9 +373,11 @@ object ReadingEngine {
             "evidence" -> a.content.passage[a.content.evidence]
             else -> null
         }
-        return a.copy(checkpoints = a.checkpoints + (key to check), feedback = if (answer != null)
+        val feedback = if (answer != null)
             "${if (correct) "Correct!" else "Not quite."} Correct answer: $answer"
-        else "Checkpoint saved.")
+        else "Checkpoint saved."
+        return a.copy(checkpoints = a.checkpoints + (key to check), feedback =
+            if (a.game == ReadingGame.GRAMMAR) "$feedback\n${a.content.explanation}" else feedback)
     }
 
     fun submit(data: ReadingData, key: String, now: Long = System.currentTimeMillis(),
@@ -397,7 +399,8 @@ object ReadingEngine {
                 if (!a.orderComplete) a.copy(feedback = "Place every tile before submitting.")
                 else award(a, key, a.order in a.content.validOrders, now)
             }
-            (key == "answer" && game in listOf(ReadingGame.MISSING, ReadingGame.SEQUENCE, ReadingGame.DETECTIVE)) ||
+            (key == "answer" && game in listOf(ReadingGame.MISSING, ReadingGame.GRAMMAR,
+                ReadingGame.SEQUENCE, ReadingGame.DETECTIVE)) ||
                 (key == "bonus" && game == ReadingGame.SCRAMBLE) -> {
                 val question = question(a)
                 val answer = a.fields["answer"]?.toIntOrNull()

@@ -193,7 +193,7 @@ class ReadingSqliteStoreTest {
         install(ReadingContent.activities)
         var data = reader()
         val completed = mutableListOf<ReadingAttempt>()
-        for (game in ReadingGame.entries) {
+        for (game in ReadingContent.activities.map { it.game }.distinct()) {
             data = store.startSession(data, game, ReadingLevel.SPROUT, 15, false, null)
             data = readingSolve(data)
             completed += requireNotNull(data.active)

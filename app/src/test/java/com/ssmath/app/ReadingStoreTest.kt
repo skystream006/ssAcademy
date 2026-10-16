@@ -632,7 +632,7 @@ class ReadingStoreTest {
     }
 
     @Test fun submittingTheLastRequiredCheckpointAutomaticallySavesAndAdvancesEveryGame() {
-        ReadingGame.entries.forEach { game ->
+        ReadingContent.activities.map { it.game }.distinct().forEach { game ->
             val solved = readingSolve(readingSessionFixture(game))
             val completed = requireNotNull(solved.active)
             val key = ReadingEngine.requiredKeys(completed).last()

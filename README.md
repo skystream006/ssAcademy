@@ -273,6 +273,16 @@ including activity revisions, is saved at launch. Cycle rollover never resets dr
 | Story Sequencer | Arrange illustrated story parts and answer a comprehension question. |
 | Reading Detective | Answer a passage question and select its evidence. |
 | Story Studio | Create a story with character, setting, problem, and ending checkpoints. Use suggested tiles or type your own words. |
+| Grammar Quest | Read a sentence, choose its correct grammar answer, and learn from the explanation after submitting. |
+
+Grammar Quest has **1,000 questions at each difficulty** (**3,000 total**), with **50 distinct
+question varieties per level** and 20 different examples of each,
+covering nouns, verbs, adjectives, adverbs, pronouns, prepositions, conjunctions, and sentence
+skills. Sprout starts with simple word roles and forms; Trail adds tense, ownership, and
+agreement; Summit adds complex clauses, perfect tenses, and precise word relationships.
+Sprout offers three choices; Trail and Summit offer four. Hints give concept clues;
+post-answer feedback gives a teaching explanation. Update the app, then use
+**Import / Update Reading Activities** to install Grammar Quest; an APK update alone does not add it.
 
 Hints remain available, and there are no speed bonuses. The Reading Progress view
 distinguishes completed activities from independent first-try answers, legacy retries,
@@ -291,16 +301,21 @@ use non-destructive migrations. Clearing app data, like uninstalling, removes lo
 
 ### Reading packs and storage
 
-The downloadable source is `datasets/reading/reading-activities-import.json`, with UTF-8 JSON Lines data
+The downloadable source is `datasets/reading/reading-activities-v8-import.json`, with UTF-8 JSON Lines data
 in `datasets/reading/activities-<sha256>.jsonl` (one `ReadingActivity` JSON object per line).
-The previous `manifest.json` entry point remains available for older app versions.
+Both `reading-activities-import.json` and `manifest.json` remain unchanged on **v7** for older
+apps whose game enums cannot decode Grammar Quest.
 These files are outside Android resources/assets and are **not packaged in the APK**.
-Pack **v7** contains **15,000 activities**: **1,000 per game per difficulty**, across five
-games and Sprout, Trail, and Summit. This includes 45 original activities and
-14,955 template-generated activities. Repeated correct answers from v3 are replaced with
+Pack **v9** contains **18,000 activities**: **1,000 per game per difficulty**, including Grammar Quest.
+It preserves all **15,150 v8 activities** unchanged and adds 950 grammar questions per difficulty.
+The existing `reading-activities-v8-import.json` URL serves this compatible expansion, so
+Grammar Quest users only need **Import / Update Reading Activities**; no APK update is needed.
+The original v8 manifest and immutable content remain archived as `manifest-v8.json`.
+The five legacy games span Sprout, Trail, and Summit and include 45 original activities and
+14,955 template-generated activities. Their repeated correct answers from v3 were replaced with
 context-supported word or phrase choices and comprehension questions. Each correct answer
-appears only once per game and difficulty;
-open-ended Studio stories do not have a single correct answer.
+appears only once per legacy game and difficulty; open-ended Studio stories do not have a
+single correct answer. Grammar may reuse a correct word in a different sentence or question.
 Sentence Scramble now uses **50 sentence structures per difficulty** (150 total), varying
 clause order, sentence openings, coordination, explanations, and contrasts rather than
 only substituting nouns. Structures rotate across topics and situations, with each used
@@ -316,7 +331,7 @@ The default HTTPS source is this repository's `main` branch on `raw.githubuserco
 the files must be merged/published there and publicly readable before the import button works.
 Private repository access is not configured, and the APK contains no GitHub credentials.
 
-To publish a pack, add a new checksum-named JSONL file and update the manifest's
+To publish a pack, add a new checksum-named JSONL file and update the compatible entry point's
 `schemaVersion` (currently 1), `version`, `file`, `sha256`, `bytes`, and `counts`
 (`GAME:LEVEL` keys). The digest and byte size describe the exact file bytes, including
 newlines. Never edit an existing checksum-named file. The importer rejects unsupported
@@ -325,27 +340,37 @@ or checksums, and oversized files. It caps downloads at 64 MiB, each record at 6
 and the pack at 100,000 activities. Downloads are streamed to temporary storage, then
 validated in a transactional staging table; failure rolls back and removes the temporary file.
 Allow space for the download, staging table, and SQLite transaction journal during updates.
+Grammar uses the existing `passage` and `question` fields plus a required nonblank string
+`explanation`. The explanation field is optional in the shared schema and omitted from the
+other games. Keep the two v7 entry points pinned; incompatible new games need a new entry point.
 
-The v7 content source lives in `datasets/reading/generation/`, outside the APK. It combines
+The v9 content source lives in `datasets/reading/generation/`, outside the APK. Its legacy games combine
 original vocabulary, scenes, and story prompts using difficulty-specific templates, rather
 than copying the same question under new IDs. Sprout emphasizes short concrete sentences,
 Trail adds context and cause, and Summit adds complex sentences, inference, and reasoning.
-These are reproducible template variations, not 15,000 individually hand-written lessons.
-Vocabulary can occur in more than one passage, but correct answer choices must be distinct
-within each game and difficulty, ignoring capitalization and whitespace.
+Those are reproducible template variations, not 15,000 individually hand-written lessons.
+`grammar_games.py` retains the 150 original lessons with stable
+`grammar-<level>-<concept>` IDs. The `grammar_sprout.py`, `grammar_trail.py`, and
+`grammar_summit.py` modules provide 19 additional examples per concept from curated vocabulary,
+inflections, and sentence contexts, with stable `-02` through `-20` ID suffixes.
+Neutral book pictures do not reveal answers.
+Vocabulary can occur in more than one passage, but legacy correct answer choices must be distinct
+within each game and difficulty, ignoring capitalization and whitespace; grammar answer
+identities also include the sentence and question context.
 Some reading passages have separate activities for different comprehension questions.
 Structural checks and engine tests verify the catalogue; they do not replace educational
 review of the generated wording.
 
-To reproduce the committed v7 pack, run
+To reproduce the committed v9 pack, run
 `python3 datasets/reading/generate.py` from the repository root;
 add `--check` to verify it without writing files. Python 3.9 or newer and its standard library
-are the only requirements. Generation uses the archived v4 pack as its revision baseline,
-preserves the remaining 45 original activities as an exact prefix and retains unaffected activities. It rejects duplicate
-answers and learning tasks even when titles or answer order differ, checks importer size/count
-limits, and preserves existing IDs when revising Sentence Scramble activities. Run
+are the only requirements. Generation reproduces the legacy games from the archived v4 baseline,
+verifies all 15,150 v8 records remain a byte-identical prefix, and appends the new grammar examples.
+It rejects duplicate legacy answers and duplicate learning tasks even when titles or answer
+order differ, checks importer size/count limits, and updates only the compatible v8 entry point. Run
 `python3 -m unittest discover -s datasets/reading -p 'test_*.py'` to check structure coverage,
-balanced topic rotation, tile reconstruction, answer evidence, and pack compatibility.
+balanced topic rotation, tile reconstruction, answer evidence, grammar coverage and feedback,
+balanced answer positions, and pack compatibility.
 Editing a template requires publishing a
 new immutable pack, not replacing an already published checksum-named file.
 

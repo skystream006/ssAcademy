@@ -65,6 +65,7 @@ object ReadingPackValidator {
         require(id.matches(Regex("[a-z0-9][a-z0-9_-]{0,119}"))) { "Invalid reading activity ID" }
         text(title, 200)
         text(hint)
+        if (explanation.isNotEmpty()) text(explanation)
         picture(picture)
         require(passage.size <= 24 && tiles.size <= 24 && validOrders.size <= 24 &&
             eventPictures.size <= 24 && writingChoices.size <= 4) {
@@ -89,6 +90,10 @@ object ReadingPackValidator {
                 eventPictures.size == tiles.size && tiles.indices.toList() !in validOrders)
             ReadingGame.DETECTIVE -> require(passage.isNotEmpty() && evidence in passage.indices && question != null)
             ReadingGame.STUDIO -> require(writingChoices.size == 4)
+            ReadingGame.GRAMMAR -> {
+                require(passage.isNotEmpty() && question != null)
+                text(explanation)
+            }
         }
         if (game !in listOf(ReadingGame.SCRAMBLE, ReadingGame.SEQUENCE))
             require(tiles.isEmpty() && validOrders.isEmpty())
@@ -103,7 +108,7 @@ fun interface ReadingPackTransport {
 
 private const val READING_PACK_ROOT =
     "https://raw.githubusercontent.com/skystream006/ssAcademy/main/datasets/reading/"
-const val READING_PACK_MANIFEST_URL = "${READING_PACK_ROOT}reading-activities-import.json"
+const val READING_PACK_MANIFEST_URL = "${READING_PACK_ROOT}reading-activities-v8-import.json"
 
 internal fun requireReadingPackUrl(url: String) {
     val parsed = url.toHttpUrl()
@@ -111,7 +116,7 @@ internal fun requireReadingPackUrl(url: String) {
         parsed.username.isEmpty() && parsed.password.isEmpty() && parsed.query == null && parsed.fragment == null &&
         url.startsWith(READING_PACK_ROOT) && parsed.toString() == url) { "Reading pack URL is not allowed" }
     val filename = url.removePrefix(READING_PACK_ROOT)
-    require(filename in setOf("reading-activities-import.json", "manifest.json") ||
+    require(filename in setOf("reading-activities-v8-import.json", "reading-activities-import.json", "manifest.json") ||
         filename.matches(Regex("activities-[a-f0-9]{64}\\.jsonl"))) {
         "Only the configured repository's reading pack files are allowed"
     }

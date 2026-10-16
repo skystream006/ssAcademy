@@ -131,7 +131,7 @@ internal fun ReadingAttemptReview(data: ReadingData, attempt: ReadingAttempt) {
     content.passage.forEach { Text(it) }
     HorizontalDivider()
     when (attempt.game) {
-        ReadingGame.MISSING -> ReviewQuestion(attempt, "answer")
+        ReadingGame.MISSING, ReadingGame.GRAMMAR -> ReviewQuestion(attempt, "answer")
         ReadingGame.SCRAMBLE, ReadingGame.SEQUENCE -> {
             Text(if (attempt.game == ReadingGame.SCRAMBLE) "Put the words in order." else "Put the events in order.",
                 style = MaterialTheme.typography.titleMedium)
@@ -176,6 +176,7 @@ private fun ReviewQuestion(attempt: ReadingAttempt, checkpoint: String) {
     question.choices.forEachIndexed { i, choice -> Text("${i + 1}. $choice") }
     ReviewResponse(attempt, checkpoint, attempt.fields["answer"]?.toIntOrNull()?.let(question.choices::getOrNull))
     Text("Correct answer: ${question.choices[question.answer]}")
+    if (attempt.game == ReadingGame.GRAMMAR) Text(attempt.content.explanation)
 }
 
 @Composable

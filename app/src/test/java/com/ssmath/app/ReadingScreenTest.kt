@@ -267,7 +267,7 @@ class ReadingScreenTest {
 
     @Test fun allReadingGamesHaveInstructionsBelowTitleWithSpeakerOnRightAndBackAtTopLeft() {
         show(readingFixture(), speech = true)
-        ReadingGame.entries.forEach { game ->
+        ReadingContent.activities.map { it.game }.distinct().forEach { game ->
             compose.runOnIdle { model.act { ReadingEngine.start(it, game, ReadingLevel.SPROUT) } }
             waitFor { it.page == ReadingPage.ACTIVITY && it.active?.content?.game == game }
             val data = requireNotNull(model.data)
@@ -436,12 +436,12 @@ class ReadingScreenTest {
     fun everyLegacyReadingGameUsesColoredTwoColumnChoicesThatFitAtLargeTextSizes() {
         show(readingFixture(), speech = true)
         for (level in listOf(ReadingLevel.SPROUT, ReadingLevel.TRAIL)) {
-            ReadingGame.entries.forEach { game ->
+            ReadingContent.activities.map { it.game }.distinct().forEach { game ->
                 compose.runOnIdle { model.act { ReadingEngine.start(it, game, level) } }
                 waitFor { it.active?.content?.game == game && it.active?.content?.level == level }
                 val content = requireNotNull(model.data?.active).content
                 val (prefix, choices) = when (game) {
-                    ReadingGame.MISSING, ReadingGame.DETECTIVE ->
+                    ReadingGame.MISSING, ReadingGame.DETECTIVE, ReadingGame.GRAMMAR ->
                         "reading-answer" to requireNotNull(content.question).choices
                     ReadingGame.SCRAMBLE, ReadingGame.SEQUENCE -> "reading-tile" to content.tiles
                     ReadingGame.STUDIO -> "reading-studio-character" to content.writingChoices.first()
@@ -671,12 +671,12 @@ class ReadingScreenTest {
         assertTrue(requireNotNull(model.data).profiles.isEmpty())
     }
 
-    @Test fun allFiveRetainedGamesAppearWithRecommendedGamesFirst() {
+    @Test fun grammarFollowsRetainedGamesWithoutChangingTheirOrder() {
         show(readingFixture().copy(page = ReadingPage.MENU))
         compose.onNodeWithTag("reading-game-CAPTION").assertDoesNotExist()
         compose.onNodeWithText("Caption Quest").assertDoesNotExist()
         val expected = listOf("reading-game-MISSING", "reading-game-SEQUENCE", "reading-game-STUDIO",
-            "reading-game-SCRAMBLE", "reading-game-DETECTIVE")
+            "reading-game-SCRAMBLE", "reading-game-DETECTIVE", "reading-game-GRAMMAR")
         val nodes = compose.onAllNodes(androidx.compose.ui.test.SemanticsMatcher("Game tile") {
             it.config.getOrElse(SemanticsProperties.TestTag) { "" }.startsWith("reading-game-")
         }).fetchSemanticsNodes()
@@ -693,7 +693,7 @@ class ReadingScreenTest {
             it.config.getOrElse(SemanticsProperties.TestTag) { "" }.startsWith("reading-game-")
         }).fetchSemanticsNodes()
         assertEquals(listOf("reading-game-SEQUENCE", "reading-game-STUDIO",
-            "reading-game-SCRAMBLE"), nodes.map {
+            "reading-game-SCRAMBLE", "reading-game-GRAMMAR"), nodes.map {
             it.config[SemanticsProperties.TestTag]
         })
         click("reading-question-count-15")

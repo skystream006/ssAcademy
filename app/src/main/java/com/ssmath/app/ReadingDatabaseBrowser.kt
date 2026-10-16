@@ -250,6 +250,10 @@ internal fun ReadingDatabaseDetail(activity: ReadingActivity, revision: String, 
         if (activity.passage.isEmpty()) Text("No passage")
         activity.passage.forEachIndexed { index, text -> Text("${index + 1}. $text") }
         activity.question?.let { DatabaseQuestion(it) }
+        if (activity.explanation.isNotBlank()) {
+            DatabaseSection("Explanation")
+            Text(activity.explanation)
+        }
         if (activity.game == ReadingGame.DETECTIVE) {
             DatabaseSection("Evidence")
             Text("Sentence ${activity.evidence + 1} (index ${activity.evidence}): " +

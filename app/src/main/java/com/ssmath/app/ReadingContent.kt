@@ -8,7 +8,8 @@ enum class ReadingGame(val title: String, val guidance: String) {
     SCRAMBLE("Sentence Scramble", "Hold and drag tiles into empty spaces. Drag them back out to Available tiles. You can also tap to add or remove tiles."),
     SEQUENCE("Story Sequencer", "Put the illustrated events in order, then answer a question."),
     DETECTIVE("Reading Detective", "Answer the question, then tap the exact sentence that proves it."),
-    STUDIO("Story Studio", "Create a character, a setting, a problem, and an ending. Save each part.")
+    STUDIO("Story Studio", "Create a character, a setting, a problem, and an ending. Save each part."),
+    GRAMMAR("Grammar Quest", "Read the sentence and question. Choose an answer to explore how words work.")
 }
 
 @Serializable
@@ -36,7 +37,8 @@ data class ReadingActivity(
     val eventPictures: List<ReadingPicture> = emptyList(),
     val evidence: Int = 0,
     val writingChoices: List<List<String>> = emptyList(),
-    val hint: String
+    val hint: String,
+    val explanation: String = ""
 )
 
 /** Original content retained only to resolve pre-database saves; new libraries come from reading packs. */

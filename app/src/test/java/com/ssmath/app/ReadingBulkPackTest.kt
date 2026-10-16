@@ -27,7 +27,7 @@ class ReadingBulkPackTest {
     private lateinit var store: ReadingSqliteStore
     private lateinit var cache: File
     private val legacy get() = File(application.filesDir, "bulk-reading-legacy.json")
-    private val expectedCounts = ReadingGame.entries.flatMap { game ->
+    private val expectedCounts = ReadingGame.entries.filterNot { it == ReadingGame.GRAMMAR }.flatMap { game ->
         ReadingLevel.entries.map { level -> "${game.name}:${level.name}" to 1000 }
     }.toMap()
 
@@ -103,7 +103,7 @@ class ReadingBulkPackTest {
         repeat(variants) { variant ->
             var data = fresh(activity)
             when (activity.game) {
-                ReadingGame.MISSING, ReadingGame.DETECTIVE -> data = answer(data)
+                ReadingGame.MISSING, ReadingGame.DETECTIVE, ReadingGame.GRAMMAR -> data = answer(data)
                 ReadingGame.SCRAMBLE, ReadingGame.SEQUENCE -> {
                     val order = activity.validOrders[variant]
                     data = ReadingEngine.submit(readingOrder(data, order), "order")
@@ -218,7 +218,7 @@ class ReadingBulkPackTest {
         ReadingGame.entries.forEach { game ->
             ReadingLevel.entries.forEach { level ->
                 val expected = when (game) {
-                    ReadingGame.STUDIO -> 0
+                    ReadingGame.STUDIO, ReadingGame.GRAMMAR -> 0
                     else -> 1000
                 }
                 assertEquals("$game:$level", expected, poolAnswers["$game:$level"].orEmpty().size)
@@ -307,7 +307,7 @@ class ReadingBulkPackTest {
             assertEquals(oldRevisions.getValue(activity.id), store.catalog.latest(activity.id)?.revision)
             assertEquals(activity, store.catalog.find(activity.id, oldRevisions.getValue(activity.id)))
         }
-        val samples = ReadingGame.entries.flatMap { game ->
+        val samples = ReadingGame.entries.filterNot { it == ReadingGame.GRAMMAR }.flatMap { game ->
             ReadingLevel.entries.map { level ->
                 val candidates = store.catalog.candidates(game, level)
                 assertEquals("${game.name}:${level.name}", 1000, candidates.size)
