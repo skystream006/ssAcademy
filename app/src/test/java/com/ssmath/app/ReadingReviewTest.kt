@@ -46,7 +46,7 @@ class ReadingReviewTest {
                 MathTheme { ReadingReviewDialog(data, data.attempts.map { it.id }, { it }) {} }
             }
         }
-        for (game in ReadingGame.entries) {
+        for (game in ReadingContent.activities.map { it.game }.distinct()) {
             val completed = readingSolve(readingFixture(ReadingContent.forGame(game, ReadingLevel.SPROUT).first()))
             val data = Json.decodeFromString<ReadingData>(Json.encodeToString(ReadingData.serializer(), completed))
             compose.runOnIdle { current.value = data }

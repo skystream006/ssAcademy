@@ -149,7 +149,7 @@ class ReadingPackTest {
         assertEquals("v2", catalog.status().version)
         assertEquals(manifest.sha256, storedChecksum())
         ReadingGame.entries.forEach { game -> ReadingLevel.entries.forEach { level ->
-            assertEquals(3, catalog.candidates(game, level).size)
+            assertEquals(if (game == ReadingGame.GRAMMAR) 0 else 3, catalog.candidates(game, level).size)
         } }
         activities.forEach { activity ->
             val latest = requireNotNull(catalog.latest(activity.id))
@@ -174,7 +174,7 @@ class ReadingPackTest {
         assertEquals(pack.manifest.sha256, storedChecksum())
         ReadingGame.entries.forEach { game ->
             listOf(ReadingLevel.SPROUT, ReadingLevel.TRAIL).forEach { level ->
-                assertEquals(3, catalog.candidates(game, level).size)
+                assertEquals(if (game == ReadingGame.GRAMMAR) 0 else 3, catalog.candidates(game, level).size)
             }
             assertTrue(catalog.candidates(game, ReadingLevel.SUMMIT).isEmpty())
         }
@@ -193,7 +193,7 @@ class ReadingPackTest {
             }).importPack()
         }
         assertEquals("test-v1", status.version)
-        assertEquals("reading-activities-import.json", requests.first().substringAfterLast('/'))
+        assertEquals("reading-activities-v8-import.json", requests.first().substringAfterLast('/'))
         assertEquals("activities-${current.sha256}.jsonl", requests.last().substringAfterLast('/'))
         assertEquals(first, catalog.latest(first.id)?.activity)
         assertCleanFailure {
@@ -307,7 +307,7 @@ class ReadingPackTest {
     }
 
     @Test fun everyGameRejectsItsInvalidSchemaAndAnswers() {
-        val invalid = ReadingGame.entries.map { game ->
+        val invalid = ReadingContent.activities.map { it.game }.distinct().map { game ->
             val activity = ReadingContent.forGame(game, ReadingLevel.SPROUT).first()
             when (game) {
                 ReadingGame.MISSING -> activity.copy(passage = listOf("No gap here."))
@@ -315,6 +315,7 @@ class ReadingPackTest {
                 ReadingGame.SEQUENCE -> activity.copy(validOrders = listOf(listOf(0, 1, 2)))
                 ReadingGame.DETECTIVE -> activity.copy(evidence = activity.passage.size)
                 ReadingGame.STUDIO -> activity.copy(writingChoices = listOf(listOf("Only one")))
+                ReadingGame.GRAMMAR -> activity.copy(explanation = "")
             }
         } + listOf(
             first.copy(question = requireNotNull(first.question).copy(answer = 4)),
