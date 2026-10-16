@@ -233,6 +233,14 @@ class GrammarLessonTest(unittest.TestCase):
         self.assertIn("tense-consistency", {lesson.slug for lesson in LESSONS["TRAIL"]})
         self.assertIn("modifier-attachment", {lesson.slug for lesson in LESSONS["SUMMIT"]})
 
+    def test_prompts_distinguish_otherwise_possible_wordings(self):
+        sprout = {lesson.slug: lesson for lesson in LESSONS["SPROUT"]}
+        summit = {lesson.slug: lesson for lesson in LESSONS["SUMMIT"]}
+        self.assertIn("correctly ordered", sprout["adjective-before-noun"].prompt)
+        self.assertIn("immediately before", sprout["adjective-before-noun"].prompt)
+        self.assertIn("future-perfect phrase", summit["future-perfect"].prompt)
+        self.assertIn("'We' is the subject doing", summit["relative-pronoun-object"].hint)
+
     def test_repeatable_generation_returns_independent_objects(self):
         for level in generate.LEVELS:
             first = list(grammar(level))
