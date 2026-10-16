@@ -135,7 +135,7 @@ class ReadingSessionTest {
     }
 
     @Test fun creativeGamesCountOnceAndOptionalScrambleBonusIsNotPartOfSessionScoring() {
-        for (game in listOf(ReadingGame.STUDIO, ReadingGame.PARTNERS, ReadingGame.SCRAMBLE)) {
+        for (game in listOf(ReadingGame.STUDIO, ReadingGame.SCRAMBLE)) {
             var data = readingSessionFixture(game)
             data = readingSolve(data)
             val session = requireNotNull(data.activeSession)
@@ -185,7 +185,7 @@ class ReadingSessionTest {
             now = 1_700_000_000_000)
         data = readingSolve(data)
         val previous = requireNotNull(data.activeSession)
-        data = ReadingEngine.startSession(data, ReadingGame.CAPTION, ReadingLevel.SPROUT, 25)
+        data = ReadingEngine.startSession(data, ReadingGame.DETECTIVE, ReadingLevel.SPROUT, 25)
         val archived = data.sessions.first()
         assertTrue(archived.abandoned)
         assertNotNull(archived.finishedAt)

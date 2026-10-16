@@ -67,16 +67,13 @@ object ReadingPackValidator {
         text(hint)
         picture(picture)
         require(passage.size <= 24 && tiles.size <= 24 && validOrders.size <= 24 &&
-            eventPictures.size <= 24 && branches.size <= 4 && writingChoices.size <= 4) {
+            eventPictures.size <= 24 && writingChoices.size <= 4) {
             "Reading activity exceeds its schema limits"
         }
         passage.forEach { text(it) }
         tiles.forEach { text(it) }
         eventPictures.forEach { picture(it) }
         question?.let { question(it) }
-        branches.forEach { text(it.label, 200); text(it.text); question(it.question) }
-        require(branches.map { it.label }.distinct().size == branches.size &&
-            branches.map { it.text }.distinct().size == branches.size) { "Duplicate chapters" }
         require(validOrders.distinct().size == validOrders.size) { "Duplicate tile orders" }
         validOrders.forEach {
             require(it.sorted() == tiles.indices.toList()) { "Tile orders must be complete permutations" }
@@ -91,15 +88,12 @@ object ReadingPackValidator {
             ReadingGame.SEQUENCE -> require(tiles.size >= 2 && validOrders.isNotEmpty() && question != null &&
                 eventPictures.size == tiles.size && tiles.indices.toList() !in validOrders)
             ReadingGame.DETECTIVE -> require(passage.isNotEmpty() && evidence in passage.indices && question != null)
-            ReadingGame.CAPTION -> require(question != null)
-            ReadingGame.CHAPTER -> require(passage.isNotEmpty() && branches.size >= 2)
-            ReadingGame.STUDIO, ReadingGame.PARTNERS -> require(writingChoices.size == 4)
+            ReadingGame.STUDIO -> require(writingChoices.size == 4)
         }
         if (game !in listOf(ReadingGame.SCRAMBLE, ReadingGame.SEQUENCE))
             require(tiles.isEmpty() && validOrders.isEmpty())
         if (game != ReadingGame.SEQUENCE) require(eventPictures.isEmpty())
-        if (game != ReadingGame.CHAPTER) require(branches.isEmpty())
-        if (game !in listOf(ReadingGame.STUDIO, ReadingGame.PARTNERS)) require(writingChoices.isEmpty())
+        if (game != ReadingGame.STUDIO) require(writingChoices.isEmpty())
     }
 }
 

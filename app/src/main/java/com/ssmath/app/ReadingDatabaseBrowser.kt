@@ -275,14 +275,6 @@ internal fun ReadingDatabaseDetail(activity: ReadingActivity, revision: String, 
                 choices.forEachIndexed { choice, text -> Text("${choice + 1}. $text") }
             }
         }
-        activity.branches.forEachIndexed { index, branch ->
-            Column(Modifier.testTag("reading-database-branch-$index"),
-                verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                DatabaseSection("Branch ${index + 1}: ${branch.label}")
-                Text(branch.text)
-                DatabaseQuestion(branch.question)
-            }
-        }
     }
 }
 

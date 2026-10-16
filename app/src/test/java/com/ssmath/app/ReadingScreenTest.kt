@@ -17,7 +17,6 @@ import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.junit4.StateRestorationTester
-import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -442,14 +441,10 @@ class ReadingScreenTest {
                 waitFor { it.active?.content?.game == game && it.active?.content?.level == level }
                 val content = requireNotNull(model.data?.active).content
                 val (prefix, choices) = when (game) {
-                    ReadingGame.MISSING, ReadingGame.CAPTION, ReadingGame.DETECTIVE ->
+                    ReadingGame.MISSING, ReadingGame.DETECTIVE ->
                         "reading-answer" to requireNotNull(content.question).choices
                     ReadingGame.SCRAMBLE, ReadingGame.SEQUENCE -> "reading-tile" to content.tiles
-                    ReadingGame.CHAPTER -> "reading-branch" to content.branches.map { it.label }
                     ReadingGame.STUDIO -> "reading-studio-character" to content.writingChoices.first()
-                    ReadingGame.PARTNERS -> "reading-turn-choice" to content.writingChoices.first().map {
-                        "$it began an adventure."
-                    }
                 }
                 compose.runOnIdle { textSize.intValue = 100 }
                 assertEquals(choices.size.coerceAtMost(4),
@@ -615,33 +610,25 @@ class ReadingScreenTest {
 
     @Test
     @GraphicsMode(GraphicsMode.Mode.NATIVE)
-    fun stagedAnswerGridsKeepChapterAndOrderCheckpointsLocked() {
+    fun stagedAnswerGridsKeepOrderCheckpointsLocked() {
         show(readingFixture())
-        for (game in listOf(ReadingGame.CHAPTER, ReadingGame.SCRAMBLE, ReadingGame.SEQUENCE)) {
+        for (game in listOf(ReadingGame.SCRAMBLE, ReadingGame.SEQUENCE)) {
             compose.runOnIdle { model.act { ReadingEngine.start(it, game, ReadingLevel.TRAIL) } }
             waitFor { it.active?.content?.game == game }
             val content = requireNotNull(model.data?.active).content
             compose.onNodeWithTag("reading-answer-0").assertDoesNotExist()
-            if (game == ReadingGame.CHAPTER) {
-                click("reading-branch-1")
-                waitFor { it.active?.branch == 1 }
-                content.branches.indices.forEach {
-                    compose.onNodeWithTag("reading-branch-$it").assertIsNotEnabled()
-                }
-            } else {
-                content.validOrders.first().forEachIndexed { position, tile ->
-                    click("reading-tile-$tile")
-                    waitFor { it.active?.order?.size == position + 1 }
-                }
-                click("reading-submit-order")
-                waitFor { it.active?.earned("order") == true }
-                if (game == ReadingGame.SCRAMBLE) {
-                    compose.onNodeWithTag("reading-summary").assertIsDisplayed()
-                    assertNotNull(model.data?.active?.finishedAt)
-                    continue
-                }
-                compose.onNodeWithTag("reading-placed-0").assertIsNotEnabled()
+            content.validOrders.first().forEachIndexed { position, tile ->
+                click("reading-tile-$tile")
+                waitFor { it.active?.order?.size == position + 1 }
             }
+            click("reading-submit-order")
+            waitFor { it.active?.earned("order") == true }
+            if (game == ReadingGame.SCRAMBLE) {
+                compose.onNodeWithTag("reading-summary").assertIsDisplayed()
+                assertNotNull(model.data?.active?.finishedAt)
+                continue
+            }
+            compose.onNodeWithTag("reading-placed-0").assertIsNotEnabled()
             val question = requireNotNull(ReadingEngine.question(requireNotNull(model.data?.active)))
             assertChoiceGrid("reading-answer", question.choices)
             chooseCorrectAnswer()
@@ -684,27 +671,29 @@ class ReadingScreenTest {
         assertTrue(requireNotNull(model.data).profiles.isEmpty())
     }
 
-    @Test fun recommendedGamesAppearFirstInTheRequestedOrder() {
+    @Test fun allFiveRetainedGamesAppearWithRecommendedGamesFirst() {
         show(readingFixture().copy(page = ReadingPage.MENU))
-        val recommended = listOf("reading-game-MISSING", "reading-game-SEQUENCE", "reading-game-STUDIO")
-        val nodes = compose.onAllNodes(
-            hasTestTag(recommended[0]) or hasTestTag(recommended[1]) or hasTestTag(recommended[2])
-        ).fetchSemanticsNodes()
-        assertEquals(recommended, nodes.map { it.config[SemanticsProperties.TestTag] })
+        compose.onNodeWithTag("reading-game-CAPTION").assertDoesNotExist()
+        compose.onNodeWithText("Caption Quest").assertDoesNotExist()
+        val expected = listOf("reading-game-MISSING", "reading-game-SEQUENCE", "reading-game-STUDIO",
+            "reading-game-SCRAMBLE", "reading-game-DETECTIVE")
+        val nodes = compose.onAllNodes(androidx.compose.ui.test.SemanticsMatcher("Game tile") {
+            it.config.getOrElse(SemanticsProperties.TestTag) { "" }.startsWith("reading-game-")
+        }).fetchSemanticsNodes()
+        assertEquals(expected, nodes.map { it.config[SemanticsProperties.TestTag] })
     }
 
     @Test fun disabledGamesAreHiddenWithoutChangingRemainingTileOrder() {
         show(readingFixture().copy(page = ReadingPage.MENU),
-            disabled = setOf(ReadingGame.MISSING, ReadingGame.CAPTION))
+            disabled = setOf(ReadingGame.MISSING, ReadingGame.DETECTIVE))
         compose.onNodeWithTag("reading-game-MISSING").assertDoesNotExist()
         compose.onNodeWithTag("reading-new-MISSING").assertDoesNotExist()
-        compose.onNodeWithTag("reading-game-CAPTION").assertDoesNotExist()
+        compose.onNodeWithTag("reading-game-DETECTIVE").assertDoesNotExist()
         val nodes = compose.onAllNodes(androidx.compose.ui.test.SemanticsMatcher("Game tile") {
             it.config.getOrElse(SemanticsProperties.TestTag) { "" }.startsWith("reading-game-")
         }).fetchSemanticsNodes()
         assertEquals(listOf("reading-game-SEQUENCE", "reading-game-STUDIO",
-            "reading-game-SCRAMBLE", "reading-game-DETECTIVE",
-            "reading-game-CHAPTER", "reading-game-PARTNERS"), nodes.map {
+            "reading-game-SCRAMBLE"), nodes.map {
             it.config[SemanticsProperties.TestTag]
         })
         click("reading-question-count-15")
@@ -865,13 +854,6 @@ class ReadingScreenTest {
         assertTrue(story.startsWith("A kind fox lived in "))
         assertFalse(story.contains("robot"))
         assertEquals(story, ReadingStore(file).load().stories.single().text)
-    }
-
-    @Test fun partnerPresetAndImmediateTypingShareTheSameTurnBufferDuringSlowSave() {
-        var data = readingFixture(ReadingContent.forGame(ReadingGame.PARTNERS, ReadingLevel.SPROUT).first())
-        data = ReadingEngine.partner(data, "reader-b")
-        data = ReadingEngine.field(data, "turn", "An old sentence.", expectedTurn = 0)
-        assertPresetThenImmediateTyping(data, "reading-turn-choice-1", "turn", "A tiny robot began an adventure.")
     }
 
     @Test fun gameStartWaitsForTheQueuedLevelSelectionToSave() {
@@ -1125,50 +1107,48 @@ class ReadingScreenTest {
         }
     }
 
-    @Test fun partnersBatchSupportsFirstStartResumeAndCompletionWithoutAnotherReader() {
+    @Test fun studioBatchSupportsFirstStartResumeAndCompletion() {
         val data = ReadingEngine.addProfile(ReadingData(), "Ari", "reader-a")
         show(data)
         click("reading-question-count-15")
-        click("reading-game-PARTNERS")
-        waitFor { it.active?.content?.game == ReadingGame.PARTNERS }
-        repeat(4) { index ->
-            click("reading-turn-choice-0")
-            waitFor { !it.active?.fields?.get("turn").isNullOrBlank() }
-            click("reading-save-turn")
-            waitFor { it.active?.turns?.size == index + 1 }
+        click("reading-game-STUDIO")
+        waitFor { it.active?.content?.game == ReadingGame.STUDIO }
+        ReadingEngine.studioKeys.take(2).forEach { key ->
+            click("reading-studio-$key-0")
+            waitFor { !it.active?.fields?.get(key).isNullOrBlank() }
+            click("reading-save-$key")
+            waitFor { it.active?.earned(key) == true }
         }
         val draft = requireNotNull(model.data).active
         click("reading-back")
         waitFor { it.page == ReadingPage.MENU }
-        click("reading-resume-PARTNERS")
+        click("reading-resume-STUDIO")
         waitFor { it.page == ReadingPage.ACTIVITY }
         assertEquals(draft, model.data?.active)
-        repeat(4) { index ->
-            click("reading-tile-$index")
-            waitFor { it.active?.order?.size == index + 1 }
+        ReadingEngine.studioKeys.drop(2).forEach { key ->
+            click("reading-studio-$key-0")
+            waitFor { !it.active?.fields?.get(key).isNullOrBlank() }
+            click("reading-save-$key")
+            if (key != "ending") waitFor { it.active?.earned(key) == true }
         }
-        click("reading-reread")
-        waitFor { it.active?.reread == true }
-        click("reading-shared")
         waitFor { it.stories.size == 1 }
         assertEquals(1, model.data?.profiles?.size)
-        assertTrue(requireNotNull(model.data).attempts.first().earned("participation:reader-a"))
+        assertTrue(ReadingEngine.ready(requireNotNull(model.data).attempts.first()))
         assertEquals(2, requireNotNull(model.data?.activeSession).attemptIds.indexOf(model.data?.active?.id) + 1)
-        assertEquals(1, model.data?.sharedCompletions("reader-a"))
+        assertEquals(1, model.data?.completions("reader-a"))
         assertEquals(model.data, ReadingStore(file).load())
     }
 
-    @Test fun partnersNewBatchRetainsExistingParticipationHistory() {
+    @Test fun studioNewBatchRetainsExistingWritingHistory() {
         var data = ReadingEngine.addProfile(ReadingData(), "Ari", "reader-a")
-        data = ReadingEngine.start(data, ReadingGame.PARTNERS, ReadingLevel.SPROUT, id = "old-story")
-        data = ReadingEngine.submit(ReadingEngine.field(data, "turn", "A fox set out.", expectedTurn = 0),
-            "turn", expectedTurn = 0)
+        data = ReadingEngine.start(data, ReadingGame.STUDIO, ReadingLevel.SPROUT, id = "old-story")
+        data = ReadingEngine.submit(ReadingEngine.field(data, "character", "A fox"), "character")
         show(data.copy(page = ReadingPage.MENU))
         click("reading-question-count-15")
-        click("reading-game-PARTNERS")
+        click("reading-game-STUDIO")
         waitFor { it.active?.id != "old-story" }
         assertEquals(data.attempts.first().checkpoints, model.data?.attempts?.first()?.checkpoints)
-        assertTrue(requireNotNull(model.data).attempts.first().earned("participation:reader-a"))
+        assertTrue(requireNotNull(model.data).attempts.first().earned("character"))
         assertEquals(1, model.data?.profiles?.size)
         assertEquals(model.data, ReadingStore(file).load())
     }
@@ -1221,10 +1201,10 @@ class ReadingScreenTest {
         }
     }
 
-    @Test fun captionInstructionsDoNotAffectIndependentCreditAndUnavailableAudioCanBeRetried() {
-        show(readingFixture(ReadingContent.forGame(ReadingGame.CAPTION, ReadingLevel.SPROUT).first()), speech = true)
+    @Test fun instructionsDoNotAffectIndependentCreditAndUnavailableAudioCanBeRetried() {
+        show(readingFixture(), speech = true)
         click("reading-instructions")
-        assertEquals(ReadingGame.CAPTION.guidance, lastSpoken)
+        assertEquals(ReadingGame.MISSING.guidance, lastSpoken)
         assertEquals(0, model.data?.active?.narrations)
         chooseCorrectAnswer()
         click("reading-submit-answer")
@@ -1233,7 +1213,7 @@ class ReadingScreenTest {
 
         compose.runOnIdle {
             speechWorks = false
-            model.act { ReadingEngine.start(it, ReadingGame.CAPTION, ReadingLevel.SPROUT, true, "fresh") }
+            model.act { ReadingEngine.start(it, ReadingGame.MISSING, ReadingLevel.SPROUT, true, "fresh") }
         }
         waitFor { it.active?.id == "fresh" }
         click("reading-instructions")
@@ -1246,8 +1226,7 @@ class ReadingScreenTest {
     }
 
     @Test fun previouslyNarratedDraftRetainsItsSupportHistoryWithoutNarrationControls() {
-        val content = ReadingContent.forGame(ReadingGame.CAPTION, ReadingLevel.SPROUT).first()
-        show(ReadingEngine.narration(readingFixture(content), queued = true), speech = true)
+        show(ReadingEngine.narration(readingFixture(), queued = true), speech = true)
         compose.onNodeWithTag("reading-listen").assertDoesNotExist()
         compose.onNodeWithTag("reading-stop").assertDoesNotExist()
         click("reading-instructions")
@@ -1258,28 +1237,25 @@ class ReadingScreenTest {
         assertEquals(1, ReadingStore(file).load().active?.narrations)
     }
 
-    @Test fun partnerActivityHasOnlyInstructionsButSavedStoryStillReadsInArrangedOrder() {
-        var data = readingFixture(ReadingContent.forGame(ReadingGame.PARTNERS, ReadingLevel.SPROUT).first())
-        data = ReadingEngine.partner(data, "reader-b")
-        repeat(4) { index ->
-            data = ReadingEngine.field(data, "turn", "Sentence $index.", expectedTurn = index)
-            data = ReadingEngine.submit(data, "turn", expectedTurn = index)
+    @Test fun studioActivityHasOnlyInstructionsButSavedStoryCanStillBeReadAloud() {
+        val content = ReadingContent.forGame(ReadingGame.STUDIO, ReadingLevel.SPROUT).first()
+        var data = readingFixture(content)
+        ReadingEngine.studioKeys.dropLast(1).forEachIndexed { index, key ->
+            data = ReadingEngine.field(data, key, content.writingChoices[index][0])
+            data = ReadingEngine.submit(data, key)
         }
-        data = readingOrder(data, listOf(3, 1, 0, 2))
+        data = ReadingEngine.field(data, "ending", content.writingChoices.last()[0])
         show(data, speech = true)
         compose.onNodeWithTag("reading-listen").assertDoesNotExist()
         compose.onNodeWithTag("reading-stop").assertDoesNotExist()
         click("reading-instructions")
-        assertEquals(ReadingGame.PARTNERS.guidance, lastSpoken)
+        assertEquals(ReadingGame.STUDIO.guidance, lastSpoken)
         assertEquals(0, model.data?.active?.narrations)
-        click("reading-reread")
-        waitFor { it.active?.reread == true }
-        click("reading-shared")
-        waitFor { it.active?.earned("shared") == true }
+        click("reading-save-ending")
         waitFor { it.active?.finishedAt != null }
         val completed = model.data
         click("reading-listen")
-        assertEquals("Sentence 3. Sentence 1. Sentence 0. Sentence 2.", lastSpoken)
+        assertEquals(ReadingEngine.storyText(requireNotNull(data.active)), lastSpoken)
         val previousStops = stopped
         click("reading-stop")
         assertTrue(stopped > previousStops)

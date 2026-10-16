@@ -114,7 +114,7 @@ internal fun ReadingAttemptReview(data: ReadingData, attempt: ReadingAttempt) {
     Text(attempt.title, style = MaterialTheme.typography.titleLarge)
     Text("Started ${formatFinishedAt(attempt.startedAt)}")
     attempt.finishedAt?.let { Text("Finished ${formatFinishedAt(it)}") }
-    val creative = attempt.game in listOf(ReadingGame.STUDIO, ReadingGame.PARTNERS)
+    val creative = attempt.game == ReadingGame.STUDIO
     Text(when {
         attempt.finishedAt != null && creative -> "Completed"
         attempt.finishedAt != null && ReadingEngine.ready(attempt) && ReadingEngine.wrong(attempt) -> "Completed after retry"
@@ -131,7 +131,7 @@ internal fun ReadingAttemptReview(data: ReadingData, attempt: ReadingAttempt) {
     content.passage.forEach { Text(it) }
     HorizontalDivider()
     when (attempt.game) {
-        ReadingGame.MISSING, ReadingGame.CAPTION -> ReviewQuestion(attempt, "answer")
+        ReadingGame.MISSING -> ReviewQuestion(attempt, "answer")
         ReadingGame.SCRAMBLE, ReadingGame.SEQUENCE -> {
             Text(if (attempt.game == ReadingGame.SCRAMBLE) "Put the words in order." else "Put the events in order.",
                 style = MaterialTheme.typography.titleMedium)
@@ -154,36 +154,12 @@ internal fun ReadingAttemptReview(data: ReadingData, attempt: ReadingAttempt) {
                 attempt.fields["evidence"]?.toIntOrNull()?.let(content.passage::getOrNull))
             Text("Correct evidence: ${content.passage[content.evidence]}")
         }
-        ReadingGame.CHAPTER -> {
-            val branch = attempt.branch?.let(content.branches::getOrNull)
-            Text("Chosen chapter: ${branch?.label ?: "Not chosen"}")
-            branch?.let {
-                Text(it.text)
-                ReviewQuestion(attempt, "answer")
-            }
-        }
         ReadingGame.STUDIO -> {
             Text("Creative writing · no single correct answer")
             ReadingEngine.studioKeys.forEach { field ->
                 Text("Your $field idea", style = MaterialTheme.typography.titleMedium)
                 ReviewResponse(attempt, field, attempt.fields[field])
             }
-        }
-        ReadingGame.PARTNERS -> {
-            Text("Creative writing · no single correct answer")
-            val prompts = listOf("Introduce a character.", "Add a place.", "Tell us the problem.", "Give the story an ending.")
-            prompts.forEachIndexed { i, prompt ->
-                val author = if (i % 2 == 0) data.name(attempt.ownerId)
-                    else attempt.partnerId?.let(data::name) ?: "Your partner"
-                Text("Turn ${i + 1} · $author · $prompt", style = MaterialTheme.typography.titleMedium)
-                Text("Saved answer: ${attempt.turns.getOrNull(i)?.text ?: "Not answered"}")
-            }
-            attempt.fields["turn"]?.takeIf { it.isNotBlank() }?.let { Text("Unsubmitted draft: $it") }
-            Text("Arrange and reread your story.", style = MaterialTheme.typography.titleMedium)
-            ReviewResponse(attempt, "shared", attempt.order.takeIf { it.isNotEmpty() }?.joinToString("\n") {
-                attempt.turns[it].text
-            })
-            Text(if (attempt.reread) "Story reread" else "Story not yet reread")
         }
     }
     data.stories.find { it.attemptId == attempt.id }?.let {

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reproduce the v5 reading catalogue with varied Sentence Scramble structures."""
+"""Reproduce the five-game v7 reading catalogue with varied Sentence Scramble structures."""
 
 import argparse
 from collections import Counter, defaultdict
@@ -9,9 +9,8 @@ import json
 from pathlib import Path
 import unicodedata
 
-from generation.creative_games import partners, studio
+from generation.creative_games import studio
 from generation.reasoning_games import detective, sequence
-from generation.scene_games import caption, chapter
 from generation.word_games import missing, scramble
 
 
@@ -19,7 +18,7 @@ ROOT = Path(__file__).resolve().parent
 LEVELS = ("SPROUT", "TRAIL", "SUMMIT")
 GENERATORS = {
     "MISSING": missing, "SCRAMBLE": scramble, "SEQUENCE": sequence, "DETECTIVE": detective,
-    "CAPTION": caption, "CHAPTER": chapter, "STUDIO": studio, "PARTNERS": partners,
+    "STUDIO": studio,
 }
 PER_POOL = 1_000
 MAX_PACK_BYTES = 64 * 1024 * 1024
@@ -41,20 +40,14 @@ def task_identity(activity):
     elif game in ("SCRAMBLE", "SEQUENCE"):
         task = [sorted(" ".join(activity["tiles"][i] for i in order)
                        for order in activity["validOrders"]), answer(activity["question"])]
-    elif game == "CAPTION":
-        task = [activity["picture"]["symbol"], answer(activity["question"])]
-    elif game == "CHAPTER":
-        task = [activity["passage"], sorted(
-            (branch["text"], answer(branch["question"])) for branch in activity["branches"])]
     else:
         task = [sorted(choices) for choices in activity["writingChoices"]]
     return encoded([game, activity["level"], task])
 
 
 def answer_keys(activity):
-    """Scope objective answers, including every chapter branch, to their pool."""
+    """Scope objective answers to their pool."""
     questions = ([activity["question"]] if activity.get("question") else [])
-    questions += [branch["question"] for branch in activity.get("branches", [])]
     return [
         (activity["game"], activity["level"],
          " ".join(unicodedata.normalize("NFKC", q["choices"][q["answer"]]).lower().split()))
@@ -77,12 +70,12 @@ def build_pack():
     if (set(previous_pools) != expected_keys
             or any(len(pool) != PER_POOL for pool in previous_pools.values())
             or len({a["id"] for a in previous_activities}) != len(previous_activities)):
-        raise ValueError("Expected the original 24,000-activity v4 catalogue")
-    prefix = b"".join(published.splitlines(keepends=True)[:72])
+        raise ValueError("Expected the 15,000-activity v4 catalogue")
+    prefix = b"".join(published.splitlines(keepends=True)[:45])
     original = [json.loads(line) for line in prefix.splitlines()]
     counts = Counter(f'{a["game"]}:{a["level"]}' for a in original)
-    if len(original) != 72 or set(counts) != expected_keys or set(counts.values()) != {3}:
-        raise ValueError("Expected the original 72-activity v2 catalogue")
+    if len(original) != 45 or set(counts) != expected_keys or set(counts.values()) != {3}:
+        raise ValueError("Expected the 45-activity v2 catalogue")
     identities = {task_identity(a) for a in original}
     ids = {a["id"] for a in original}
     used_answers = set()
@@ -127,7 +120,7 @@ def build_pack():
     data = output.getvalue()
     checksum = hashlib.sha256(data).hexdigest()
     manifest = {
-        "schemaVersion": 1, "version": "v5", "file": f"activities-{checksum}.jsonl",
+        "schemaVersion": 1, "version": "v7", "file": f"activities-{checksum}.jsonl",
         "sha256": checksum, "bytes": len(data), "counts": dict(counts),
     }
     return data, manifest

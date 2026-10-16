@@ -5,6 +5,10 @@ import androidx.test.core.app.ApplicationProvider
 import java.io.File
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -191,10 +195,6 @@ class ReadingSqliteStoreTest {
         val completed = mutableListOf<ReadingAttempt>()
         for (game in ReadingGame.entries) {
             data = store.startSession(data, game, ReadingLevel.SPROUT, 15, false, null)
-            // The shared-story fixture uses the second legacy reader.
-            if (game == ReadingGame.PARTNERS) {
-                data = data.copy(profiles = data.profiles + ReadingProfile("reader-b", "Bo"))
-            }
             data = readingSolve(data)
             completed += requireNotNull(data.active)
             data = ReadingEngine.endSession(data, requireNotNull(data.activeSession).id, abandoned = true)
@@ -208,7 +208,7 @@ class ReadingSqliteStoreTest {
             assertEquals(expected.content, review.content)
             assertTrue(ReadingEngine.ready(review))
         }
-        assertEquals(2, reopened.stories.size)
+        assertEquals(1, reopened.stories.size)
         assertEquals(data.stories, reopened.stories)
         assertEquals(reopened, store.load())
     }
@@ -238,7 +238,7 @@ class ReadingSqliteStoreTest {
         store.save(data)
         data = store.start(data, ReadingGame.MISSING, ReadingLevel.SPROUT, false)
         data = store.start(data, ReadingGame.MISSING, ReadingLevel.TRAIL, false)
-        data = store.start(data, ReadingGame.CAPTION, ReadingLevel.SPROUT, false)
+        data = store.start(data, ReadingGame.DETECTIVE, ReadingLevel.SPROUT, false)
         assertEquals(4L, scalar("SELECT COUNT(*) FROM reading_cycles"))
         assertEquals(3L, scalar("SELECT COUNT(*) FROM reading_presented WHERE reader_id='reader-b'"))
         assertEquals(3L, scalar("SELECT COUNT(*) FROM reading_presented WHERE reader_id='reader-a'"))
@@ -283,6 +283,89 @@ class ReadingSqliteStoreTest {
         assertEquals(next, store.load())
     }
 
+    @Test fun upgradesPurgeRetiredCataloguesAndHistoryWhileKeepingOtherRevisionsAndRotation() {
+        for (version in listOf(1, 2, 3)) {
+            install()
+            val data = store.start(reader(), ReadingGame.MISSING, ReadingLevel.SPROUT, false)
+            val original = requireNotNull(data.active)
+            val raw = legacyReadingPayload(data, activateRetired = true)
+            val db = database.writableDatabase
+            val payload = readingPackJson.parseToJsonElement(readingPackJson.encodeToString(original.content)).jsonObject
+            db.execSQL("UPDATE reading_content SET payload=? WHERE id=? AND revision=?", arrayOf(
+                JsonObject(payload + ("branches" to JsonArray(emptyList()))).toString(),
+                original.contentId, requireNotNull(original.activityRef).revision))
+            for (game in listOf("CHAPTER", "PARTNERS", "CAPTION")) {
+                db.execSQL("INSERT INTO reading_content VALUES(?,?,?)", arrayOf(
+                    "retired-$game", "retired", """{"game":"$game","branches":[{"text":"Removed content"}]}"""))
+                db.execSQL("INSERT INTO reading_content VALUES(?,?,?)", arrayOf(
+                    "retired-$game", "archive", """{"game":"$game"}"""))
+                repeat(120) { index ->
+                    db.execSQL("INSERT INTO reading_content VALUES(?,?,?)", arrayOf(
+                        "retired-$game", "archive-$index",
+                        """{"game":"$game","branches":[{"text":"${"Retired text ".repeat(1000)}"}]}"""))
+                }
+                db.execSQL("INSERT INTO reading_current VALUES(?,?,?,?)", arrayOf("retired-$game", game, "SPROUT", "retired"))
+                db.execSQL("INSERT INTO reading_cycles VALUES(?,?,?,1,NULL)", arrayOf("reader-a", game, "SPROUT"))
+                db.execSQL("INSERT INTO reading_presented VALUES(?,?,?,?,1)",
+                    arrayOf("reader-a", game, "SPROUT", "retired-$game"))
+            }
+            if (version == 1) {
+                db.execSQL("DROP TABLE reading_attempts")
+                db.execSQL("DROP TABLE reading_stories")
+                db.execSQL("DROP TABLE reading_state")
+                db.execSQL("CREATE TABLE reading_state(singleton INTEGER PRIMARY KEY,payload TEXT NOT NULL)")
+                db.execSQL("INSERT INTO reading_state VALUES(1,?)", arrayOf(raw.toString()))
+            } else {
+                db.execSQL("DELETE FROM reading_attempts")
+                db.execSQL("DELETE FROM reading_stories")
+                (raw.getValue("attempts") as JsonArray).forEachIndexed { index, value ->
+                    db.execSQL("INSERT INTO reading_attempts VALUES(?,?,?)",
+                        arrayOf<Any>(value.jsonObject.getValue("id").jsonPrimitive.content, index, value.toString()))
+                }
+                (raw.getValue("stories") as JsonArray).forEachIndexed { index, value ->
+                    db.execSQL("INSERT INTO reading_stories VALUES(?,?,?)",
+                        arrayOf<Any>(value.jsonObject.getValue("attemptId").jsonPrimitive.content, index, value.toString()))
+                }
+                db.execSQL("UPDATE reading_state SET payload=?", arrayOf(JsonObject(raw + mapOf(
+                    "attempts" to JsonArray(emptyList()), "stories" to JsonArray(emptyList()))).toString()))
+            }
+            db.version = version
+            database.close()
+            database = ReadingDatabase(application, "rotation.db")
+            store = ReadingSqliteStore(application, database, legacy)
+            val restored = store.load()
+            val expected = data.copy(attempts = data.attempts.map { it.copy(loadedContent = null) },
+                profiles = data.profiles.map { it.copy(activeAttemptId = null) }, page = ReadingPage.MENU,
+                deletedSessionIds = setOf("session-CHAPTER", "session-PARTNERS", "session-CAPTION"))
+            assertEquals(expected, restored)
+            assertEquals(original.content, store.review(restored.attempts.single()).content)
+            assertEquals(pool.size.toLong(), scalar("SELECT COUNT(*) FROM reading_content"))
+            assertEquals(pool.size, store.catalog.browse().total)
+            assertEquals(1L, scalar("SELECT COUNT(*) FROM reading_cycles"))
+            assertEquals(1L, scalar("SELECT COUNT(*) FROM reading_presented"))
+            assertEquals(1L, scalar("SELECT COUNT(*) FROM reading_attempts"))
+            assertEquals(0L, scalar("SELECT COUNT(*) FROM reading_stories"))
+            assertEquals(expected, store.load())
+            store.save(restored)
+            assertEquals(original.id, store.start(restored, ReadingGame.MISSING, ReadingLevel.SPROUT, false).active?.id)
+            database.close()
+            application.deleteDatabase("rotation.db")
+            database = ReadingDatabase(application, "rotation.db")
+            store = ReadingSqliteStore(application, database, legacy)
+        }
+    }
+
+    @Test fun importingLegacyFileDropsRetiredGamesBeforeResolvingTheirContent() {
+        val original = readingSolve(readingFixture())
+        legacy.writeText(legacyReadingPayload(original).toString())
+        val migrated = store.load()
+        assertEquals(original.copy(deletedSessionIds = setOf("session-CHAPTER", "session-PARTNERS", "session-CAPTION")),
+            migrated.withoutCatalogueRefs())
+        assertEquals(1L, scalar("SELECT COUNT(*) FROM reading_content"))
+        assertEquals(1L, scalar("SELECT COUNT(*) FROM reading_presented"))
+        assertEquals(migrated, store.load())
+    }
+
     @Test fun brokenLegacyFileNeverCreatesAnEmptyReplacementLedger() {
         legacy.writeText("{broken")
         assertThrows(Exception::class.java) { store.load() }
@@ -312,7 +395,7 @@ class ReadingSqliteStoreTest {
         val solved = readingSolve(store.start(reader(), ReadingGame.MISSING, ReadingLevel.SPROUT, false))
         val completed = requireNotNull(solved.active)
         val attempts = (1..3200).map { index ->
-            completed.copy(id = "history-${index.toString().padStart(32, '0')}", loadedContent = null)
+            completed.copy(id = "history-${index.toString().padStart(128, '0')}", loadedContent = null)
         }
         val history = solved.copy(attempts = attempts, profiles = solved.profiles.map {
             it.copy(activeAttemptId = attempts.last().id)

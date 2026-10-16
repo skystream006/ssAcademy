@@ -7,6 +7,11 @@ import java.io.File
 import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -14,6 +19,56 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+
+internal fun legacyReadingPayload(data: ReadingData, activateRetired: Boolean = false): JsonObject {
+    val root = readingPackJson.parseToJsonElement(readingPackJson.encodeToString(data)).jsonObject
+    val retiredAttempts = mutableListOf<JsonObject>()
+    val retiredSessions = mutableListOf<JsonObject>()
+    val retiredContent = listOf("CHAPTER" to "chapter-path", "PARTNERS" to "partners-sprout-0", "CAPTION" to "caption-cat")
+    retiredContent.forEach { (game, contentId) ->
+        val ids = (0 until 15).map { "$game-$it" }
+        ids.forEach { id ->
+            retiredAttempts += readingPackJson.parseToJsonElement(
+                """{"id":"$id","ownerId":"reader-a","contentId":"imported-$contentId","startedAt":1,
+                    "activityRef":{"revision":"retired","game":"$game","level":"SPROUT","title":"Removed activity"}}"""
+            ).jsonObject
+        }
+        retiredAttempts += readingPackJson.parseToJsonElement(
+            """{"id":"legacy-$game","ownerId":"reader-a","contentId":"$contentId","startedAt":1}"""
+        ).jsonObject
+        retiredSessions += readingPackJson.parseToJsonElement(
+            """{"id":"session-$game","ownerId":"reader-a","game":"$game","level":"SPROUT",
+                "attemptIds":${JsonArray(ids.map(::JsonPrimitive))},"startedAt":1,"rewardsEnabledAtStart":false}"""
+        ).jsonObject
+    }
+    val attempts = (root.getValue("attempts") as JsonArray).map { value ->
+        val attempt = value.jsonObject
+        JsonObject(attempt + mapOf(
+            "branch" to readingPackJson.parseToJsonElement("null"),
+            "partnerId" to readingPackJson.parseToJsonElement("null"),
+            "turns" to JsonArray(emptyList()), "reread" to JsonPrimitive(false),
+            "checkpoints" to JsonObject(attempt.getValue("checkpoints").jsonObject.mapValues { (_, checkpoint) ->
+                JsonObject(checkpoint.jsonObject + ("shared" to JsonPrimitive(false)))
+            })
+        ))
+    }
+    val stories = (root.getValue("stories") as JsonArray).map {
+        JsonObject(it.jsonObject + ("turns" to JsonArray(emptyList())))
+    } + readingPackJson.parseToJsonElement(
+        """{"attemptId":"legacy-PARTNERS","title":"Removed story","text":"Removed writing",
+            "illustration":"book","readerIds":["reader-a","reader-b"],"turns":[],"savedAt":2}"""
+    )
+    val profiles = (root.getValue("profiles") as JsonArray).map { value ->
+        if (activateRetired) JsonObject(value.jsonObject + ("activeAttemptId" to JsonPrimitive("legacy-CAPTION")))
+        else value
+    }
+    return JsonObject(root + mapOf(
+        "attempts" to JsonArray(attempts + retiredAttempts),
+        "stories" to JsonArray(stories),
+        "sessions" to JsonArray((root.getValue("sessions") as JsonArray) + retiredSessions),
+        "profiles" to JsonArray(profiles)
+    ))
+}
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
@@ -27,19 +82,44 @@ class ReadingStoreTest {
         settings.edit().clear().commit()
     }
 
-    @Test fun draftsSupportBranchAttributionAndStoriesRoundTripWithoutDuplicatingCheckpoints() {
+    @Test fun retiredGamesArePurgedBeforeLegacyDecodingWithoutChangingOtherReadersOrStories() {
+        val original = readingSolve(readingFixture(
+            ReadingContent.forGame(ReadingGame.STUDIO, ReadingLevel.SPROUT).first()))
+        file.writeText(legacyReadingPayload(original, activateRetired = true).toString())
+        val expected = original.copy(
+            profiles = original.profiles.map { it.copy(activeAttemptId = null) },
+            page = ReadingPage.MENU,
+            deletedSessionIds = setOf("session-CHAPTER", "session-PARTNERS", "session-CAPTION")
+        )
+        assertEquals(expected, ReadingStore(file).load())
+        assertEquals(expected, ReadingStore(file).load())
+        val rewritten = file.readText()
+        assertFalse(rewritten.contains("Removed writing"))
+        assertFalse(rewritten.contains("chapter-path"))
+        assertFalse(rewritten.contains("partners-sprout"))
+        assertFalse(rewritten.contains("caption-cat"))
+        assertFalse(rewritten.contains("\"turns\""))
+        assertFalse(rewritten.contains("\"shared\""))
+    }
+
+    @Test fun retiringOtherGamesKeepsTheCurrentDraftAndRejectsUnrelatedCorruption() {
+        val original = ReadingEngine.field(readingFixture(), "answer", "1")
+        file.writeText(legacyReadingPayload(original).toString())
+        assertEquals(original.copy(deletedSessionIds = setOf("session-CHAPTER", "session-PARTNERS", "session-CAPTION")),
+            ReadingStore(file).load())
+        val invalid = JsonObject(legacyReadingPayload(original) + ("profiles" to JsonPrimitive("invalid")))
+        file.writeText(invalid.toString())
+        assertThrows(IOException::class.java) { ReadingStore(file).load() }
+        assertEquals(invalid.toString(), file.readText())
+    }
+
+    @Test fun draftsSupportAndStoriesRoundTripWithoutDuplicatingCheckpoints() {
         val store = ReadingStore(file)
         assertEquals(ReadingData(), store.load())
         ReadingContent.activities.forEach { content ->
             var data = readingFixture(content)
             data = ReadingEngine.hint(ReadingEngine.narration(data, true))
-            if (content.game == ReadingGame.CHAPTER) data = ReadingEngine.branch(data, 1)
-            if (content.game == ReadingGame.PARTNERS) {
-                data = ReadingEngine.partner(data, "reader-b")
-                data = ReadingEngine.submit(ReadingEngine.field(data, "turn", "A new adventure began.", expectedTurn = 0),
-                    "turn", expectedTurn = 0)
-                data = ReadingEngine.field(data, "turn", "An unfinished sentence", expectedTurn = 1)
-            } else if (content.game == ReadingGame.STUDIO) data = ReadingEngine.field(data, "character", "A typed character")
+            if (content.game == ReadingGame.STUDIO) data = ReadingEngine.field(data, "character", "A typed character")
             else if (content.tiles.isNotEmpty()) data = ReadingEngine.placeTile(data, 0)
             else data = ReadingEngine.field(data, "answer", "0")
             store.save(data)
@@ -93,7 +173,7 @@ class ReadingStoreTest {
         val dataSets = listOf(
             readingSolve(readingFixture()),
             readingAnswer(readingFixture(), readingWrong(readingFixture())),
-            readingSolve(readingFixture(ReadingContent.forGame(ReadingGame.PARTNERS, ReadingLevel.SPROUT).first()))
+            readingSolve(readingFixture(ReadingContent.forGame(ReadingGame.STUDIO, ReadingLevel.SPROUT).first()))
         )
         val store = ReadingStore(file)
         store.load()
@@ -108,11 +188,10 @@ class ReadingStoreTest {
             assertTrue(requireNotNull(restored.active).checkpoints.values.none { it.rewardGranted })
             listOf("reader-a", "reader-b").forEach { id ->
                 assertEquals(original.checkpointCount(id), restored.checkpointCount(id))
-                assertEquals(original.sharedCompletions(id), restored.sharedCompletions(id))
                 assertEquals(original.accuracy(id), restored.accuracy(id))
             }
             if (restored.active?.finishedAt != null) {
-                assertEquals(restored, ReadingEngine.submit(restored, "shared", rewardsEnabled = false))
+                assertEquals(restored, ReadingEngine.submit(restored, "answer", rewardsEnabled = false))
             } else {
                 val disabled = readingAnswer(restored, readingCorrect(restored), rewardsEnabled = false)
                 assertTrue(requireNotNull(disabled.active).earned("answer"))
@@ -205,10 +284,8 @@ class ReadingStoreTest {
         assertThrows(IllegalArgumentException::class.java) {
             ReadingEngine.validate(base.copy(profiles = base.profiles + base.profiles.first()))
         }
-        val partners = readingFixture(ReadingContent.forGame(ReadingGame.PARTNERS, ReadingLevel.SPROUT).first())
         assertThrows(IllegalArgumentException::class.java) {
-            ReadingEngine.validate(partners.copy(attempts = listOf(requireNotNull(partners.active).copy(
-                partnerId = "reader-b", turns = listOf(ReadingTurn("reader-b", "Wrong author."))))))
+            ReadingEngine.validate(base.copy(attempts = listOf(requireNotNull(base.active).copy(ownerId = "unknown"))))
         }
     }
 
@@ -397,10 +474,9 @@ class ReadingStoreTest {
         assertEquals(0, model.data?.active?.hints)
     }
 
-    @Test fun delayedPartnerSaveRejectsEditsAndSubmissionsForThePreviousTurn() {
-        var data = readingFixture(ReadingContent.forGame(ReadingGame.PARTNERS, ReadingLevel.SPROUT).first())
-        data = ReadingEngine.partner(data, "reader-b")
-        data = ReadingEngine.field(data, "turn", "Ari's sentence.", expectedTurn = 0)
+    @Test fun delayedStorySaveRejectsEditsAndSubmissionsForTheCompletedCheckpoint() {
+        var data = readingFixture(ReadingContent.forGame(ReadingGame.STUDIO, ReadingLevel.SPROUT).first())
+        data = ReadingEngine.field(data, "character", "A patient inventor")
         val storage = RecordingStorage(data)
         val model = ReadingViewModel(application, storage)
         await { model.data != null }
@@ -408,18 +484,17 @@ class ReadingStoreTest {
         storage.writeGate = gate
         storage.writeStarted = CountDownLatch(1)
         try {
-            model.submit("turn", expectedTurn = 0)
+            model.submit("character")
             await { storage.writeStarted?.count == 0L }
-            model.act { ReadingEngine.field(it, "turn", "Still Ari typing.", expectedTurn = 0) }
-            model.submit("turn", expectedTurn = 0)
+            model.act { ReadingEngine.field(it, "character", "Still typing") }
+            model.submit("character")
             model.act { it.copy(page = ReadingPage.MENU) }
         } finally {
             storage.writeGate = null
             gate.countDown()
         }
         await { model.data?.page == ReadingPage.MENU && !model.saving }
-        assertEquals(listOf(ReadingTurn("reader-a", "Ari's sentence.")), storage.saved.active?.turns)
-        assertNull(storage.saved.active?.fields?.get("turn"))
+        assertEquals("A patient inventor", storage.saved.active?.fields?.get("character"))
         assertEquals(1, storage.saved.checkpointCount("reader-a"))
         assertEquals(0, storage.saved.checkpointCount("reader-b"))
     }
@@ -572,7 +647,7 @@ class ReadingStoreTest {
             val saved = storage.saved
             assertEquals(1, saved.sessionCorrect(requireNotNull(saved.activeSession)))
             assertNotNull(saved.attempts.first().finishedAt)
-            assertEquals(if (game in listOf(ReadingGame.STUDIO, ReadingGame.PARTNERS)) 1 else 0, saved.stories.size)
+            assertEquals(if (game == ReadingGame.STUDIO) 1 else 0, saved.stories.size)
             assertTrue(requireNotNull(saved.active).fields.isEmpty())
             ReadingEngine.validate(saved)
         }

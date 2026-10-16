@@ -43,6 +43,7 @@ class ReadingStore(file: File) : ReadingStorage {
     @Synchronized
     override fun load(): ReadingData {
         loaded = false
+        var migrated = false
         val data = if (!atomic.baseFile.exists() && !File(atomic.baseFile.path + ".bak").exists()) ReadingData()
         else try {
             val text = atomic.openRead().bufferedReader(Charsets.UTF_8).use { it.readText() }
@@ -50,7 +51,9 @@ class ReadingStore(file: File) : ReadingStorage {
             require(root is JsonObject && listOf("version", "profiles", "selectedProfileId", "attempts", "stories").all {
                 it in root
             })
-            json.decodeFromJsonElement(ReadingData.serializer(), root)
+            val cleaned = ReadingMigration.migrate(root)
+            migrated = cleaned != root
+            json.decodeFromJsonElement(ReadingData.serializer(), cleaned)
         } catch (error: Exception) {
             throw IOException("Reading data could not be opened. The existing file has been kept.", error)
         }
@@ -60,6 +63,12 @@ class ReadingStore(file: File) : ReadingStorage {
             throw IOException("Reading data needs repair. The existing file has been kept.", error)
         }
         loaded = true
+        try {
+            if (migrated) save(data)
+        } catch (error: Exception) {
+            loaded = false
+            throw error
+        }
         return data
     }
 
@@ -396,13 +405,13 @@ class ReadingViewModel(
         }
     }
 
-    fun submit(key: String, expectedTurn: Int? = null) {
+    fun submit(key: String) {
         act { current ->
             if (current.active?.let { isDisabled(it.game) } == true) current
             else {
                 val rewardsEnabled = settings.getBoolean(Subject.READING.rewardsPreference, true)
                 val disabled = disabledRewards()
-                val submitted = ReadingEngine.submit(current, key, expectedTurn = expectedTurn,
+                val submitted = ReadingEngine.submit(current, key,
                     rewardsEnabled = rewardsEnabled, disabledRewards = disabled, random = rewardRandom)
                 ReadingEngine.nextSessionActivity(ReadingEngine.finish(submitted,
                     rewardsEnabled = rewardsEnabled, disabledRewards = disabled, random = rewardRandom))
