@@ -5,6 +5,7 @@ from copy import deepcopy
 import hashlib
 import json
 import unittest
+from zipfile import ZipFile
 
 import generate
 from generation.grammar_games import LESSONS, grammar, grammar_lessons
@@ -297,8 +298,8 @@ class PublishedPackTest(unittest.TestCase):
     def setUpClass(cls):
         cls.data, cls.manifest = generate.build_pack()
         cls.activities = [json.loads(line) for line in cls.data.splitlines()]
-        baseline = json.loads((generate.ROOT / "manifest-v4.json").read_text(encoding="utf-8"))
-        cls.previous_data = (generate.ROOT / baseline["file"]).read_bytes()
+        baseline = json.loads(generate.archived_file("manifest-v4.json"))
+        cls.previous_data = generate.archived_file(baseline["file"])
         cls.previous = [json.loads(line) for line in cls.previous_data.splitlines()]
         cls.legacy_manifest = json.loads((generate.ROOT / "manifest.json").read_text(encoding="utf-8"))
         cls.legacy_data = (generate.ROOT / cls.legacy_manifest["file"]).read_bytes()
@@ -334,11 +335,11 @@ class PublishedPackTest(unittest.TestCase):
         )
 
     def test_all_v8_questions_and_ids_remain_byte_identical(self):
-        archived = json.loads((generate.ROOT / "manifest-v8.json").read_text(encoding="utf-8"))
+        archived = json.loads(generate.archived_file("manifest-v8.json"))
         self.assertEqual("v8", archived["version"])
         self.assertEqual("e69b6c094a096ca840a2a06e4bbecaceee21a2832503f186f26e205c0e5a657d",
                          archived["sha256"])
-        original_data = (generate.ROOT / archived["file"]).read_bytes()
+        original_data = generate.archived_file(archived["file"])
         self.assertEqual(15_150, len(original_data.splitlines()))
         self.assertEqual(original_data, b"".join(self.data.splitlines(keepends=True)[:15_150]))
 
@@ -349,16 +350,26 @@ class PublishedPackTest(unittest.TestCase):
             "validOrders", "picture", "eventPictures", "evidence", "writingChoices", "explanation",
         }
         self.assertEqual(legacy_games, set(generate.GENERATORS))
-        referenced = set()
-        manifests = set(generate.ROOT.glob("manifest*.json")) | set(
-            generate.ROOT.glob("reading-activities*-import.json")
+        with ZipFile(generate.ARCHIVE) as archive:
+            archived_names = archive.namelist()
+        self.assertEqual(len(archived_names), len(set(archived_names)))
+        archived_names = set(archived_names)
+        archived_manifests = {name for name in archived_names if name.endswith(".json")}
+        self.assertEqual(
+            {f"manifest-v{version}.json" for version in (1, 2, 3, 4, 8)}, archived_manifests,
         )
-        self.assertIn(generate.ROOT / generate.V8_ENTRY_POINT, manifests)
-        for path in sorted(manifests):
-            with self.subTest(manifest=path.name):
-                manifest = json.loads(path.read_text(encoding="utf-8"))
-                referenced.add(manifest["file"])
-                data = (generate.ROOT / manifest["file"]).read_bytes()
+        live_manifests = {path.name for path in generate.ROOT.glob("*.json")}
+        self.assertEqual(
+            {"manifest.json", "reading-activities-import.json", generate.V8_ENTRY_POINT}, live_manifests,
+        )
+        referenced = {False: set(), True: set()}
+        for name in sorted(live_manifests | archived_manifests):
+            archived = name in archived_manifests
+            read = generate.archived_file if archived else lambda name: (generate.ROOT / name).read_bytes()
+            with self.subTest(manifest=name):
+                manifest = json.loads(read(name))
+                referenced[archived].add(manifest["file"])
+                data = read(manifest["file"])
                 self.assertEqual(1, manifest["schemaVersion"])
                 self.assertEqual(len(data), manifest["bytes"])
                 self.assertEqual(hashlib.sha256(data).hexdigest(), manifest["sha256"])
@@ -389,8 +400,11 @@ class PublishedPackTest(unittest.TestCase):
                 self.assertEqual(expected, counts)
                 self.assertEqual(expected, manifest["counts"])
         self.assertEqual(
-            referenced, {path.name for path in generate.ROOT.glob("activities-*.jsonl")},
+            referenced[False], {path.name for path in generate.ROOT.glob("activities-*.jsonl")},
         )
+        self.assertEqual(2, len(referenced[False]))
+        self.assertEqual(archived_names, archived_manifests | referenced[True])
+        self.assertFalse(archived_names.intersection(path.name for path in generate.ROOT.iterdir()))
 
     def test_only_generated_scrambles_change_and_keep_their_ids(self):
         self.assertEqual(18_000, len(self.activities))
@@ -417,10 +431,8 @@ class PublishedPackTest(unittest.TestCase):
     def test_legacy_catalogues_remain_exact_prefixes(self):
         for version, count in (("v1", 30), ("v2", 45)):
             with self.subTest(version=version):
-                manifest = json.loads(
-                    (generate.ROOT / f"manifest-{version}.json").read_text(encoding="utf-8"),
-                )
-                data = (generate.ROOT / manifest["file"]).read_bytes()
+                manifest = json.loads(generate.archived_file(f"manifest-{version}.json"))
+                data = generate.archived_file(manifest["file"])
                 self.assertEqual(count, len(data.splitlines()))
                 self.assertEqual(data, b"".join(self.data.splitlines(keepends=True)[:count]))
 
