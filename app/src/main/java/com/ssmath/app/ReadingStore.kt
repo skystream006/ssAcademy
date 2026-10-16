@@ -291,8 +291,8 @@ class ReadingViewModel(
         val current = data ?: return
         if (storageError != null || importing) return
         val enabled = settings.getBoolean(Subject.READING.rewardsPreference, true)
-        val minutes = normalizeTimeLimitMinutes(settings.getInt("time_limit_minutes", 0))
-        val limit = (minutes * 60_000L).takeIf { enabled && settings.getBoolean("show_timer", false) && it > 0 }
+        val seconds = settings.readTimeLimitSeconds()
+        val limit = (seconds * 1_000L).takeIf { enabled && settings.getBoolean("show_timer", false) && it > 0 }
         commands.trySend(Command.Edit(current.selectedProfileId, current.profile?.activeAttemptId, { it },
             Command.Start(game, null, true, count, enabled, limit)))
     }

@@ -609,7 +609,7 @@ class GameModesTest {
             listOf("save", "cancel", "back", "close").forEach { exit ->
                 val model = model()
                 model.chooseShowTimer(true)
-                model.chooseTimeLimitMinutes(5)
+                model.chooseTimeLimitSeconds(300)
                 if (mode == GameMode.PRACTICE) readyPractice(model, 4) else readyRewards(model, 4)
                 model.start()
                 answer(model)
@@ -674,7 +674,7 @@ class GameModesTest {
             model.chooseRewardsEnabled(true)
             RewardType.entries.forEach { model.chooseRewardEnabled(it, true) }
             model.chooseShowTimer(true)
-            model.chooseTimeLimitMinutes(5)
+            model.chooseTimeLimitSeconds(300)
             model.closeOverlay()
             repeat(count) { answer(model) }
             val scene = requireNotNull(model.celebration)
@@ -790,7 +790,7 @@ class GameModesTest {
         val model = model()
         model.chooseRewardsEnabled(true)
         model.chooseShowTimer(true)
-        model.chooseTimeLimitMinutes(1)
+        model.chooseTimeLimitSeconds(60)
         readyPractice(model, count = 25)
         assertNull(model.readyTimeLimitMs)
         model.start()

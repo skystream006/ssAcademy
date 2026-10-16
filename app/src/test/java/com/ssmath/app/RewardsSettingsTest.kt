@@ -255,7 +255,7 @@ class RewardsSettingsTest {
         compose.onNodeWithContentDescription("Show timer").performScrollTo().assertIsOff().performClick()
         compose.onNodeWithTag("time-limit").performScrollTo().performClick()
         compose.onNodeWithText("5 minutes").performClick()
-        assertEquals(5, model.timeLimitMinutes)
+        assertEquals(300, model.timeLimitSeconds)
         compose.onNodeWithContentDescription("Show timer").performScrollTo().performClick()
         compose.onNodeWithTag("time-limit").assertDoesNotExist()
         compose.onNodeWithContentDescription("Show timer").performClick()
@@ -265,7 +265,7 @@ class RewardsSettingsTest {
         val restored = MathViewModel(application)
         assertFalse(restored.rewardsEnabled)
         assertTrue(restored.showTimer)
-        assertEquals(5, restored.timeLimitMinutes)
+        assertEquals(300, restored.timeLimitSeconds)
     }
 
     @Test fun upperRightUseRewardsActionConfirmsAndUpdatesTheInventory() {
@@ -311,23 +311,23 @@ class RewardsSettingsTest {
         compose.setContent { MathTheme { SettingsScreen(model) } }
         compose.onNodeWithText("Math Settings").performScrollTo().performClick()
         compose.onNodeWithText("Time limit per 5 questions").performScrollTo().assertIsDisplayed()
-        (1..4).forEach { minutes ->
+        listOf(30 to "30 seconds", 60 to "1 minute", 120 to "2 minutes",
+            180 to "3 minutes", 240 to "4 minutes").forEach { (seconds, label) ->
             compose.onNodeWithTag("time-limit").performScrollTo().performClick()
-            val label = if (minutes == 1) "1 minute" else "$minutes minutes"
             compose.onNodeWithText(label).performScrollTo().performClick()
             compose.onNodeWithTag("time-limit").assertTextEquals(label)
-            assertEquals(minutes, model.timeLimitMinutes)
-            assertEquals(minutes, MathViewModel(application).timeLimitMinutes)
+            assertEquals(seconds, model.timeLimitSeconds)
+            assertEquals(seconds, MathViewModel(application).timeLimitSeconds)
         }
         compose.onNodeWithTag("time-limit").performScrollTo().performClick()
         (5..60 step 5).forEach { minutes ->
             compose.onNodeWithText("$minutes minutes").performScrollTo().assertIsDisplayed()
         }
         compose.onNodeWithText("60 minutes").performClick()
-        assertEquals(60, model.timeLimitMinutes)
+        assertEquals(3_600, model.timeLimitSeconds)
         compose.onNodeWithTag("time-limit").performClick()
         compose.onNodeWithText("None").performScrollTo().performClick()
-        assertEquals(0, model.timeLimitMinutes)
+        assertEquals(0, model.timeLimitSeconds)
     }
 
     @Test fun adminOffersPersistentRewardSwitchesForEveryTierEvenWithRewardsOff() {
