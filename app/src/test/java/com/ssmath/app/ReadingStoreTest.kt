@@ -588,6 +588,19 @@ class ReadingStoreTest {
         assertFalse(requireNotNull(storage.saved.active).checkpoints.getValue("answer").rewardGranted)
     }
 
+    @Test fun readingAcceptsShortSharedLimitsWithoutMathQuestionScaling() {
+        settings.edit().putBoolean("reading_rewards_enabled", true).putBoolean("show_timer", true).commit()
+        (1..4).forEach { minutes ->
+            settings.edit().putInt("time_limit_minutes", minutes).commit()
+            val storage = RecordingStorage(readingFixture())
+            val model = ReadingViewModel(application, storage)
+            await { model.data != null }
+            model.startSession(ReadingGame.MISSING, 25)
+            await { model.data?.activeSession != null && !model.saving }
+            assertEquals(minutes * 60_000L, model.data?.activeSession?.timeLimitMs)
+        }
+    }
+
     @Test fun sessionStartSnapshotsSettingsAndRepeatedSubmissionsAdvanceOnlyOnce() {
         settings.edit().putBoolean("reading_rewards_enabled", true).putBoolean("show_timer", true)
             .putInt("time_limit_minutes", 10).commit()

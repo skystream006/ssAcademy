@@ -535,22 +535,23 @@ internal fun RemoveRewardsDialog(
 private fun TimeLimitSetting(minutes: Int, onChange: (Int) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text("Time limit", style = MaterialTheme.typography.titleSmall)
+        Text("Time limit per 5 questions", style = MaterialTheme.typography.titleSmall)
         Box {
             OutlinedButton(onClick = { expanded = true }, modifier = Modifier.testTag("time-limit")) {
-                Text(if (minutes == 0) "None" else "$minutes minutes")
+                Text(if (minutes == 0) "None" else if (minutes == 1) "1 minute" else "$minutes minutes")
                 Icon(Icons.Rounded.ExpandMore, null)
             }
             DropdownMenu(expanded, onDismissRequest = { expanded = false }) {
-                (0..60 step 5).forEach { option ->
+                ((0..4) + (5..60 step 5)).forEach { option ->
                     DropdownMenuItem(
-                        text = { Text(if (option == 0) "None" else "$option minutes") },
+                        text = { Text(if (option == 0) "None" else if (option == 1) "1 minute" else "$option minutes") },
                         onClick = { onChange(option); expanded = false },
                         modifier = Modifier.semantics { selected = minutes == option })
                 }
             }
         }
-        Text("Applies to the next Rewards Game. Time pauses in settings and in the background.",
+        Text("Rewards Game only, not Practice Game. 1 minute per 5 questions gives 5 minutes for 25 questions. " +
+            "Time pauses in settings and in the background.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

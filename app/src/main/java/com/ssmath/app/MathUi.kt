@@ -593,8 +593,8 @@ private fun ReadyDialog(model: MathViewModel) {
         Text("${operation.label} · $numbers · ${parameters.questionCount} questions",
             style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.fillMaxWidth())
-        if (model.gameMode == GameMode.REWARDS && model.rewardsEnabled && model.showTimer && model.timeLimitMinutes > 0) {
-            Text("Time limit: ${model.timeLimitMinutes} minutes", modifier = Modifier.fillMaxWidth(),
+        model.readyTimeLimitMs?.let { limit ->
+            Text("Time limit: ${formatDuration(limit)}", modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Center)
         }
         Button(onClick = model::start, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("start-button")) {
