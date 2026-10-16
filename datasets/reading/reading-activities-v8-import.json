@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "version": "v8",
-  "file": "activities-e69b6c094a096ca840a2a06e4bbecaceee21a2832503f186f26e205c0e5a657d.jsonl",
-  "sha256": "e69b6c094a096ca840a2a06e4bbecaceee21a2832503f186f26e205c0e5a657d",
-  "bytes": 19308537,
+  "version": "v9",
+  "file": "activities-6ed22731563c3d2a2cb36b63cc076f89cc40a6dd4d0a8b0105fa45ba6e0a8fa9.jsonl",
+  "sha256": "6ed22731563c3d2a2cb36b63cc076f89cc40a6dd4d0a8b0105fa45ba6e0a8fa9",
+  "bytes": 21153420,
   "counts": {
     "MISSING:SPROUT": 1000,
     "MISSING:TRAIL": 1000,
@@ -20,8 +20,8 @@
     "SEQUENCE:SUMMIT": 1000,
     "DETECTIVE:SUMMIT": 1000,
     "STUDIO:SUMMIT": 1000,
-    "GRAMMAR:SPROUT": 50,
-    "GRAMMAR:TRAIL": 50,
-    "GRAMMAR:SUMMIT": 50
+    "GRAMMAR:SPROUT": 1000,
+    "GRAMMAR:TRAIL": 1000,
+    "GRAMMAR:SUMMIT": 1000
   }
 }

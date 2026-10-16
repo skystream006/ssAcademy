@@ -122,18 +122,25 @@ class GrammarGameTest {
         }
     }
 
-    @Test fun publishedGrammarHasFiftyQuestionsPerLevelAndEveryChoiceIsScored() {
+    @Test fun publishedGrammarHasOneThousandQuestionsPerLevelAndEveryChoiceIsScored() {
         val pack = ReadingRepositoryPack("reading-activities-v8-import.json")
         val grammar = pack.activities.filter { it.game == ReadingGame.GRAMMAR }
-        assertEquals(150, grammar.size)
-        assertEquals(150, grammar.map { it.id }.distinct().size)
-        assertEquals(15_150, pack.activities.size)
+        assertEquals("v9", pack.manifest.version)
+        assertEquals(3000, grammar.size)
+        assertEquals(3000, grammar.map { it.id }.distinct().size)
+        assertEquals(18_000, pack.activities.size)
         val legacy = ReadingRepositoryPack()
         assertEquals(legacy.activities, pack.activities.filter { it.game != ReadingGame.GRAMMAR })
+        val original = ReadingRepositoryPack("manifest-v8.json")
+        assertEquals(original.activities, pack.activities.take(original.activities.size))
         for (level in ReadingLevel.entries) {
             val pool = grammar.filter { it.level == level }
-            assertEquals(50, pool.size)
-            assertEquals(50, pool.map { it.passage to it.question!!.prompt }.distinct().size)
+            assertEquals(1000, pool.size)
+            assertEquals(1000, pack.manifest.counts["GRAMMAR:${level.name}"])
+            assertEquals(1000, pool.map { it.passage to it.question!!.prompt }.distinct().size)
+            val concepts = pool.groupingBy { it.id.replace(Regex("-\\d{2}$"), "") }.eachCount()
+            assertEquals(50, concepts.size)
+            assertEquals(setOf(20), concepts.values.toSet())
             pool.forEach { activity ->
                 ReadingPackValidator.validate(activity)
                 val question = requireNotNull(activity.question)
@@ -187,5 +194,51 @@ class GrammarGameTest {
             assertEquals(1, data.sessionCorrect(session))
         }
         assertEquals(oldDraft.content, store.review(oldDraft.copy(loadedContent = null)).content)
+    }
+
+    @Test fun expandingV8KeepsGrammarDraftsAndExhaustsEachThousandQuestionPoolBeforeRepeating() {
+        val original = ReadingRepositoryPack("manifest-v8.json")
+        runBlocking { original.importer(store.catalog, cache).importPack() }
+        var data = ReadingEngine.addProfile(store.load(), "Ari", "reader-a")
+        store.save(data)
+        val drafts = ReadingLevel.entries.associateWith { level ->
+            data = store.start(data, ReadingGame.GRAMMAR, level, false)
+            data = ReadingEngine.hint(ReadingEngine.field(data, "answer", readingCorrect(data).toString()))
+            store.save(data)
+            requireNotNull(data.active)
+        }
+        val before = store.load()
+        val current = ReadingRepositoryPack("reading-activities-v8-import.json")
+        runBlocking { current.importer(store.catalog, cache).importPack() }
+        assertEquals(before, store.load())
+        drafts.values.forEach { draft ->
+            assertEquals(draft, store.review(draft.copy(loadedContent = null)))
+            assertEquals(draft.activityRef?.revision, store.catalog.latest(draft.contentId)?.revision)
+        }
+        data = before
+        for (level in ReadingLevel.entries) {
+            val draft = drafts.getValue(level)
+            assertEquals(1000, store.catalog.candidates(ReadingGame.GRAMMAR, level).size)
+            data = store.start(data, ReadingGame.GRAMMAR, level, false)
+            assertEquals(draft, data.active)
+            val previousCount = data.attempts.size
+            data = store.startBatch(data, ReadingGame.GRAMMAR, level, 999)
+            val allocated = data.attempts.drop(previousCount)
+            assertEquals(999, allocated.size)
+            val seen = allocated.map { it.contentId } + draft.contentId
+            assertEquals(1000, seen.distinct().size)
+            assertEquals(store.catalog.candidates(ReadingGame.GRAMMAR, level).toSet(), seen.toSet())
+            val last = requireNotNull(data.active)
+            database.close()
+            database = ReadingDatabase(application, "grammar-test.db")
+            store = ReadingSqliteStore(application, database)
+            data = store.load()
+            assertEquals(last, data.active)
+            data = store.startBatch(data, ReadingGame.GRAMMAR, level, 2)
+            val nextCycle = data.attempts.takeLast(2)
+            assertEquals(2, nextCycle.map { it.contentId }.distinct().size)
+            assertNotEquals(last.contentId, nextCycle.first().contentId)
+            assertEquals(draft.fields, store.review(data.attempts.first { it.id == draft.id }).fields)
+        }
     }
 }

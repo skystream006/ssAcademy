@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reproduce v8: the unchanged v7 catalogue plus 150 curated Grammar Quest lessons."""
+"""Reproduce v9: preserve v8 and expand Grammar Quest to 1,000 questions per level."""
 
 import argparse
 from collections import Counter, defaultdict
@@ -22,7 +22,7 @@ GENERATORS = {
     "STUDIO": studio,
 }
 PER_POOL = 1_000
-GRAMMAR_PER_LEVEL = 50
+GRAMMAR_PER_LEVEL = 1_000
 V8_ENTRY_POINT = "reading-activities-v8-import.json"
 MAX_PACK_BYTES = 64 * 1024 * 1024
 MAX_LINE_BYTES = 64 * 1024
@@ -126,7 +126,7 @@ def build_pack():
             if counts[key] != PER_POOL:
                 raise ValueError(f"{key}: expected {PER_POOL} activities, got {counts[key]}")
     # Released apps cannot decode GRAMMAR. Keep both old entry points and their
-    # immutable v7 file unchanged, and require v8 to have that exact byte prefix.
+    # immutable v7 file unchanged, and require newer packs to have that exact byte prefix.
     legacy_manifest_bytes = (ROOT / "manifest.json").read_bytes()
     legacy_manifest = json.loads(legacy_manifest_bytes)
     legacy_data = (ROOT / legacy_manifest["file"]).read_bytes()
@@ -137,29 +137,41 @@ def build_pack():
             or legacy_data != output.getvalue()
             or (ROOT / "reading-activities-import.json").read_bytes() != legacy_manifest_bytes):
         raise ValueError("The v7 catalogue and its compatibility entry points must remain unchanged")
+    grammar_pools = {level: list(grammar(level)) for level in LEVELS}
+    # Keep the original 150 grammar records in their published order before adding examples.
+    for section in (slice(0, 50), slice(50, None)):
+        for level, pool in grammar_pools.items():
+            key = f"GRAMMAR:{level}"
+            for activity in pool[section]:
+                if activity["id"] in ids:
+                    raise ValueError("Activity ID collision")
+                identity = task_identity(activity)
+                answers = answer_keys(activity)
+                if identity in identities or used_answers.intersection(answers):
+                    raise ValueError(f"{key}: duplicate grammar learning task")
+                ids.add(activity["id"])
+                identities.add(identity)
+                used_answers.update(answers)
+                line = encoded(activity) + b"\n"
+                if len(line) > MAX_LINE_BYTES or output.tell() + len(line) > MAX_PACK_BYTES:
+                    raise ValueError("Generated content exceeds the Android importer limits")
+                output.write(line)
+                counts[key] += 1
     for level in LEVELS:
         key = f"GRAMMAR:{level}"
-        for activity in grammar(level):
-            if activity["id"] in ids:
-                raise ValueError("Activity ID collision")
-            identity = task_identity(activity)
-            answers = answer_keys(activity)
-            if identity in identities or used_answers.intersection(answers):
-                raise ValueError(f"{key}: duplicate grammar learning task")
-            ids.add(activity["id"])
-            identities.add(identity)
-            used_answers.update(answers)
-            line = encoded(activity) + b"\n"
-            if len(line) > MAX_LINE_BYTES or output.tell() + len(line) > MAX_PACK_BYTES:
-                raise ValueError("Generated content exceeds the Android importer limits")
-            output.write(line)
-            counts[key] += 1
         if counts[key] != GRAMMAR_PER_LEVEL:
             raise ValueError(f"{key}: expected {GRAMMAR_PER_LEVEL} activities, got {counts[key]}")
     data = output.getvalue()
+    original_manifest = json.loads((ROOT / "manifest-v8.json").read_text(encoding="utf-8"))
+    original_data = (ROOT / original_manifest["file"]).read_bytes()
+    if (original_manifest["version"] != "v8"
+            or original_manifest["bytes"] != len(original_data)
+            or original_manifest["sha256"] != hashlib.sha256(original_data).hexdigest()
+            or not data.startswith(original_data)):
+        raise ValueError("The original v8 catalogue must remain an unchanged prefix")
     checksum = hashlib.sha256(data).hexdigest()
     manifest = {
-        "schemaVersion": 1, "version": "v8", "file": f"activities-{checksum}.jsonl",
+        "schemaVersion": 1, "version": "v9", "file": f"activities-{checksum}.jsonl",
         "sha256": checksum, "bytes": len(data), "counts": dict(counts),
     }
     return data, manifest

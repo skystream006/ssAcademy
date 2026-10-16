@@ -1,4 +1,4 @@
-"""Curated Grammar Quest lessons: one distinct learning objective per stable ID.
+"""Grammar Quest's original concepts and their expanded, stable-ID examples.
 
 The source-only focus labels describe the curriculum, not extra importer fields.
 Choices rotate evenly; illustrations deliberately provide no answer information.
@@ -849,13 +849,30 @@ LESSONS = {
 }
 
 
-def grammar(level):
-    """Yield fifty authored lessons, with stable concept IDs and balanced choices."""
+def grammar_lessons(level):
+    """Keep original lessons first, then add nineteen examples per concept."""
     if level not in LESSONS:
         raise ValueError(f"Unknown reading level: {level}")
     lessons = LESSONS[level]
     if len(lessons) != 50 or len({lesson.slug for lesson in lessons}) != 50:
         raise ValueError(f"{level}: expected fifty distinct grammar concepts")
+    from .grammar_sprout import expanded_lessons as sprout
+    from .grammar_trail import expanded_lessons as trail
+    from .grammar_summit import expanded_lessons as summit
+
+    expanded = tuple({"SPROUT": sprout, "TRAIL": trail, "SUMMIT": summit}[level]())
+    expected = {
+        f"{lesson.slug}-{variant:02d}": lesson.focus
+        for lesson in lessons for variant in range(2, 21)
+    }
+    if len(expanded) != 950 or {lesson.slug: lesson.focus for lesson in expanded} != expected:
+        raise ValueError(f"{level}: expected nineteen new examples per grammar concept")
+    return lessons + expanded
+
+
+def grammar(level):
+    """Yield one thousand lessons with stable IDs and balanced answer positions."""
+    lessons = grammar_lessons(level)
     choice_count = 3 if level == "SPROUT" else 4
     for index, lesson in enumerate(lessons):
         choices = [lesson.correct, *lesson.distractors]

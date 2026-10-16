@@ -7,7 +7,7 @@ import json
 import unittest
 
 import generate
-from generation.grammar_games import LESSONS, grammar
+from generation.grammar_games import LESSONS, grammar, grammar_lessons
 from generation.scramble_structures import STRUCTURES
 from generation.word_games import (
     _SELECTION_GROUPS,
@@ -144,9 +144,10 @@ class GrammarLessonTest(unittest.TestCase):
         for level in generate.LEVELS:
             activities = list(grammar(level))
             choice_count = 3 if level == "SPROUT" else 4
-            expected_positions = {0: 17, 1: 17, 2: 16} if choice_count == 3 else {0: 13, 1: 13, 2: 12, 3: 12}
+            self.assertEqual(1000, len(activities))
+            expected_positions = {0: 334, 1: 333, 2: 333} if choice_count == 3 else dict.fromkeys(range(4), 250)
             self.assertEqual(expected_positions, Counter(a["question"]["answer"] for a in activities))
-            for activity, lesson in zip(activities, LESSONS[level]):
+            for activity, lesson in zip(activities, grammar_lessons(level)):
                 with self.subTest(activity=activity["id"]):
                     self.assertEqual(fields, set(activity))
                     self.assertEqual(f"grammar-{level.lower()}-{lesson.slug}", activity["id"])
@@ -161,7 +162,8 @@ class GrammarLessonTest(unittest.TestCase):
                     self.assertEqual(lesson.prompt, q["prompt"])
                     self.assertEqual(choice_count, len(q["choices"]))
                     self.assertEqual(choice_count, len({c.strip() for c in q["choices"]}))
-                    if lesson.slug not in {"proper-name-capital", "sentence-capital"}:
+                    concept = lesson.slug.rsplit("-", 1)[0] if lesson.slug[-2:].isdigit() else lesson.slug
+                    if concept not in {"proper-name-capital", "sentence-capital"}:
                         self.assertEqual(choice_count, len({c.casefold() for c in q["choices"]}))
                     self.assertIs(type(q["answer"]), int)
                     self.assertTrue(0 <= q["answer"] < choice_count)
@@ -182,7 +184,24 @@ class GrammarLessonTest(unittest.TestCase):
                         {"symbol": "📖", "description": "An open book for reading practice."},
                         activity["picture"],
                     )
-        self.assertEqual(150, len(ids))
+        self.assertEqual(3000, len(ids))
+
+    def test_each_concept_has_twenty_distinct_contexts_and_stable_variant_ids(self):
+        for level in generate.LEVELS:
+            lessons = grammar_lessons(level)
+            self.assertEqual(LESSONS[level], lessons[:50])
+            by_slug = {lesson.slug: lesson for lesson in lessons}
+            self.assertEqual(1000, len(by_slug))
+            tasks = [(lesson.passage.casefold(), lesson.prompt.casefold()) for lesson in lessons]
+            self.assertEqual(len(tasks), len(set(tasks)))
+            for original in LESSONS[level]:
+                variants = [original] + [
+                    by_slug[f"{original.slug}-{index:02d}"] for index in range(2, 21)
+                ]
+                with self.subTest(level=level, concept=original.slug):
+                    self.assertEqual({original.focus}, {lesson.focus for lesson in variants})
+                    self.assertEqual(20, len({lesson.passage.casefold() for lesson in variants}))
+                    self.assertTrue(all(lesson.hint != lesson.explanation for lesson in variants))
 
     def test_progression_and_representative_teaching_answers(self):
         expected = {
@@ -285,7 +304,7 @@ class PublishedPackTest(unittest.TestCase):
         cls.legacy_data = (generate.ROOT / cls.legacy_manifest["file"]).read_bytes()
 
     def test_published_files_reproduce_exactly(self):
-        self.assertEqual("v8", self.manifest["version"])
+        self.assertEqual("v9", self.manifest["version"])
         self.assertEqual(self.data, (generate.ROOT / self.manifest["file"]).read_bytes())
         self.assertEqual(len(self.data), self.manifest["bytes"])
         self.assertEqual(hashlib.sha256(self.data).hexdigest(), self.manifest["sha256"])
@@ -309,9 +328,19 @@ class PublishedPackTest(unittest.TestCase):
         self.assertEqual(15_000, len(self.legacy_data.splitlines()))
         self.assertEqual(self.legacy_data, b"".join(self.data.splitlines(keepends=True)[:15_000]))
         self.assertEqual(
-            [activity for level in generate.LEVELS for activity in grammar(level)],
+            [activity for section in (slice(0, 50), slice(50, None))
+             for level in generate.LEVELS for activity in list(grammar(level))[section]],
             self.activities[15_000:],
         )
+
+    def test_all_v8_questions_and_ids_remain_byte_identical(self):
+        archived = json.loads((generate.ROOT / "manifest-v8.json").read_text(encoding="utf-8"))
+        self.assertEqual("v8", archived["version"])
+        self.assertEqual("e69b6c094a096ca840a2a06e4bbecaceee21a2832503f186f26e205c0e5a657d",
+                         archived["sha256"])
+        original_data = (generate.ROOT / archived["file"]).read_bytes()
+        self.assertEqual(15_150, len(original_data.splitlines()))
+        self.assertEqual(original_data, b"".join(self.data.splitlines(keepends=True)[:15_150]))
 
     def test_all_catalogues_have_only_supported_games_and_schema_fields(self):
         legacy_games = {"MISSING", "SCRAMBLE", "SEQUENCE", "DETECTIVE", "STUDIO"}
@@ -340,7 +369,7 @@ class PublishedPackTest(unittest.TestCase):
                     len(line) + 1 <= generate.MAX_LINE_BYTES for line in data.splitlines()
                 ))
                 activities = [json.loads(line) for line in data.splitlines()]
-                games = legacy_games | ({"GRAMMAR"} if manifest["version"] == "v8" else set())
+                games = legacy_games | ({"GRAMMAR"} if manifest["version"] in ("v8", "v9") else set())
                 self.assertEqual(games, {a["game"] for a in activities})
                 self.assertTrue(all(set(a) <= fields for a in activities))
                 for activity in activities:
@@ -353,8 +382,9 @@ class PublishedPackTest(unittest.TestCase):
                 levels = generate.LEVELS[:2] if manifest["version"] == "v1" else generate.LEVELS
                 per_pool = 3 if manifest["version"] in ("v1", "v2") else 1000
                 expected = {f"{game}:{level}": per_pool for game in legacy_games for level in levels}
-                if manifest["version"] == "v8":
-                    expected.update({f"GRAMMAR:{level}": 50 for level in levels})
+                if manifest["version"] in ("v8", "v9"):
+                    grammar_count = 50 if manifest["version"] == "v8" else 1000
+                    expected.update({f"GRAMMAR:{level}": grammar_count for level in levels})
                 counts = Counter(f'{a["game"]}:{a["level"]}' for a in activities)
                 self.assertEqual(expected, counts)
                 self.assertEqual(expected, manifest["counts"])
@@ -363,7 +393,7 @@ class PublishedPackTest(unittest.TestCase):
         )
 
     def test_only_generated_scrambles_change_and_keep_their_ids(self):
-        self.assertEqual(15_150, len(self.activities))
+        self.assertEqual(18_000, len(self.activities))
         self.assertEqual(len(self.previous), len(self.activities[:15_000]))
         old_lines = self.previous_data.splitlines(keepends=True)
         new_lines = self.data.splitlines(keepends=True)
@@ -407,11 +437,11 @@ class PublishedPackTest(unittest.TestCase):
     def test_pool_counts_answers_and_import_limits(self):
         counts = Counter(f'{a["game"]}:{a["level"]}' for a in self.activities)
         expected = {f"{game}:{level}": 1000 for game in generate.GENERATORS for level in generate.LEVELS}
-        expected.update({f"GRAMMAR:{level}": 50 for level in generate.LEVELS})
+        expected.update({f"GRAMMAR:{level}": 1000 for level in generate.LEVELS})
         self.assertEqual(18, len(counts))
         self.assertEqual(expected, counts)
         self.assertEqual(dict(counts), self.manifest["counts"])
-        self.assertEqual(15_150, len({a["id"] for a in self.activities}))
+        self.assertEqual(18_000, len({a["id"] for a in self.activities}))
         self.assertLessEqual(len(self.data), generate.MAX_PACK_BYTES)
         self.assertTrue(all(len(line) + 1 <= generate.MAX_LINE_BYTES for line in self.data.splitlines()))
         answers = [key for a in self.activities for key in generate.answer_keys(a)]
