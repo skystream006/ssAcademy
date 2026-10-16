@@ -304,12 +304,21 @@ class RewardsSettingsTest {
         assertEquals(5, model.history.size)
     }
 
-    @Test fun timeLimitOffersNoneAndFiveMinuteStepsThroughSixty() {
+    @Test fun timeLimitOffersShortLimitsPerFiveQuestionsAndKeepsExistingChoices() {
         val model = MathViewModel(application)
         model.chooseRewardsEnabled(true)
         model.chooseShowTimer(true)
         compose.setContent { MathTheme { SettingsScreen(model) } }
         compose.onNodeWithText("Math Settings").performScrollTo().performClick()
+        compose.onNodeWithText("Time limit per 5 questions").performScrollTo().assertIsDisplayed()
+        (1..4).forEach { minutes ->
+            compose.onNodeWithTag("time-limit").performScrollTo().performClick()
+            val label = if (minutes == 1) "1 minute" else "$minutes minutes"
+            compose.onNodeWithText(label).performScrollTo().performClick()
+            compose.onNodeWithTag("time-limit").assertTextEquals(label)
+            assertEquals(minutes, model.timeLimitMinutes)
+            assertEquals(minutes, MathViewModel(application).timeLimitMinutes)
+        }
         compose.onNodeWithTag("time-limit").performScrollTo().performClick()
         (5..60 step 5).forEach { minutes ->
             compose.onNodeWithText("$minutes minutes").performScrollTo().assertIsDisplayed()

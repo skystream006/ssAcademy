@@ -96,7 +96,7 @@ The semi-transparent (50% opacity) settings button in the bottom-right corner op
 expand or collapse it without changing your choices. **Rewards** contains
 **My Rewards** and **My Pokémons**. **Math Settings** contains
 **Math Rewards System**, **Math Practice History**,
-**Show timer** (and its conditional **Time limit**), **Show correct answers**,
+**Show timer** (and its conditional **Time limit per 5 questions**), **Show correct answers**,
 **Vertical equations**, and **Default Math Reward Game Settings**.
 **Reading Settings** contains **Reading Progress**, **Set Reading Level**, **Active Reading Games**,
 **Reading Rewards System**, **Reading Practice History**, and **Import / Update Reading Activities**.
@@ -187,11 +187,15 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   Reading checkpoint points have been removed; checkpoints still track activity progress.
 - **Show timer** – off by default. Show or hide the timer while practicing. The timer pauses while
   Settings, any subject's Practice History, My Rewards, or My Pokémons is open, or the app is in the background.
-  When both Math Rewards System and Show timer are enabled, **Time limit** offers
-  **None** or **5–60 minutes** in 5-minute increments. The selection applies to the
-  next Rewards Game, not Practice Game. A timed game shows time remaining and ends when time runs out,
+  When both Math Rewards System and Show timer are enabled, **Time limit per 5 questions** offers
+  **None**, **1, 2, 3, or 4 minutes**, or **5–60 minutes** in 5-minute increments.
+  The total math limit scales with the chosen question count: **1 minute per 5 questions**
+  gives **3 minutes for 15**, **5 minutes for 25**, and **10 minutes for 50 questions**.
+  The selection applies to the next Rewards Game only; Practice Game has no time limit.
+  The ready screen shows the total limit. A timed game shows time remaining and ends when time runs out,
   saving the partial result without a prize. Changing settings during practice does
-  not remove its active time limit. Reading games also use this limit when Reading
+  not remove its active time limit. Reading games use the selected minutes as a total limit
+  (without math's question-count scaling) when Reading
   Rewards System and Show timer are enabled at launch; leaving Reading or backgrounding
   the app pauses it. Saved reading sessions retain their elapsed time and original limit.
 - **Show correct answers** – on by default. Reveal correct answers after

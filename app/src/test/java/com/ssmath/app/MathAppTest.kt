@@ -1082,6 +1082,34 @@ class MathAppTest {
         }
     }
 
+    @Test fun readyScreenAndCountdownShowTheScaledRewardsLimitButPracticeHasOnlyElapsedTime() {
+        val model = model()
+        model.chooseShowTimer(true)
+        model.chooseTimeLimitMinutes(1)
+        compose.setContent { MathAppContent(model) }
+        listOf(15 to "03:00", 25 to "05:00", 50 to "10:00").forEach { (count, duration) ->
+            compose.runOnIdle {
+                model.openRewardsGame()
+                model.updateRewardsQuestionCount(count.toString())
+                model.selectRewardsGame(Operation.ADDITION)
+            }
+            compose.onNodeWithText("Time limit: $duration").assertIsDisplayed()
+            compose.onNodeWithTag("start-button").performClick()
+            compose.onNodeWithTag("timer").assertTextEquals("Left: $duration")
+            compose.runOnIdle { model.backToSetup() }
+        }
+        compose.runOnIdle {
+            model.openPracticeGame()
+            model.selectOperation(Operation.ADDITION)
+            model.updateQuestionCount("25")
+            model.submitSetup()
+        }
+        compose.onNodeWithText("Time limit:", substring = true).assertDoesNotExist()
+        compose.onNodeWithTag("start-button").performClick()
+        compose.onNodeWithTag("timer").assertTextEquals("00:00")
+        compose.runOnIdle { model.backToSetup() }
+    }
+
     @Test fun timingOutWithQuitConfirmationOpenDoesNotReopenItInTheNextGame() {
         val model = model()
         model.chooseShowTimer(true)
@@ -1094,7 +1122,7 @@ class MathAppTest {
         compose.onNodeWithTag("quit-game").performClick()
         compose.onNodeWithText("Quit this practice?").assertIsDisplayed()
         compose.runOnIdle {
-            now += 300_000L
+            now += 600_000L
             model.checkTimeLimit()
             assertEquals(Screen.RESULTS, model.screen)
             assertTrue(model.lastResult!!.timedOut)

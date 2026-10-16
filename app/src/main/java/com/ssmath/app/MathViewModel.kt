@@ -62,6 +62,13 @@ class MathViewModel(
     private var readyGame by mutableStateOf<ReadyGame?>(null)
     val readyOperation: Operation? get() = readyGame?.operation
     val readyParameters: GameParameters? get() = readyGame?.parameters
+    val readyTimeLimitMs: Long?
+        get() {
+            val ready = readyGame ?: return null
+            val count = ready.parameters.questionCount ?: return null
+            return if (ready.mode == GameMode.REWARDS && rewardsEnabled && showTimer && timeLimitMinutes > 0)
+                timeLimitMinutes * 60_000L * count / 5 else null
+        }
     var overlay by mutableStateOf<Overlay?>(null)
         private set
     private var collectionReturnOverlay: Overlay? = null
@@ -158,7 +165,7 @@ class MathViewModel(
         it.name in settings.getStringSet("disabled_reading_games", emptySet()).orEmpty()
     }.toSet())
         private set
-    var timeLimitMinutes by mutableStateOf(normalizeTimeLimit(settings.getInt("time_limit_minutes", 0)))
+    var timeLimitMinutes by mutableStateOf(normalizeTimeLimitMinutes(settings.getInt("time_limit_minutes", 0)))
         private set
     var activeTimeLimitMs by mutableStateOf<Long?>(null)
         private set
@@ -396,8 +403,7 @@ class MathViewModel(
         pendingResult = null
         dismissReward()
         rewardsEnabledAtStart = gameMode == GameMode.REWARDS && rewardsEnabled
-        activeTimeLimitMs = if (rewardsEnabledAtStart && showTimer && timeLimitMinutes > 0)
-            timeLimitMinutes * 60_000L else null
+        activeTimeLimitMs = readyTimeLimitMs
         resetTimer()
         readyGame = null
         screen = Screen.PLAYING
@@ -1043,11 +1049,9 @@ class MathViewModel(
     }
 
     fun chooseTimeLimitMinutes(value: Int) {
-        timeLimitMinutes = normalizeTimeLimit(value)
+        timeLimitMinutes = normalizeTimeLimitMinutes(value)
         settings.edit().putInt("time_limit_minutes", timeLimitMinutes).apply()
     }
-
-    private fun normalizeTimeLimit(value: Int): Int = value.coerceIn(0, 60) / 5 * 5
 
     fun chooseShowCorrectAnswers(value: Boolean) {
         showCorrectAnswers = value
