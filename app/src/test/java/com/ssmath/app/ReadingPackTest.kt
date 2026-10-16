@@ -122,7 +122,7 @@ class ReadingPackTest {
         ).use { assertFalse(it.moveToFirst()) }
     }
 
-    @Test fun repositoryPackPreservesAll36LegacyActivitiesAndAdds18SummitActivities() {
+    @Test fun repositoryPackPreservesAll30LegacyActivitiesAndAdds15SummitActivities() {
         val pack = ReadingRepositoryPack("manifest-v2.json")
         val manifest = pack.manifest
         val bytes = pack.bytes
@@ -130,19 +130,19 @@ class ReadingPackTest {
         val legacy = ReadingRepositoryPack("manifest-v1.json")
         assertEquals(1, manifest.schemaVersion)
         assertEquals("v2", manifest.version)
-        assertEquals(33903L, manifest.bytes)
-        assertEquals("d4a1901f7dbb46ec28b4048ebadcf067b1b25b02157bdbe0a81ed0e06ba27fd9",
+        assertEquals(29081L, manifest.bytes)
+        assertEquals("da742a95437b288c409e814d22f3e40f0fb356a03639e4fa0bfc0c57c52b173e",
             manifest.sha256)
-        assertEquals(54, manifest.counts.values.sum())
-        assertEquals(54, activities.size)
-        assertEquals(54, activities.map { it.id }.distinct().size)
+        assertEquals(45, manifest.counts.values.sum())
+        assertEquals(45, activities.size)
+        assertEquals(45, activities.map { it.id }.distinct().size)
         assertEquals(bytes.size.toLong(), manifest.bytes)
         assertEquals(readingSha256(bytes), manifest.sha256)
         assertEquals("activities-${manifest.sha256}.jsonl", manifest.file)
         assertArrayEquals(legacy.bytes, bytes.copyOfRange(0, legacy.bytes.size))
-        assertEquals(ReadingContent.activities, activities.take(36))
+        assertEquals(ReadingContent.activities, activities.take(30))
         assertEquals(ReadingContent.activities, activities.filter { it.level != ReadingLevel.SUMMIT })
-        assertEquals(18, activities.count { it.level == ReadingLevel.SUMMIT })
+        assertEquals(15, activities.count { it.level == ReadingLevel.SUMMIT })
         assertEquals(manifest.counts, activities.groupingBy { "${it.game.name}:${it.level.name}" }.eachCount())
         activities.forEach(ReadingPackValidator::validate)
         assertEquals(manifest.counts, runBlocking { pack.importer(catalog, cache).importPack() }.counts)
@@ -158,17 +158,17 @@ class ReadingPackTest {
         }
     }
 
-    @Test fun archivedManifestAndRemaining36ActivityPackRemainImportable() {
+    @Test fun archivedManifestAndRemaining30ActivityPackRemainImportable() {
         val pack = ReadingRepositoryPack("manifest-v1.json")
         assertEquals("v1", pack.manifest.version)
         assertEquals(1, pack.manifest.schemaVersion)
-        assertEquals(16751L, pack.manifest.bytes)
-        assertEquals("e209a1a88ef41bdf02396085e732a64848c7c56d03e561106cf9c22bf95741cc",
+        assertEquals(14369L, pack.manifest.bytes)
+        assertEquals("26ee2a35b6bdaa22cb7e82447f12ac18a9e410fd3c3d1173ff24f4ee84a25f92",
             pack.manifest.sha256)
         assertEquals(pack.manifest.bytes, pack.bytes.size.toLong())
         assertEquals(pack.manifest.sha256, readingSha256(pack.bytes))
         assertEquals(ReadingContent.activities, pack.activities)
-        assertEquals(36, pack.activities.size)
+        assertEquals(30, pack.activities.size)
         assertEquals(pack.manifest.counts, runBlocking { pack.importer(catalog, cache).importPack() }.counts)
         assertEquals("v1", catalog.status().version)
         assertEquals(pack.manifest.sha256, storedChecksum())
@@ -295,6 +295,7 @@ class ReadingPackTest {
             readingPackJson.encodeToString(first.copy(id = "bad-game")).replace("\"MISSING\"", "\"UNKNOWN\"") + "\n",
             readingPackJson.encodeToString(first.copy(id = "retired-game")).replace("\"MISSING\"", "\"CHAPTER\"") + "\n",
             readingPackJson.encodeToString(first.copy(id = "retired-game")).replace("\"MISSING\"", "\"PARTNERS\"") + "\n",
+            readingPackJson.encodeToString(first.copy(id = "retired-game")).replace("\"MISSING\"", "\"CAPTION\"") + "\n",
             readingPackJson.encodeToString(first.copy(id = "bad-level")).replace("\"SPROUT\"", "\"EXPERT\"") + "\n",
             readingPackJson.encodeToString(first.copy(id = "bad-field")).replace("\"title\":", "\"surprise\":") + "\n"
         )
@@ -313,7 +314,6 @@ class ReadingPackTest {
                 ReadingGame.SCRAMBLE -> activity.copy(validOrders = listOf(listOf(0, 0, 2)))
                 ReadingGame.SEQUENCE -> activity.copy(validOrders = listOf(listOf(0, 1, 2)))
                 ReadingGame.DETECTIVE -> activity.copy(evidence = activity.passage.size)
-                ReadingGame.CAPTION -> activity.copy(question = null)
                 ReadingGame.STUDIO -> activity.copy(writingChoices = listOf(listOf("Only one")))
             }
         } + listOf(
@@ -342,7 +342,7 @@ class ReadingPackTest {
 
     @Test fun idsCannotMoveGameOrLevelEvenWhenOnlyAnArchivedRevisionExists() {
         val movedLevel = first.copy(level = ReadingLevel.TRAIL)
-        val movedGame = ReadingContent.find("caption-cat").copy(id = first.id)
+        val movedGame = ReadingContent.find("detective-bag").copy(id = first.id)
         catalog.insertLegacy(first)
         listOf(movedLevel, movedGame).forEach { assertCleanFailure { install(listOf(it)) } }
         install()

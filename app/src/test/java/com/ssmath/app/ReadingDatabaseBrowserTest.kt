@@ -93,7 +93,7 @@ class ReadingDatabaseBrowserTest {
 
     @Test fun pagesInstalledActivitiesFiltersThemAndReturnsFromDetailWithoutChangingTheCatalog() {
         val entries = (0..44).map { first.copy(id = "entry-%02d".format(it), title = "Installed activity $it") }
-        install(entries + ReadingContent.find("caption-cat").copy(id = "other-caption", level = ReadingLevel.TRAIL))
+        install(entries + ReadingContent.find("detective-puddle").copy(id = "other-detective"))
         val before = catalog.status()
         var closed = false
         compose.setContent { ReadingDatabaseBrowser({ closed = true }, databaseName) }
@@ -115,8 +115,8 @@ class ReadingDatabaseBrowserTest {
         compose.onNodeWithTag("reading-database-previous").performClick()
         awaitTag("reading-database-row-entry-00")
         compose.onNodeWithTag("reading-database-game").performClick()
-        compose.onNodeWithText(ReadingGame.CAPTION.title).performClick()
-        awaitTag("reading-database-row-other-caption")
+        compose.onNodeWithText(ReadingGame.DETECTIVE.title).performClick()
+        awaitTag("reading-database-row-other-detective")
         compose.onNodeWithText("1–1 of 1 activities").assertIsDisplayed()
         compose.onNodeWithTag("reading-database-level").performClick()
         compose.onNodeWithText(ReadingLevel.SPROUT.label).performClick()

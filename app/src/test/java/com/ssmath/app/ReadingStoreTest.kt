@@ -24,7 +24,8 @@ internal fun legacyReadingPayload(data: ReadingData, activateRetired: Boolean = 
     val root = readingPackJson.parseToJsonElement(readingPackJson.encodeToString(data)).jsonObject
     val retiredAttempts = mutableListOf<JsonObject>()
     val retiredSessions = mutableListOf<JsonObject>()
-    listOf("CHAPTER" to "chapter-path", "PARTNERS" to "partners-sprout-0").forEach { (game, contentId) ->
+    val retiredContent = listOf("CHAPTER" to "chapter-path", "PARTNERS" to "partners-sprout-0", "CAPTION" to "caption-cat")
+    retiredContent.forEach { (game, contentId) ->
         val ids = (0 until 15).map { "$game-$it" }
         ids.forEach { id ->
             retiredAttempts += readingPackJson.parseToJsonElement(
@@ -58,7 +59,7 @@ internal fun legacyReadingPayload(data: ReadingData, activateRetired: Boolean = 
             "illustration":"book","readerIds":["reader-a","reader-b"],"turns":[],"savedAt":2}"""
     )
     val profiles = (root.getValue("profiles") as JsonArray).map { value ->
-        if (activateRetired) JsonObject(value.jsonObject + ("activeAttemptId" to JsonPrimitive("legacy-PARTNERS")))
+        if (activateRetired) JsonObject(value.jsonObject + ("activeAttemptId" to JsonPrimitive("legacy-CAPTION")))
         else value
     }
     return JsonObject(root + mapOf(
@@ -88,7 +89,7 @@ class ReadingStoreTest {
         val expected = original.copy(
             profiles = original.profiles.map { it.copy(activeAttemptId = null) },
             page = ReadingPage.MENU,
-            deletedSessionIds = setOf("session-CHAPTER", "session-PARTNERS")
+            deletedSessionIds = setOf("session-CHAPTER", "session-PARTNERS", "session-CAPTION")
         )
         assertEquals(expected, ReadingStore(file).load())
         assertEquals(expected, ReadingStore(file).load())
@@ -96,6 +97,7 @@ class ReadingStoreTest {
         assertFalse(rewritten.contains("Removed writing"))
         assertFalse(rewritten.contains("chapter-path"))
         assertFalse(rewritten.contains("partners-sprout"))
+        assertFalse(rewritten.contains("caption-cat"))
         assertFalse(rewritten.contains("\"turns\""))
         assertFalse(rewritten.contains("\"shared\""))
     }
@@ -103,7 +105,7 @@ class ReadingStoreTest {
     @Test fun retiringOtherGamesKeepsTheCurrentDraftAndRejectsUnrelatedCorruption() {
         val original = ReadingEngine.field(readingFixture(), "answer", "1")
         file.writeText(legacyReadingPayload(original).toString())
-        assertEquals(original.copy(deletedSessionIds = setOf("session-CHAPTER", "session-PARTNERS")),
+        assertEquals(original.copy(deletedSessionIds = setOf("session-CHAPTER", "session-PARTNERS", "session-CAPTION")),
             ReadingStore(file).load())
         val invalid = JsonObject(legacyReadingPayload(original) + ("profiles" to JsonPrimitive("invalid")))
         file.writeText(invalid.toString())

@@ -428,7 +428,7 @@ private fun ReadingMenu(data: ReadingData, model: ReadingViewModel, onExit: () -
     val profile = data.profile
     var questionCount by rememberSaveable { mutableStateOf<Int?>(null) }
     val games = listOf(ReadingGame.MISSING, ReadingGame.SEQUENCE, ReadingGame.STUDIO, ReadingGame.SCRAMBLE,
-        ReadingGame.DETECTIVE, ReadingGame.CAPTION)
+        ReadingGame.DETECTIVE)
         .filterNot { it in disabledGames }
     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
         CollectionButtons({ stop(); onRewards() }, { stop(); onPokemons() }, "reading")
@@ -490,7 +490,6 @@ private val ReadingGame.backgroundImage: Int
         ReadingGame.STUDIO -> R.drawable.reading_studio
         ReadingGame.SCRAMBLE -> R.drawable.reading_scramble
         ReadingGame.DETECTIVE -> R.drawable.reading_detective
-        ReadingGame.CAPTION -> R.drawable.reading_caption
     }
 
 @Composable
@@ -544,7 +543,7 @@ private fun ReadingActivityScreen(data: ReadingData, model: ReadingViewModel, a:
             Text(content.title, style = MaterialTheme.typography.titleLarge)
             ReadingPictureView(content.picture)
             when (content.game) {
-                ReadingGame.MISSING, ReadingGame.CAPTION -> {
+                ReadingGame.MISSING -> {
                     content.passage.forEach { Text(it, style = MaterialTheme.typography.headlineSmall) }
                     ReadingQuestionView(a, model, "answer")
                 }

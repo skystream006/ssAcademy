@@ -307,17 +307,23 @@ class HistoryStoreTest {
         store.claimReward(1)
         store.collectPokemon(1, Celebration.PIKACHU)
         store.collectPokemon(Celebration.SQUIRTLE)
-        val games = listOf("retired-chapter" to ReadingGame.CAPTION, "retired-partners" to ReadingGame.STUDIO,
-            "remaining" to ReadingGame.MISSING)
+        val games = listOf("retired-chapter" to ReadingGame.DETECTIVE, "retired-partners" to ReadingGame.STUDIO,
+            "retired-caption" to ReadingGame.SEQUENCE, "remaining" to ReadingGame.MISSING)
         games.forEach { (id, game) ->
-            val celebration = if (game == ReadingGame.STUDIO) Celebration.PARTY else Celebration.PIKACHU
+            val celebration = when (game) {
+                ReadingGame.STUDIO -> Celebration.PARTY
+                ReadingGame.SEQUENCE -> Celebration.MEW
+                else -> Celebration.PIKACHU
+            }
             store.addReadingResult(reading(id).copy(game = game, celebration = celebration))
             store.claimReadingReward(id)
             store.collectReadingCelebration(id, celebration)
         }
-        val before = file.readText().replace("\"game\":\"CAPTION\"", "\"game\":\"CHAPTER\"")
+        val before = file.readText().replace("\"game\":\"DETECTIVE\"", "\"game\":\"CHAPTER\"")
             .replace("\"game\":\"STUDIO\"", "\"game\":\"PARTNERS\"")
-        val expected = store.deleteReadingResults(setOf("retired-chapter", "retired-partners"))
+            .replace("\"game\":\"SEQUENCE\"", "\"game\":\"CAPTION\"")
+        val removed = setOf("retired-chapter", "retired-partners", "retired-caption")
+        val expected = store.deleteReadingResults(removed)
         file.writeText(before)
         assertEquals(expected, HistoryStore(file).loadSnapshot())
         assertEquals(RewardBalance(0, 2), expected.rewards[RewardType.LOLLIPOP])
@@ -325,9 +331,11 @@ class HistoryStoreTest {
         val cleaned = file.readText()
         assertFalse(cleaned.contains("\"game\":\"CHAPTER\""))
         assertFalse(cleaned.contains("\"game\":\"PARTNERS\""))
+        assertFalse(cleaned.contains("\"game\":\"CAPTION\""))
         assertEquals(expected, store.loadSnapshot())
-        assertEquals(expected, store.deleteReadingResults(setOf("retired-chapter", "retired-partners")))
+        assertEquals(expected, store.deleteReadingResults(removed))
         assertEquals(expected, store.addReadingResult(reading("retired-chapter")))
+        assertEquals(expected, store.addReadingResult(reading("retired-caption")))
         assertEquals(cleaned, file.readText())
         assertEquals(2, store.add(eligible(2)).size)
     }
@@ -335,7 +343,7 @@ class HistoryStoreTest {
     @Test fun failedRetiredRewardMigrationKeepsTheOriginalFileAndRetriesWithoutDoubleSubtraction() {
         store.addReadingResult(reading("retired"))
         store.claimReadingReward("retired")
-        val original = file.readText().replace("\"game\":\"MISSING\"", "\"game\":\"PARTNERS\"")
+        val original = file.readText().replace("\"game\":\"MISSING\"", "\"game\":\"CAPTION\"")
         file.writeText(original)
         val blocked = File(directory, "${file.name}.tmp").apply { mkdir() }
         assertThrows(IOException::class.java) { store.loadSnapshot() }

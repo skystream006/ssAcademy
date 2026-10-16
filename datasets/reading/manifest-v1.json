@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "version": "v1",
-  "file": "activities-e209a1a88ef41bdf02396085e732a64848c7c56d03e561106cf9c22bf95741cc.jsonl",
-  "sha256": "e209a1a88ef41bdf02396085e732a64848c7c56d03e561106cf9c22bf95741cc",
-  "bytes": 16751,
+  "file": "activities-26ee2a35b6bdaa22cb7e82447f12ac18a9e410fd3c3d1173ff24f4ee84a25f92.jsonl",
+  "sha256": "26ee2a35b6bdaa22cb7e82447f12ac18a9e410fd3c3d1173ff24f4ee84a25f92",
+  "bytes": 14369,
   "counts": {
     "MISSING:SPROUT": 3,
     "MISSING:TRAIL": 3,
@@ -13,8 +13,6 @@
     "SEQUENCE:TRAIL": 3,
     "DETECTIVE:SPROUT": 3,
     "DETECTIVE:TRAIL": 3,
-    "CAPTION:SPROUT": 3,
-    "CAPTION:TRAIL": 3,
     "STUDIO:SPROUT": 3,
     "STUDIO:TRAIL": 3
   }

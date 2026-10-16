@@ -9,7 +9,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 class ReadingDatabase(context: Context, name: String = "reading.db") :
-    SQLiteOpenHelper(context.applicationContext, name, null, 3) {
+    SQLiteOpenHelper(context.applicationContext, name, null, 4) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("""CREATE TABLE reading_content (
             id TEXT NOT NULL, revision TEXT NOT NULL, payload TEXT NOT NULL,
@@ -33,7 +33,7 @@ class ReadingDatabase(context: Context, name: String = "reading.db") :
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        check(oldVersion in 1..2 && newVersion == 3) {
+        check(oldVersion in 1..3 && newVersion == 4) {
             "A non-destructive reading database migration is required: $oldVersion to $newVersion"
         }
         if (oldVersion == 1) {

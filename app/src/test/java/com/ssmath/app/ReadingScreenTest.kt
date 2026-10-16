@@ -441,7 +441,7 @@ class ReadingScreenTest {
                 waitFor { it.active?.content?.game == game && it.active?.content?.level == level }
                 val content = requireNotNull(model.data?.active).content
                 val (prefix, choices) = when (game) {
-                    ReadingGame.MISSING, ReadingGame.CAPTION, ReadingGame.DETECTIVE ->
+                    ReadingGame.MISSING, ReadingGame.DETECTIVE ->
                         "reading-answer" to requireNotNull(content.question).choices
                     ReadingGame.SCRAMBLE, ReadingGame.SEQUENCE -> "reading-tile" to content.tiles
                     ReadingGame.STUDIO -> "reading-studio-character" to content.writingChoices.first()
@@ -671,10 +671,10 @@ class ReadingScreenTest {
         assertTrue(requireNotNull(model.data).profiles.isEmpty())
     }
 
-    @Test fun allSixRetainedGamesAppearWithRecommendedGamesFirst() {
+    @Test fun allFiveRetainedGamesAppearWithRecommendedGamesFirst() {
         show(readingFixture().copy(page = ReadingPage.MENU))
         val expected = listOf("reading-game-MISSING", "reading-game-SEQUENCE", "reading-game-STUDIO",
-            "reading-game-SCRAMBLE", "reading-game-DETECTIVE", "reading-game-CAPTION")
+            "reading-game-SCRAMBLE", "reading-game-DETECTIVE")
         val nodes = compose.onAllNodes(androidx.compose.ui.test.SemanticsMatcher("Game tile") {
             it.config.getOrElse(SemanticsProperties.TestTag) { "" }.startsWith("reading-game-")
         }).fetchSemanticsNodes()
@@ -683,15 +683,15 @@ class ReadingScreenTest {
 
     @Test fun disabledGamesAreHiddenWithoutChangingRemainingTileOrder() {
         show(readingFixture().copy(page = ReadingPage.MENU),
-            disabled = setOf(ReadingGame.MISSING, ReadingGame.CAPTION))
+            disabled = setOf(ReadingGame.MISSING, ReadingGame.DETECTIVE))
         compose.onNodeWithTag("reading-game-MISSING").assertDoesNotExist()
         compose.onNodeWithTag("reading-new-MISSING").assertDoesNotExist()
-        compose.onNodeWithTag("reading-game-CAPTION").assertDoesNotExist()
+        compose.onNodeWithTag("reading-game-DETECTIVE").assertDoesNotExist()
         val nodes = compose.onAllNodes(androidx.compose.ui.test.SemanticsMatcher("Game tile") {
             it.config.getOrElse(SemanticsProperties.TestTag) { "" }.startsWith("reading-game-")
         }).fetchSemanticsNodes()
         assertEquals(listOf("reading-game-SEQUENCE", "reading-game-STUDIO",
-            "reading-game-SCRAMBLE", "reading-game-DETECTIVE"), nodes.map {
+            "reading-game-SCRAMBLE"), nodes.map {
             it.config[SemanticsProperties.TestTag]
         })
         click("reading-question-count-15")
@@ -1199,10 +1199,10 @@ class ReadingScreenTest {
         }
     }
 
-    @Test fun captionInstructionsDoNotAffectIndependentCreditAndUnavailableAudioCanBeRetried() {
-        show(readingFixture(ReadingContent.forGame(ReadingGame.CAPTION, ReadingLevel.SPROUT).first()), speech = true)
+    @Test fun instructionsDoNotAffectIndependentCreditAndUnavailableAudioCanBeRetried() {
+        show(readingFixture(), speech = true)
         click("reading-instructions")
-        assertEquals(ReadingGame.CAPTION.guidance, lastSpoken)
+        assertEquals(ReadingGame.MISSING.guidance, lastSpoken)
         assertEquals(0, model.data?.active?.narrations)
         chooseCorrectAnswer()
         click("reading-submit-answer")
@@ -1211,7 +1211,7 @@ class ReadingScreenTest {
 
         compose.runOnIdle {
             speechWorks = false
-            model.act { ReadingEngine.start(it, ReadingGame.CAPTION, ReadingLevel.SPROUT, true, "fresh") }
+            model.act { ReadingEngine.start(it, ReadingGame.MISSING, ReadingLevel.SPROUT, true, "fresh") }
         }
         waitFor { it.active?.id == "fresh" }
         click("reading-instructions")
@@ -1224,8 +1224,7 @@ class ReadingScreenTest {
     }
 
     @Test fun previouslyNarratedDraftRetainsItsSupportHistoryWithoutNarrationControls() {
-        val content = ReadingContent.forGame(ReadingGame.CAPTION, ReadingLevel.SPROUT).first()
-        show(ReadingEngine.narration(readingFixture(content), queued = true), speech = true)
+        show(ReadingEngine.narration(readingFixture(), queued = true), speech = true)
         compose.onNodeWithTag("reading-listen").assertDoesNotExist()
         compose.onNodeWithTag("reading-stop").assertDoesNotExist()
         click("reading-instructions")

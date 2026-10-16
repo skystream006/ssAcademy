@@ -8,7 +8,6 @@ enum class ReadingGame(val title: String, val guidance: String) {
     SCRAMBLE("Sentence Scramble", "Hold and drag tiles into empty spaces. Drag them back out to Available tiles. You can also tap to add or remove tiles."),
     SEQUENCE("Story Sequencer", "Put the illustrated events in order, then answer a question."),
     DETECTIVE("Reading Detective", "Answer the question, then tap the exact sentence that proves it."),
-    CAPTION("Caption Quest", "Look at the picture. Match it to a caption."),
     STUDIO("Story Studio", "Create a character, a setting, a problem, and an ending. Save each part.")
 }
 
@@ -175,27 +174,6 @@ object ReadingContent {
                 "Under the broad tree, the ground stayed cool.", "Lina moved her reading rug there."),
             q("Why did Lina choose the tree?", "Its shade was cool", "It had a door", "It was noisy"),
             1, p("📚", "A stack of books"), "Which sentence explains how the ground felt under the tree?")
-
-        fun caption(level: ReadingLevel, id: String, title: String, picture: ReadingPicture,
-                    answer: String, hint: String, vararg others: String) {
-            add(ReadingActivity(id, ReadingGame.CAPTION, level, title, picture,
-                question = q("Which caption matches the picture?", answer, *others), hint = hint))
-        }
-        caption(ReadingLevel.SPROUT, "caption-cat", "Picture postcard", p("🐈 📦", "A cat beside a box"),
-            "A cat is by a box.", "Match both things in the picture.", "A dog is by a box.", "A cat is by a cup.")
-        caption(ReadingLevel.SPROUT, "caption-boat", "At the lake", p("⛵ 🌊", "A sailboat on water"),
-            "A boat is on the water.", "Look at where the boat is.", "A boat is on a road.", "A bus is on the water.")
-        caption(ReadingLevel.SPROUT, "caption-bird", "Garden visitor", p("🐦 🌳", "A bird beside a tree"),
-            "A bird is by a tree.", "Find the animal and its place.", "A fish is by a tree.", "A bird is by a bed.")
-        caption(ReadingLevel.TRAIL, "caption-weather", "Before the picnic", p("☁️ 🌧️ 🧺", "Clouds and falling rain over a basket"),
-            "Rain clouds threaten the picnic.", "Use the weather clues to infer what may happen.",
-            "Bright sunshine warms the picnic.", "Snow covers a mountain.", "The basket floats on a lake.")
-        caption(ReadingLevel.TRAIL, "caption-growth", "Slow change", p("🌰 → 🌱 → 🪴", "A seed, an arrow, a shoot, an arrow, a leafy plant"),
-            "A seed gradually becomes a plant.", "Read the pictures from left to right.",
-            "A plant shrinks into a seed.", "A leaf turns into a stone.", "Three birds build a nest.")
-        caption(ReadingLevel.TRAIL, "caption-team", "Working together", p("🧑 🪵 🧑 🌉", "Two people with timber beside a bridge"),
-            "The team uses timber to build a crossing.", "Think about the material and what the people are making.",
-            "One person bakes bread alone.", "The team plants flowers in a boat.", "Two people paint the moon.")
 
         val sproutSets = listOf(
             listOf(listOf("A kind fox", "A tiny robot", "A brave duck"), listOf("a leafy park", "a cozy boat", "a sunny hill"),

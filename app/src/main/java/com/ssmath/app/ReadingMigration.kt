@@ -9,7 +9,7 @@ import kotlinx.serialization.json.jsonPrimitive
 
 /** Retired games are removed before decoding their no-longer-supported enum values. */
 internal object ReadingMigration {
-    val retiredGames = setOf("CHAPTER", "PARTNERS")
+    val retiredGames = setOf("CHAPTER", "PARTNERS", "CAPTION")
 
     private fun JsonObject.text(key: String) = get(key)?.jsonPrimitive?.contentOrNull
     private fun JsonObject.rows(key: String) = get(key)?.let { it as JsonArray }.orEmpty().map { it.jsonObject }
@@ -20,7 +20,7 @@ internal object ReadingMigration {
         val removed = attempts.filter { attempt ->
             val game = (attempt["activityRef"] as? JsonObject)?.text("game")
             game in retiredGames || (game == null && attempt.text("contentId")?.let {
-                it.startsWith("chapter-") || it.startsWith("partners-")
+                it.startsWith("chapter-") || it.startsWith("partners-") || it.startsWith("caption-")
             } == true)
         }.map { requireNotNull(it.text("id")) }.toMutableSet()
         val removedSessions = sessions.filter { session ->

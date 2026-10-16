@@ -83,7 +83,7 @@ class ReadingSummitTest {
         var result = data
         val activity = requireNotNull(data.active).content
         when (activity.game) {
-            ReadingGame.MISSING, ReadingGame.CAPTION, ReadingGame.DETECTIVE -> result = answer(result)
+            ReadingGame.MISSING, ReadingGame.DETECTIVE -> result = answer(result)
             ReadingGame.SCRAMBLE, ReadingGame.SEQUENCE -> {
                 val order = activity.validOrders[variant % activity.validOrders.size]
                 result = persist(ReadingEngine.submit(readingOrder(result, order), "order"))
@@ -116,7 +116,7 @@ class ReadingSummitTest {
     @Test fun everySummitActivityAndAcceptedOrderCanBeCompletedThroughSqlite() {
         install()
         val activities = ReadingRepositoryPack("manifest-v2.json").activities.filter { it.level == ReadingLevel.SUMMIT }
-        assertEquals(18, activities.size)
+        assertEquals(15, activities.size)
         var data = readers()
         val orders = mutableSetOf<Pair<String, List<Int>>>()
         repeat(2) { variant ->
@@ -137,9 +137,9 @@ class ReadingSummitTest {
             }
         }
         assertEquals(activities.flatMap { a -> a.validOrders.map { a.id to it } }.toSet(), orders)
-        assertEquals(36, data.attempts.size)
-        assertEquals(36, data.completions("reader-a"))
-        assertEquals(72, data.checkpointCount("reader-a"))
+        assertEquals(30, data.attempts.size)
+        assertEquals(30, data.completions("reader-a"))
+        assertEquals(66, data.checkpointCount("reader-a"))
         assertEquals(0, data.checkpointCount("reader-b"))
         assertTrue(data.attempts.flatMap { it.checkpoints.values }.none { it.rewardGranted })
         assertEquals(0, data.completions("reader-b"))
@@ -219,7 +219,7 @@ class ReadingSummitTest {
             assertEquals(revision, store.catalog.latest(id)?.revision)
             assertEquals(oldActivities.first { it.id == id }, store.catalog.find(id, revision))
         }
-        assertEquals(listOf(listOf("54")), rows("SELECT COUNT(*) FROM reading_content"))
+        assertEquals(listOf(listOf("45")), rows("SELECT COUNT(*) FROM reading_content"))
         data = store.start(data, ReadingGame.MISSING, ReadingLevel.SPROUT, false)
         assertEquals(unfinished, data.active)
         assertEquals(oldCycles, cycles())

@@ -123,7 +123,7 @@ class PublishedPackTest(unittest.TestCase):
         cls.previous = [json.loads(line) for line in cls.previous_data.splitlines()]
 
     def test_published_files_reproduce_exactly(self):
-        self.assertEqual("v6", self.manifest["version"])
+        self.assertEqual("v7", self.manifest["version"])
         self.assertEqual(self.data, (generate.ROOT / self.manifest["file"]).read_bytes())
         self.assertEqual(len(self.data), self.manifest["bytes"])
         self.assertEqual(hashlib.sha256(self.data).hexdigest(), self.manifest["sha256"])
@@ -133,7 +133,7 @@ class PublishedPackTest(unittest.TestCase):
             )
 
     def test_all_catalogues_have_only_supported_games_and_schema_fields(self):
-        games = {"MISSING", "SCRAMBLE", "SEQUENCE", "DETECTIVE", "CAPTION", "STUDIO"}
+        games = {"MISSING", "SCRAMBLE", "SEQUENCE", "DETECTIVE", "STUDIO"}
         fields = {
             "id", "game", "level", "title", "hint", "passage", "question", "tiles",
             "validOrders", "picture", "eventPictures", "evidence", "writingChoices",
@@ -169,28 +169,41 @@ class PublishedPackTest(unittest.TestCase):
         )
 
     def test_only_generated_scrambles_change_and_keep_their_ids(self):
-        self.assertEqual(18_000, len(self.activities))
+        self.assertEqual(15_000, len(self.activities))
         self.assertEqual(len(self.previous), len(self.activities))
+        old_lines = self.previous_data.splitlines(keepends=True)
+        new_lines = self.data.splitlines(keepends=True)
         self.assertEqual(
-            b"".join(self.previous_data.splitlines(keepends=True)[:54]),
-            b"".join(self.data.splitlines(keepends=True)[:54]),
+            b"".join(old_lines[:45]),
+            b"".join(new_lines[:45]),
         )
         revised = Counter()
         for index, (old, new) in enumerate(zip(self.previous, self.activities)):
             self.assertEqual(
                 (old["id"], old["game"], old["level"]), (new["id"], new["game"], new["level"]),
             )
-            if index >= 54 and new["game"] == "SCRAMBLE":
+            if index >= 45 and new["game"] == "SCRAMBLE":
                 self.assertNotEqual(old, new)
                 revised[new["level"]] += 1
             else:
                 self.assertEqual(old, new)
+                self.assertEqual(old_lines[index], new_lines[index])
         self.assertEqual(dict.fromkeys(generate.LEVELS, 997), dict(revised))
+
+    def test_legacy_catalogues_remain_exact_prefixes(self):
+        for version, count in (("v1", 30), ("v2", 45)):
+            with self.subTest(version=version):
+                manifest = json.loads(
+                    (generate.ROOT / f"manifest-{version}.json").read_text(encoding="utf-8"),
+                )
+                data = (generate.ROOT / manifest["file"]).read_bytes()
+                self.assertEqual(count, len(data.splitlines()))
+                self.assertEqual(data, b"".join(self.data.splitlines(keepends=True)[:count]))
 
     def test_published_scrambles_use_the_varied_generator(self):
         for level in generate.LEVELS:
             published = [
-                a for a in self.activities[54:] if a["game"] == "SCRAMBLE" and a["level"] == level
+                a for a in self.activities[45:] if a["game"] == "SCRAMBLE" and a["level"] == level
             ]
             expected = list(scramble(level))
             self.assertEqual(len(expected), len(published))
@@ -199,10 +212,10 @@ class PublishedPackTest(unittest.TestCase):
 
     def test_pool_counts_answers_and_import_limits(self):
         counts = Counter(f'{a["game"]}:{a["level"]}' for a in self.activities)
-        self.assertEqual(18, len(counts))
+        self.assertEqual(15, len(counts))
         self.assertEqual({1000}, set(counts.values()))
         self.assertEqual(dict(counts), self.manifest["counts"])
-        self.assertEqual(18_000, len({a["id"] for a in self.activities}))
+        self.assertEqual(15_000, len({a["id"] for a in self.activities}))
         self.assertLessEqual(len(self.data), generate.MAX_PACK_BYTES)
         self.assertTrue(all(len(line) + 1 <= generate.MAX_LINE_BYTES for line in self.data.splitlines()))
         answers = [key for a in self.activities for key in generate.answer_keys(a)]

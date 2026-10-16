@@ -103,7 +103,7 @@ class ReadingBulkPackTest {
         repeat(variants) { variant ->
             var data = fresh(activity)
             when (activity.game) {
-                ReadingGame.MISSING, ReadingGame.CAPTION, ReadingGame.DETECTIVE -> data = answer(data)
+                ReadingGame.MISSING, ReadingGame.DETECTIVE -> data = answer(data)
                 ReadingGame.SCRAMBLE, ReadingGame.SEQUENCE -> {
                     val order = activity.validOrders[variant]
                     data = ReadingEngine.submit(readingOrder(data, order), "order")
@@ -148,25 +148,25 @@ class ReadingBulkPackTest {
         }
     }
 
-    @Test fun v6HasOneThousandDistinctAnswerActivitiesPerPoolAndEveryActivityCanBeCompleted() {
+    @Test fun v7HasOneThousandDistinctAnswerActivitiesPerPoolAndEveryActivityCanBeCompleted() {
         val pack = ReadingRepositoryPack()
         val archived = ReadingRepositoryPack("manifest-v4.json")
-        val oldActivities = archived.activities.take(54)
+        val oldActivities = archived.activities.take(45)
         val oldBytes = archived.contentFile.bufferedReader(Charsets.UTF_8).useLines {
-            it.take(54).joinToString("\n", postfix = "\n").toByteArray(Charsets.UTF_8)
+            it.take(45).joinToString("\n", postfix = "\n").toByteArray(Charsets.UTF_8)
         }
         val oldIds = oldActivities.map { it.id }.toSet()
         val manifest = pack.manifest
-        assertEquals("v6", manifest.version)
+        assertEquals("v7", manifest.version)
         assertEquals(1, manifest.schemaVersion)
-        assertEquals(18, expectedCounts.size)
+        assertEquals(15, expectedCounts.size)
         assertEquals(expectedCounts, manifest.counts)
-        assertEquals(18_000, manifest.counts.values.sum())
+        assertEquals(15_000, manifest.counts.values.sum())
         assertTrue(manifest.counts.values.sum() <= ReadingPackImporter.MAX_ACTIVITIES)
         assertTrue(manifest.bytes in 1..ReadingPackImporter.MAX_PACK_BYTES)
         assertEquals(manifest.bytes, pack.contentFile.length())
         assertEquals("activities-${manifest.sha256}.jsonl", manifest.file)
-        assertEquals(54, oldActivities.size)
+        assertEquals(45, oldActivities.size)
         DataInputStream(pack.contentFile.inputStream()).use { input ->
             val prefix = ByteArray(oldBytes.size)
             input.readFully(prefix)
@@ -210,8 +210,8 @@ class ReadingBulkPackTest {
             completeEveryPath(activity)
             records++
         }
-        assertEquals(18_000, records)
-        assertEquals(18_000, ids.size)
+        assertEquals(15_000, records)
+        assertEquals(15_000, ids.size)
         assertEquals(expectedCounts, counts)
         assertEquals(manifest.bytes, bytes)
         assertTrue(ids.containsAll(oldIds))
@@ -301,8 +301,8 @@ class ReadingBulkPackTest {
         assertEquals(before, reopen())
         assertEquals(oldCycles, cycles())
         assertEquals(oldPresented, presented())
-        assertEquals(18_000L, scalar("SELECT COUNT(*) FROM reading_content"))
-        assertEquals(18_000L, scalar("SELECT COUNT(*) FROM reading_current"))
+        assertEquals(15_000L, scalar("SELECT COUNT(*) FROM reading_content"))
+        assertEquals(15_000L, scalar("SELECT COUNT(*) FROM reading_current"))
         oldActivities.forEach { activity ->
             assertEquals(oldRevisions.getValue(activity.id), store.catalog.latest(activity.id)?.revision)
             assertEquals(activity, store.catalog.find(activity.id, oldRevisions.getValue(activity.id)))
@@ -320,7 +320,7 @@ class ReadingBulkPackTest {
                 sample
             }
         }
-        assertEquals(18, samples.map { it.activity.id }.distinct().size)
+        assertEquals(15, samples.map { it.activity.id }.distinct().size)
         data = store.start(data, ReadingGame.SCRAMBLE, ReadingLevel.TRAIL, false)
         assertEquals(scrambleDraft, data.active)
         data = store.start(data, ReadingGame.MISSING, ReadingLevel.SPROUT, false)
@@ -333,39 +333,39 @@ class ReadingBulkPackTest {
         assertEquals(beforeReimport, reopen())
         assertEquals(oldCycles, cycles())
         assertEquals(oldPresented, presented())
-        assertEquals(18_000L, scalar("SELECT COUNT(*) FROM reading_content"))
-        assertEquals(18_000L, scalar("SELECT COUNT(*) FROM reading_current"))
+        assertEquals(15_000L, scalar("SELECT COUNT(*) FROM reading_content"))
+        assertEquals(15_000L, scalar("SELECT COUNT(*) FROM reading_current"))
         samples.forEach { assertEquals(it, store.catalog.latest(it.activity.id)) }
         assertEquals(listOf(listOf(pack.manifest.sha256)), rows("SELECT checksum FROM reading_pack"))
 
-        val pool = store.catalog.candidates(ReadingGame.CAPTION, ReadingLevel.SUMMIT).toSet()
+        val pool = store.catalog.candidates(ReadingGame.MISSING, ReadingLevel.SUMMIT).toSet()
         val offset = data.attempts.size
-        data = store.startBatch(data, ReadingGame.CAPTION, ReadingLevel.SUMMIT, 500)
+        data = store.startBatch(data, ReadingGame.MISSING, ReadingLevel.SUMMIT, 500)
         assertEquals(500, data.attempts.drop(offset).map { it.contentId }.distinct().size)
         val halfwayDraft = requireNotNull(data.active)
         val halfwayCycles = cycles()
         val halfwayPresented = presented()
         assertEquals(data, reopen())
-        data = store.start(data, ReadingGame.CAPTION, ReadingLevel.SUMMIT, false)
+        data = store.start(data, ReadingGame.MISSING, ReadingLevel.SUMMIT, false)
         assertEquals(halfwayDraft, data.active)
         assertEquals(halfwayCycles, cycles())
         assertEquals(halfwayPresented, presented())
-        data = store.startBatch(data, ReadingGame.CAPTION, ReadingLevel.SUMMIT, 500)
+        data = store.startBatch(data, ReadingGame.MISSING, ReadingLevel.SUMMIT, 500)
         val firstCycle = data.attempts.drop(offset).map { it.contentId }
         assertEquals(1000, firstCycle.size)
         assertEquals(1000, firstCycle.distinct().size)
         assertEquals(pool, firstCycle.toSet())
-        assertEquals(1L, scalar("SELECT cycle FROM reading_cycles WHERE game='CAPTION' AND level='SUMMIT'"))
-        assertEquals(1000L, scalar("SELECT COUNT(*) FROM reading_presented WHERE game='CAPTION' AND level='SUMMIT'"))
+        assertEquals(1L, scalar("SELECT cycle FROM reading_cycles WHERE game='MISSING' AND level='SUMMIT'"))
+        assertEquals(1000L, scalar("SELECT COUNT(*) FROM reading_presented WHERE game='MISSING' AND level='SUMMIT'"))
 
-        data = store.start(data, ReadingGame.CAPTION, ReadingLevel.SUMMIT, true)
+        data = store.start(data, ReadingGame.MISSING, ReadingLevel.SUMMIT, true)
         assertNotEquals(firstCycle.last(), data.active?.contentId)
         assertTrue(data.active?.contentId in pool)
-        assertEquals(2L, scalar("SELECT cycle FROM reading_cycles WHERE game='CAPTION' AND level='SUMMIT'"))
-        assertEquals(1L, scalar("SELECT COUNT(*) FROM reading_presented WHERE game='CAPTION' AND level='SUMMIT' AND cycle=2"))
-        assertEquals(999L, scalar("SELECT COUNT(*) FROM reading_presented WHERE game='CAPTION' AND level='SUMMIT' AND cycle=1"))
-        assertEquals(oldCycles, cycles().filterNot { it[1] == "CAPTION" && it[2] == "SUMMIT" })
-        assertEquals(oldPresented, presented().filterNot { it[1] == "CAPTION" && it[2] == "SUMMIT" })
+        assertEquals(2L, scalar("SELECT cycle FROM reading_cycles WHERE game='MISSING' AND level='SUMMIT'"))
+        assertEquals(1L, scalar("SELECT COUNT(*) FROM reading_presented WHERE game='MISSING' AND level='SUMMIT' AND cycle=2"))
+        assertEquals(999L, scalar("SELECT COUNT(*) FROM reading_presented WHERE game='MISSING' AND level='SUMMIT' AND cycle=1"))
+        assertEquals(oldCycles, cycles().filterNot { it[1] == "MISSING" && it[2] == "SUMMIT" })
+        assertEquals(oldPresented, presented().filterNot { it[1] == "MISSING" && it[2] == "SUMMIT" })
         assertEquals(before.stories, data.stories)
         assertEquals(before.completions("reader-a"), data.completions("reader-a"))
         assertEquals(before.completions("reader-b"), data.completions("reader-b"))
@@ -423,8 +423,8 @@ class ReadingBulkPackTest {
         assertEquals(before, reopen())
         assertEquals(oldCycles, cycles())
         assertEquals(oldPresented, presented())
-        assertEquals(18_000L, scalar("SELECT COUNT(*) FROM reading_current"))
-        assertEquals(18_000L + revised.size, scalar("SELECT COUNT(*) FROM reading_content"))
+        assertEquals(15_000L, scalar("SELECT COUNT(*) FROM reading_current"))
+        assertEquals(15_000L + revised.size, scalar("SELECT COUNT(*) FROM reading_content"))
         listOf(completed, draft).forEach { attempt ->
             assertEquals(previous.getValue(attempt.contentId),
                 store.catalog.find(attempt.contentId, requireNotNull(attempt.activityRef).revision))
@@ -432,7 +432,7 @@ class ReadingBulkPackTest {
         }
         assertEquals(status, install(pack))
         assertEquals(before, reopen())
-        assertEquals(18_000L + revised.size, scalar("SELECT COUNT(*) FROM reading_content"))
+        assertEquals(15_000L + revised.size, scalar("SELECT COUNT(*) FROM reading_content"))
         assertEquals(oldCycles, cycles())
         assertEquals(oldPresented, presented())
         data = store.start(data, ReadingGame.MISSING, ReadingLevel.TRAIL, false)
@@ -445,7 +445,7 @@ class ReadingBulkPackTest {
         assertEquals(data, reopen())
     }
 
-    @Test fun v4ToV6ReplacesScrambleStructuresWithoutChangingSavedAttempts() {
+    @Test fun v4ToV7ReplacesScrambleStructuresWithoutChangingSavedAttempts() {
         val archived = ReadingRepositoryPack("manifest-v4.json")
         val pack = ReadingRepositoryPack()
         val previous = archived.activities.associateBy { it.id }
@@ -479,12 +479,12 @@ class ReadingBulkPackTest {
         val oldPresented = presented()
 
         val status = install(pack)
-        assertEquals(ReadingPackStatus("v6", expectedCounts), status)
+        assertEquals(ReadingPackStatus("v7", expectedCounts), status)
         assertEquals(before, reopen())
         assertEquals(oldCycles, cycles())
         assertEquals(oldPresented, presented())
-        assertEquals(18_000L, scalar("SELECT COUNT(*) FROM reading_current"))
-        assertEquals(18_000L + revised.size, scalar("SELECT COUNT(*) FROM reading_content"))
+        assertEquals(15_000L, scalar("SELECT COUNT(*) FROM reading_current"))
+        assertEquals(15_000L + revised.size, scalar("SELECT COUNT(*) FROM reading_content"))
         listOf(completed, draft).forEach { attempt ->
             assertEquals(previous.getValue(attempt.contentId),
                 store.catalog.find(attempt.contentId, requireNotNull(attempt.activityRef).revision))
@@ -492,7 +492,7 @@ class ReadingBulkPackTest {
         }
         assertEquals(status, install(pack))
         assertEquals(before, reopen())
-        assertEquals(18_000L + revised.size, scalar("SELECT COUNT(*) FROM reading_content"))
+        assertEquals(15_000L + revised.size, scalar("SELECT COUNT(*) FROM reading_content"))
         assertEquals(oldCycles, cycles())
         assertEquals(oldPresented, presented())
         data = store.start(data, ReadingGame.SCRAMBLE, ReadingLevel.TRAIL, false)

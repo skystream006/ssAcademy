@@ -37,7 +37,7 @@ internal fun readingSolve(data: ReadingData, rewardsEnabled: Boolean = true): Re
     var result = data
     val content = requireNotNull(data.active).content
     when (content.game) {
-        ReadingGame.MISSING, ReadingGame.CAPTION, ReadingGame.DETECTIVE ->
+        ReadingGame.MISSING, ReadingGame.DETECTIVE ->
             result = readingAnswer(result, requireNotNull(content.question).answer, rewardsEnabled = rewardsEnabled)
         ReadingGame.SCRAMBLE, ReadingGame.SEQUENCE -> {
             result = ReadingEngine.submit(readingOrder(result, content.validOrders.first()), "order",
@@ -180,9 +180,9 @@ class ReadingModelTest {
 
     @Test fun legacyCatalogueKeepsThreeOriginalActivitiesAtEachOriginalLevelWithValidFiniteContent() {
         assertEquals(listOf(ReadingGame.MISSING, ReadingGame.SCRAMBLE, ReadingGame.SEQUENCE,
-            ReadingGame.DETECTIVE, ReadingGame.CAPTION, ReadingGame.STUDIO), ReadingGame.entries)
-        assertEquals(36, ReadingContent.activities.size)
-        assertEquals(36, ReadingContent.activities.map { it.id }.distinct().size)
+            ReadingGame.DETECTIVE, ReadingGame.STUDIO), ReadingGame.entries)
+        assertEquals(30, ReadingContent.activities.size)
+        assertEquals(30, ReadingContent.activities.map { it.id }.distinct().size)
         ReadingGame.entries.forEach { game -> listOf(ReadingLevel.SPROUT, ReadingLevel.TRAIL).forEach { level ->
             assertEquals("$game $level", 3, ReadingContent.forGame(game, level).size)
         } }
@@ -205,7 +205,6 @@ class ReadingModelTest {
                     assertFalse(c.tiles.indices.toList() in c.validOrders)
                 }
                 ReadingGame.DETECTIVE -> assertTrue(c.evidence in c.passage.indices)
-                ReadingGame.CAPTION -> assertNotNull(c.question)
                 ReadingGame.STUDIO -> {
                     assertEquals(4, c.writingChoices.size)
                     assertTrue(c.writingChoices.all { choices -> choices.size >= 3 && choices.all { it.isNotBlank() } })
@@ -224,7 +223,7 @@ class ReadingModelTest {
             val result = readingSolve(readingFixture(content))
             ReadingEngine.validate(result)
             val expected = when (content.game) {
-                ReadingGame.MISSING, ReadingGame.CAPTION -> 1
+                ReadingGame.MISSING -> 1
                 ReadingGame.SCRAMBLE, ReadingGame.SEQUENCE, ReadingGame.DETECTIVE -> 2
                 ReadingGame.STUDIO -> 4
             }

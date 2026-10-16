@@ -131,7 +131,7 @@ internal fun ReadingAttemptReview(data: ReadingData, attempt: ReadingAttempt) {
     content.passage.forEach { Text(it) }
     HorizontalDivider()
     when (attempt.game) {
-        ReadingGame.MISSING, ReadingGame.CAPTION -> ReviewQuestion(attempt, "answer")
+        ReadingGame.MISSING -> ReviewQuestion(attempt, "answer")
         ReadingGame.SCRAMBLE, ReadingGame.SEQUENCE -> {
             Text(if (attempt.game == ReadingGame.SCRAMBLE) "Put the words in order." else "Put the events in order.",
                 style = MaterialTheme.typography.titleMedium)

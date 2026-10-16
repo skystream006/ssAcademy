@@ -238,7 +238,7 @@ class ReadingSqliteStoreTest {
         store.save(data)
         data = store.start(data, ReadingGame.MISSING, ReadingLevel.SPROUT, false)
         data = store.start(data, ReadingGame.MISSING, ReadingLevel.TRAIL, false)
-        data = store.start(data, ReadingGame.CAPTION, ReadingLevel.SPROUT, false)
+        data = store.start(data, ReadingGame.DETECTIVE, ReadingLevel.SPROUT, false)
         assertEquals(4L, scalar("SELECT COUNT(*) FROM reading_cycles"))
         assertEquals(3L, scalar("SELECT COUNT(*) FROM reading_presented WHERE reader_id='reader-b'"))
         assertEquals(3L, scalar("SELECT COUNT(*) FROM reading_presented WHERE reader_id='reader-a'"))
@@ -284,7 +284,7 @@ class ReadingSqliteStoreTest {
     }
 
     @Test fun upgradesPurgeRetiredCataloguesAndHistoryWhileKeepingOtherRevisionsAndRotation() {
-        for (version in listOf(1, 2)) {
+        for (version in listOf(1, 2, 3)) {
             install()
             val data = store.start(reader(), ReadingGame.MISSING, ReadingLevel.SPROUT, false)
             val original = requireNotNull(data.active)
@@ -294,7 +294,7 @@ class ReadingSqliteStoreTest {
             db.execSQL("UPDATE reading_content SET payload=? WHERE id=? AND revision=?", arrayOf(
                 JsonObject(payload + ("branches" to JsonArray(emptyList()))).toString(),
                 original.contentId, requireNotNull(original.activityRef).revision))
-            for (game in listOf("CHAPTER", "PARTNERS")) {
+            for (game in listOf("CHAPTER", "PARTNERS", "CAPTION")) {
                 db.execSQL("INSERT INTO reading_content VALUES(?,?,?)", arrayOf(
                     "retired-$game", "retired", """{"game":"$game","branches":[{"text":"Removed content"}]}"""))
                 db.execSQL("INSERT INTO reading_content VALUES(?,?,?)", arrayOf(
@@ -336,7 +336,7 @@ class ReadingSqliteStoreTest {
             val restored = store.load()
             val expected = data.copy(attempts = data.attempts.map { it.copy(loadedContent = null) },
                 profiles = data.profiles.map { it.copy(activeAttemptId = null) }, page = ReadingPage.MENU,
-                deletedSessionIds = setOf("session-CHAPTER", "session-PARTNERS"))
+                deletedSessionIds = setOf("session-CHAPTER", "session-PARTNERS", "session-CAPTION"))
             assertEquals(expected, restored)
             assertEquals(original.content, store.review(restored.attempts.single()).content)
             assertEquals(pool.size.toLong(), scalar("SELECT COUNT(*) FROM reading_content"))
@@ -359,7 +359,7 @@ class ReadingSqliteStoreTest {
         val original = readingSolve(readingFixture())
         legacy.writeText(legacyReadingPayload(original).toString())
         val migrated = store.load()
-        assertEquals(original.copy(deletedSessionIds = setOf("session-CHAPTER", "session-PARTNERS")),
+        assertEquals(original.copy(deletedSessionIds = setOf("session-CHAPTER", "session-PARTNERS", "session-CAPTION")),
             migrated.withoutCatalogueRefs())
         assertEquals(1L, scalar("SELECT COUNT(*) FROM reading_content"))
         assertEquals(1L, scalar("SELECT COUNT(*) FROM reading_presented"))

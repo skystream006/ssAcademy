@@ -343,7 +343,7 @@ object ReadingEngine {
     fun question(a: ReadingAttempt): ReadingQuestion? = a.content.question
 
     fun requiredKeys(a: ReadingAttempt): List<String> = when (a.game) {
-        ReadingGame.MISSING, ReadingGame.CAPTION -> listOf("answer")
+        ReadingGame.MISSING -> listOf("answer")
         ReadingGame.SCRAMBLE -> listOf("order")
         ReadingGame.SEQUENCE -> listOf("order", "answer")
         ReadingGame.DETECTIVE -> listOf("answer", "evidence")
@@ -397,8 +397,8 @@ object ReadingEngine {
                 if (!a.orderComplete) a.copy(feedback = "Place every tile before submitting.")
                 else award(a, key, a.order in a.content.validOrders, now)
             }
-            (key == "answer" && game in listOf(ReadingGame.MISSING, ReadingGame.SEQUENCE, ReadingGame.DETECTIVE,
-                ReadingGame.CAPTION)) || (key == "bonus" && game == ReadingGame.SCRAMBLE) -> {
+            (key == "answer" && game in listOf(ReadingGame.MISSING, ReadingGame.SEQUENCE, ReadingGame.DETECTIVE)) ||
+                (key == "bonus" && game == ReadingGame.SCRAMBLE) -> {
                 val question = question(a)
                 val answer = a.fields["answer"]?.toIntOrNull()
                 if ((game == ReadingGame.SEQUENCE || game == ReadingGame.SCRAMBLE) && !a.earned("order")) a

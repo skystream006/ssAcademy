@@ -272,7 +272,6 @@ including activity revisions, is saved at launch. Cycle rollover never resets dr
 | Sentence Scramble | Hold and drag word tiles into empty sentence spaces, or tap to add/remove tiles. More than one valid order is accepted where appropriate. |
 | Story Sequencer | Arrange illustrated story parts and answer a comprehension question. |
 | Reading Detective | Answer a passage question and select its evidence. |
-| Caption Quest | Match an illustration with a written caption. |
 | Story Studio | Create a story with character, setting, problem, and ending checkpoints. Use suggested tiles or type your own words. |
 
 Hints remain available, and there are no speed bonuses. The Reading Progress view
@@ -296,9 +295,9 @@ The downloadable source is `datasets/reading/reading-activities-import.json`, wi
 in `datasets/reading/activities-<sha256>.jsonl` (one `ReadingActivity` JSON object per line).
 The previous `manifest.json` entry point remains available for older app versions.
 These files are outside Android resources/assets and are **not packaged in the APK**.
-Pack **v6** contains **18,000 activities**: **1,000 per game per difficulty**, across six
-games and Sprout, Trail, and Summit. This includes 54 original activities and
-17,946 template-generated activities. Repeated correct answers from v3 are replaced with
+Pack **v7** contains **15,000 activities**: **1,000 per game per difficulty**, across five
+games and Sprout, Trail, and Summit. This includes 45 original activities and
+14,955 template-generated activities. Repeated correct answers from v3 are replaced with
 context-supported word or phrase choices and comprehension questions. Each correct answer
 appears only once per game and difficulty;
 open-ended Studio stories do not have a single correct answer.
@@ -327,22 +326,22 @@ and the pack at 100,000 activities. Downloads are streamed to temporary storage,
 validated in a transactional staging table; failure rolls back and removes the temporary file.
 Allow space for the download, staging table, and SQLite transaction journal during updates.
 
-The v6 content source lives in `datasets/reading/generation/`, outside the APK. It combines
+The v7 content source lives in `datasets/reading/generation/`, outside the APK. It combines
 original vocabulary, scenes, and story prompts using difficulty-specific templates, rather
 than copying the same question under new IDs. Sprout emphasizes short concrete sentences,
 Trail adds context and cause, and Summit adds complex sentences, inference, and reasoning.
-These are reproducible template variations, not 18,000 individually hand-written lessons.
+These are reproducible template variations, not 15,000 individually hand-written lessons.
 Vocabulary can occur in more than one passage, but correct answer choices must be distinct
 within each game and difficulty, ignoring capitalization and whitespace.
 Some reading passages have separate activities for different comprehension questions.
 Structural checks and engine tests verify the catalogue; they do not replace educational
 review of the generated wording.
 
-To reproduce the committed v6 pack, run
+To reproduce the committed v7 pack, run
 `python3 datasets/reading/generate.py` from the repository root;
 add `--check` to verify it without writing files. Python 3.9 or newer and its standard library
 are the only requirements. Generation uses the archived v4 pack as its revision baseline,
-preserves the remaining 54 original activities as an exact prefix and retains unaffected activities. It rejects duplicate
+preserves the remaining 45 original activities as an exact prefix and retains unaffected activities. It rejects duplicate
 answers and learning tasks even when titles or answer order differ, checks importer size/count
 limits, and preserves existing IDs when revising Sentence Scramble activities. Run
 `python3 -m unittest discover -s datasets/reading -p 'test_*.py'` to check structure coverage,

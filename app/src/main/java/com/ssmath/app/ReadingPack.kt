@@ -88,7 +88,6 @@ object ReadingPackValidator {
             ReadingGame.SEQUENCE -> require(tiles.size >= 2 && validOrders.isNotEmpty() && question != null &&
                 eventPictures.size == tiles.size && tiles.indices.toList() !in validOrders)
             ReadingGame.DETECTIVE -> require(passage.isNotEmpty() && evidence in passage.indices && question != null)
-            ReadingGame.CAPTION -> require(question != null)
             ReadingGame.STUDIO -> require(writingChoices.size == 4)
         }
         if (game !in listOf(ReadingGame.SCRAMBLE, ReadingGame.SEQUENCE))
