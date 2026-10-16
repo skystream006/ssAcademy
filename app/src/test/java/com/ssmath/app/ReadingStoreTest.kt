@@ -617,6 +617,27 @@ class ReadingStoreTest {
         assertEquals(30_000L, restored.data?.activeSession?.timeLimitMs)
     }
 
+    @Test fun readingCapsCurrentAndLegacySettingsAtFifteenMinutesForNewSessions() {
+        listOf("time_limit_minutes" to 60, "time_limit_seconds" to 3_600).forEach { (key, value) ->
+            settings.edit().clear().putBoolean("reading_rewards_enabled", true)
+                .putBoolean("show_timer", true).putInt(key, value).commit()
+            val storage = RecordingStorage(readingFixture())
+            val model = ReadingViewModel(application, storage)
+            await { model.data != null }
+            model.startSession(ReadingGame.MISSING, 25)
+            await { model.data?.activeSession != null && !model.saving }
+            assertEquals(900_000L, model.data?.activeSession?.timeLimitMs)
+        }
+    }
+
+    @Test fun savedReadingSessionsKeepTheirOriginalLongerLimit() {
+        val storage = RecordingStorage(readingSessionFixture(timeLimitMs = 1_200_000))
+        settings.edit().putInt("time_limit_seconds", 900).commit()
+        val model = ReadingViewModel(application, storage)
+        await { model.data != null }
+        assertEquals(1_200_000L, model.data?.activeSession?.timeLimitMs)
+    }
+
     @Test fun sessionStartSnapshotsSettingsAndRepeatedSubmissionsAdvanceOnlyOnce() {
         settings.edit().putBoolean("reading_rewards_enabled", true).putBoolean("show_timer", true)
             .putInt("time_limit_minutes", 10).commit()

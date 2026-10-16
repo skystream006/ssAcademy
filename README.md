@@ -188,7 +188,8 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
 - **Show timer** – off by default. Show or hide the timer while practicing. The timer pauses while
   Settings, any subject's Practice History, My Rewards, or My Pokémons is open, or the app is in the background.
   When both Math Rewards System and Show timer are enabled, **Time limit per 5 questions** offers
-  **None**, **30 seconds**, **1, 2, 3, or 4 minutes**, or **5–60 minutes** in 5-minute increments.
+  **None**, **30 seconds**, **1, 2, 3, or 4 minutes**, or **5, 10, or 15 minutes**.
+  Older saved selections above 15 minutes use 15 minutes for new games.
   **30 seconds per 5 questions** gives **1 minute 30 seconds for 15**,
   **2 minutes 30 seconds for 25**, and **5 minutes for 50 questions**.
   The total math limit scales with the chosen question count: **1 minute per 5 questions**
