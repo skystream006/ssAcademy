@@ -317,7 +317,11 @@ Pack **v9** contains **18,000 activities**: **1,000 per game per difficulty**, i
 It preserves all **15,150 v8 activities** unchanged and adds 950 grammar questions per difficulty.
 The existing `reading-activities-v8-import.json` URL serves this compatible expansion, so
 Grammar Quest users only need **Import / Update Reading Activities**; no APK update is needed.
-The original v8 manifest and immutable content remain archived as `manifest-v8.json`.
+Historical v1–v4 and v8 manifests and content are merged into `datasets/reading/archive.zip`,
+with their original filenames and bytes preserved. Generation and regression tests read the archive
+directly; these historical snapshots are no longer separate download URLs. Only the two active
+checksum-named packs remain alongside the three live import manifests. The v9 pack already includes
+all v7 activities, but the separate v7 pack is required for older apps that cannot decode Grammar Quest.
 The five legacy games span Sprout, Trail, and Summit and include 45 original activities and
 14,955 template-generated activities. Their repeated correct answers from v3 were replaced with
 context-supported word or phrase choices and comprehension questions. Each correct answer
@@ -330,7 +334,7 @@ only substituting nouns. Structures rotate across topics and situations, with ea
 per level retain their content, and the other remaining games retain their v4 content.
 All remaining activity IDs are retained, so updating replaces repetitive activities rather than
 adding them alongside their predecessors. Archived packs have also been reduced to the remaining
-games and republished under new checksum filenames. `manifest-v4.json` identifies the revision
+games and republished under new checksum filenames. The archive's `manifest-v4.json` identifies the revision
 baseline. Existing installations retain the remaining games' drafts, progress,
 and presentation cycles. Older app versions without Summit support reject the expanded pack
 safely and retain their installed library; update the app first.
@@ -371,7 +375,8 @@ review of the generated wording.
 To reproduce the committed v9 pack, run
 `python3 datasets/reading/generate.py` from the repository root;
 add `--check` to verify it without writing files. Python 3.9 or newer and its standard library
-are the only requirements. Generation reproduces the legacy games from the archived v4 baseline,
+are the only requirements. Generation reads the v4 baseline and original v8 pack from `archive.zip`,
+without unpacking historical files into the datasets folder. It reproduces the legacy games,
 verifies all 15,150 v8 records remain a byte-identical prefix, and appends the new grammar examples.
 It rejects duplicate legacy answers and duplicate learning tasks even when titles or answer
 order differ, checks importer size/count limits, and updates only the compatible v8 entry point. Run

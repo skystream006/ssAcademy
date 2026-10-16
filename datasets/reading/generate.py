@@ -8,6 +8,7 @@ import io
 import json
 from pathlib import Path
 import unicodedata
+from zipfile import ZipFile
 
 from generation.creative_games import studio
 from generation.grammar_games import grammar
@@ -16,6 +17,7 @@ from generation.word_games import missing, scramble
 
 
 ROOT = Path(__file__).resolve().parent
+ARCHIVE = ROOT / "archive.zip"
 LEVELS = ("SPROUT", "TRAIL", "SUMMIT")
 GENERATORS = {
     "MISSING": missing, "SCRAMBLE": scramble, "SEQUENCE": sequence, "DETECTIVE": detective,
@@ -30,6 +32,11 @@ MAX_LINE_BYTES = 64 * 1024
 
 def encoded(value):
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
+
+
+def archived_file(name):
+    with ZipFile(ARCHIVE) as archive:
+        return archive.read(name)
 
 
 def task_identity(activity):
@@ -64,8 +71,8 @@ def answer_keys(activity):
 
 
 def build_pack():
-    previous = json.loads((ROOT / "manifest-v4.json").read_text(encoding="utf-8"))
-    published = (ROOT / previous["file"]).read_bytes()
+    previous = json.loads(archived_file("manifest-v4.json"))
+    published = archived_file(previous["file"])
     if (len(published) != previous["bytes"]
             or hashlib.sha256(published).hexdigest() != previous["sha256"]
             or not published.endswith(b"\n")):
@@ -162,8 +169,8 @@ def build_pack():
         if counts[key] != GRAMMAR_PER_LEVEL:
             raise ValueError(f"{key}: expected {GRAMMAR_PER_LEVEL} activities, got {counts[key]}")
     data = output.getvalue()
-    original_manifest = json.loads((ROOT / "manifest-v8.json").read_text(encoding="utf-8"))
-    original_data = (ROOT / original_manifest["file"]).read_bytes()
+    original_manifest = json.loads(archived_file("manifest-v8.json"))
+    original_data = archived_file(original_manifest["file"])
     if (original_manifest["version"] != "v8"
             or original_manifest["bytes"] != len(original_data)
             or original_manifest["sha256"] != hashlib.sha256(original_data).hexdigest()

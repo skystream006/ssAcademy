@@ -6,6 +6,7 @@ import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
+import java.util.zip.ZipFile
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
@@ -21,9 +22,21 @@ import org.robolectric.annotation.Config
 
 internal class ReadingRepositoryPack(manifestFile: String = "reading-activities-import.json") {
     private val root = listOf(File("../datasets/reading"), File("datasets/reading")).first { it.isDirectory }
-    private val manifestBytes = File(root, manifestFile).readBytes()
+    private val archived = !File(root, manifestFile).isFile
+    private fun <T> readArchived(name: String, consume: (InputStream) -> T): T =
+        ZipFile(File(root, "archive.zip")).use { archive ->
+            archive.getInputStream(requireNotNull(archive.getEntry(name)) { "Missing archived pack file: $name" })
+                .use(consume)
+        }
+    private val manifestBytes = if (archived) readArchived(manifestFile) { it.readBytes() }
+        else File(root, manifestFile).readBytes()
     val manifest = readingPackJson.decodeFromString<ReadingPackManifest>(manifestBytes.toString(Charsets.UTF_8))
-    val contentFile = File(root, manifest.file)
+    val contentFile by lazy {
+        if (archived) File.createTempFile("archived-reading-pack-", ".jsonl").apply {
+            deleteOnExit()
+            readArchived(manifest.file) { input -> outputStream().use { input.copyTo(it) } }
+        } else File(root, manifest.file)
+    }
     val bytes by lazy { contentFile.readBytes() }
     val activities by lazy {
         buildList { forEachRecord { _, activity -> add(activity) } }
