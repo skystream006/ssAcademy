@@ -1013,7 +1013,7 @@ class MathAppTest {
     @Test fun quitGameRequiresConfirmationAndDiscardsOnlyTheActiveGameInEitherMode() {
         val model = model()
         model.chooseShowTimer(true)
-        model.chooseTimeLimitMinutes(5)
+        model.chooseTimeLimitSeconds(300)
         compose.setContent { MathAppContent(model) }
         GameMode.entries.forEach { mode ->
             compose.onNodeWithTag("quit-game").assertDoesNotExist()
@@ -1085,19 +1085,21 @@ class MathAppTest {
     @Test fun readyScreenAndCountdownShowTheScaledRewardsLimitButPracticeHasOnlyElapsedTime() {
         val model = model()
         model.chooseShowTimer(true)
-        model.chooseTimeLimitMinutes(1)
         compose.setContent { MathAppContent(model) }
-        listOf(15 to "03:00", 25 to "05:00", 50 to "10:00").forEach { (count, duration) ->
-            compose.runOnIdle {
-                model.openRewardsGame()
-                model.updateRewardsQuestionCount(count.toString())
-                model.selectRewardsGame(Operation.ADDITION)
+        listOf(Triple(60, 15, "03:00"), Triple(60, 25, "05:00"), Triple(60, 50, "10:00"),
+            Triple(30, 15, "01:30"), Triple(30, 25, "02:30"), Triple(30, 50, "05:00"))
+            .forEach { (seconds, count, duration) ->
+                compose.runOnIdle {
+                    model.chooseTimeLimitSeconds(seconds)
+                    model.openRewardsGame()
+                    model.updateRewardsQuestionCount(count.toString())
+                    model.selectRewardsGame(Operation.ADDITION)
+                }
+                compose.onNodeWithText("Time limit: $duration").assertIsDisplayed()
+                compose.onNodeWithTag("start-button").performClick()
+                compose.onNodeWithTag("timer").assertTextEquals("Left: $duration")
+                compose.runOnIdle { model.backToSetup() }
             }
-            compose.onNodeWithText("Time limit: $duration").assertIsDisplayed()
-            compose.onNodeWithTag("start-button").performClick()
-            compose.onNodeWithTag("timer").assertTextEquals("Left: $duration")
-            compose.runOnIdle { model.backToSetup() }
-        }
         compose.runOnIdle {
             model.openPracticeGame()
             model.selectOperation(Operation.ADDITION)
@@ -1113,7 +1115,7 @@ class MathAppTest {
     @Test fun timingOutWithQuitConfirmationOpenDoesNotReopenItInTheNextGame() {
         val model = model()
         model.chooseShowTimer(true)
-        model.chooseTimeLimitMinutes(5)
+        model.chooseTimeLimitSeconds(300)
         model.openRewardsGame()
         model.updateRewardsQuestionCount("10")
         model.selectRewardsGame(Operation.ADDITION)

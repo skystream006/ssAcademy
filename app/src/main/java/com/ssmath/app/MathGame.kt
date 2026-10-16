@@ -97,9 +97,6 @@ fun parseQuestionCount(text: String): Int? {
     return trimmed.toIntOrNull()?.takeIf { it in MIN_QUESTION_COUNT..MAX_QUESTION_COUNT }
 }
 
-internal fun normalizeTimeLimitMinutes(value: Int): Int =
-    value.coerceIn(0, 60).let { if (it < 5) it else it / 5 * 5 }
-
 /** Accepts a non-negative whole-number answer. */
 fun parseAnswer(text: String): Int? {
     val trimmed = text.trim()

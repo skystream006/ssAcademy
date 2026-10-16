@@ -120,7 +120,7 @@ fun SettingsScreen(model: MathViewModel) {
                         modifier = Modifier.semantics { contentDescription = "Show timer" })
                 }
                 if (model.rewardsEnabled && model.showTimer) {
-                    TimeLimitSetting(model.timeLimitMinutes, model::chooseTimeLimitMinutes)
+                    TimeLimitSetting(model.timeLimitSeconds, model::chooseTimeLimitSeconds)
                 }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
@@ -532,21 +532,27 @@ internal fun RemoveRewardsDialog(
 }
 
 @Composable
-private fun TimeLimitSetting(minutes: Int, onChange: (Int) -> Unit) {
+private fun TimeLimitSetting(seconds: Int, onChange: (Int) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
+    fun label(value: Int) = when (value) {
+        0 -> "None"
+        30 -> "30 seconds"
+        60 -> "1 minute"
+        else -> "${value / 60} minutes"
+    }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text("Time limit per 5 questions", style = MaterialTheme.typography.titleSmall)
         Box {
             OutlinedButton(onClick = { expanded = true }, modifier = Modifier.testTag("time-limit")) {
-                Text(if (minutes == 0) "None" else if (minutes == 1) "1 minute" else "$minutes minutes")
+                Text(label(seconds))
                 Icon(Icons.Rounded.ExpandMore, null)
             }
             DropdownMenu(expanded, onDismissRequest = { expanded = false }) {
-                ((0..4) + (5..60 step 5)).forEach { option ->
+                timeLimitOptionsSeconds.forEach { option ->
                     DropdownMenuItem(
-                        text = { Text(if (option == 0) "None" else if (option == 1) "1 minute" else "$option minutes") },
+                        text = { Text(label(option)) },
                         onClick = { onChange(option); expanded = false },
-                        modifier = Modifier.semantics { selected = minutes == option })
+                        modifier = Modifier.semantics { selected = seconds == option })
                 }
             }
         }

@@ -61,7 +61,7 @@ class RewardsModelTest {
         model.openRewardsGame()
         model.updateRewardsQuestionCount(count.toString())
         model.chooseRewardsEnabled(rewards)
-        model.chooseTimeLimitMinutes(minutes)
+        model.chooseTimeLimitSeconds(minutes * 60)
         model.selectRewardsGame(Operation.ADDITION)
         model.start()
     }
@@ -79,55 +79,85 @@ class RewardsModelTest {
     @Test fun rewardsDefaultOnAndSettingsPersistWithValidTimeSteps() {
         val first = model()
         assertTrue(first.rewardsEnabled)
-        assertEquals(0, first.timeLimitMinutes)
+        assertEquals(0, first.timeLimitSeconds)
         assertNull(first.activeTimeLimitMs)
         first.chooseRewardsEnabled(false)
-        first.chooseTimeLimitMinutes(15)
+        first.chooseTimeLimitSeconds(900)
         val second = model()
         assertFalse(second.rewardsEnabled)
-        assertEquals(15, second.timeLimitMinutes)
+        assertEquals(900, second.timeLimitSeconds)
         second.chooseRewardsEnabled(true)
         assertTrue(model().rewardsEnabled)
-        listOf(-5 to 0, 0 to 0, 1 to 1, 2 to 2, 3 to 3, 4 to 4, 5 to 5,
-            7 to 5, 60 to 60, 100 to 60).forEach { (input, expected) ->
-            second.chooseTimeLimitMinutes(input)
-            assertEquals(expected, second.timeLimitMinutes)
-            assertEquals(expected, model().timeLimitMinutes)
+        listOf(Int.MIN_VALUE to 0, -5 to 0, 0 to 0, 29 to 0, 30 to 30, 59 to 30,
+            60 to 60, 90 to 60, 120 to 120, 180 to 180, 240 to 240, 300 to 300,
+            420 to 300, 600 to 600, 900 to 900, 901 to 900, 1_200 to 900,
+            3_600 to 900, Int.MAX_VALUE to 900).forEach { (input, expected) ->
+            second.chooseTimeLimitSeconds(input)
+            assertEquals(expected, second.timeLimitSeconds)
+            assertEquals(expected, model().timeLimitSeconds)
+        }
+    }
+
+    @Test fun legacyMinuteSelectionsKeepSupportedDurationsAndCapLongerLimits() {
+        val settings = application.getSharedPreferences("settings", 0)
+        listOf(Int.MIN_VALUE to 0, 0 to 0, 1 to 60, 2 to 120, 3 to 180, 4 to 240,
+            5 to 300, 7 to 300, 10 to 600, 15 to 900, 16 to 900,
+            20 to 900, 60 to 900, Int.MAX_VALUE to 900)
+            .forEach { (minutes, seconds) ->
+                settings.edit().clear().putInt("time_limit_minutes", minutes).commit()
+                val model = model()
+                assertEquals(seconds, model.timeLimitSeconds)
+                model.chooseTimeLimitSeconds(30)
+                assertEquals(30, model().timeLimitSeconds)
+                model.chooseTimeLimitSeconds(0)
+                assertEquals(0, model().timeLimitSeconds)
+            }
+    }
+
+    @Test fun savedSecondSelectionsAboveFifteenMinutesAreCappedOnLoad() {
+        val settings = application.getSharedPreferences("settings", 0)
+        ((20..60 step 5).map { it * 60 } + listOf(901, Int.MAX_VALUE)).forEach { seconds ->
+            settings.edit().putInt("time_limit_seconds", seconds)
+                .putInt("time_limit_minutes", 1).commit()
+            assertEquals(900, model().timeLimitSeconds)
         }
     }
 
     @Test fun rewardsTimeLimitsScalePerFiveQuestionsIncludingShortAndLargeGames() {
         val model = model()
         model.chooseShowTimer(true)
-        listOf(1, 2, 3, 4, 5, 60).forEach { minutes ->
-            listOf(1 to 12_000L, 5 to 60_000L, 15 to 180_000L, 25 to 300_000L,
-                26 to 312_000L, 50 to 600_000L, 1000 to 12_000_000L).forEach { (count, perMinute) ->
+        listOf(30, 60, 120, 180, 240, 300, 600, 900).forEach { seconds ->
+            listOf(1 to 200L, 5 to 1_000L, 15 to 3_000L, 25 to 5_000L,
+                26 to 5_200L, 50 to 10_000L, 1000 to 200_000L).forEach { (count, perSecond) ->
                 model.openRewardsGame()
                 model.updateRewardsQuestionCount(count.toString())
-                model.chooseTimeLimitMinutes(minutes)
+                model.chooseTimeLimitSeconds(seconds)
                 model.selectRewardsGame(Operation.ADDITION)
-                assertEquals(perMinute * minutes, model.readyTimeLimitMs)
+                assertEquals(perSecond * seconds, model.readyTimeLimitMs)
                 model.updateQuestionCount("100")
                 model.updateRewardsQuestionCount("100")
                 model.start()
-                assertEquals(perMinute * minutes, model.activeTimeLimitMs)
-                now += perMinute * minutes - 1
+                assertEquals(perSecond * seconds, model.activeTimeLimitMs)
+                now += perSecond * seconds - 1
                 assertFalse(model.checkTimeLimit())
                 now++
                 assertTrue(model.checkTimeLimit())
-                assertEquals(perMinute * minutes, model.lastResult!!.durationMs)
+                assertEquals(perSecond * seconds, model.lastResult!!.durationMs)
+                assertTrue(model.lastResult!!.timedOut)
+                assertNull(model.lastResult!!.prizeType)
                 model.done()
             }
         }
     }
 
-    @Test fun noTimeLimitWithoutRewardsTimerOrSelectedMinutes() {
+    @Test fun noTimeLimitWithoutRewardsTimerOrSelectedDuration() {
         val model = model()
-        listOf(Triple(false, true, 1), Triple(true, false, 1), Triple(true, true, 0))
-            .forEach { (rewards, timer, minutes) ->
+        listOf(Triple(false, true, 30), Triple(true, false, 30),
+            Triple(false, true, 60), Triple(true, false, 60), Triple(true, true, 0))
+            .forEach { (rewards, timer, seconds) ->
                 model.chooseRewardsEnabled(rewards)
                 model.chooseShowTimer(timer)
-                model.chooseTimeLimitMinutes(minutes)
+                model.chooseTimeLimitSeconds(seconds)
                 model.openRewardsGame()
                 model.updateRewardsQuestionCount("25")
                 model.selectRewardsGame(Operation.ADDITION)
@@ -428,7 +458,7 @@ class RewardsModelTest {
         start(model, count = 25, minutes = 1)
         assertEquals(300_000L, model.activeTimeLimitMs)
         model.chooseShowTimer(false)
-        model.chooseTimeLimitMinutes(60)
+        model.chooseTimeLimitSeconds(900)
         model.chooseRewardsEnabled(false)
         now += 300_000
         assertTrue(model.checkTimeLimit())

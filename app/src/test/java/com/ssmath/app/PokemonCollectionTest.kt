@@ -361,7 +361,7 @@ class PokemonCollectionTest {
         model.collectPresentedCelebration(Celebration.PIKACHU)
         assertTrue(model.pokemons.isEmpty())
         model.chooseShowTimer(true)
-        model.chooseTimeLimitMinutes(5)
+        model.chooseTimeLimitSeconds(300)
         start(model)
         now += 900_000L
         assertTrue(model.checkTimeLimit())

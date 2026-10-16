@@ -66,8 +66,8 @@ class MathViewModel(
         get() {
             val ready = readyGame ?: return null
             val count = ready.parameters.questionCount ?: return null
-            return if (ready.mode == GameMode.REWARDS && rewardsEnabled && showTimer && timeLimitMinutes > 0)
-                timeLimitMinutes * 60_000L * count / 5 else null
+            return if (ready.mode == GameMode.REWARDS && rewardsEnabled && showTimer && timeLimitSeconds > 0)
+                timeLimitSeconds * 1_000L * count / 5 else null
         }
     var overlay by mutableStateOf<Overlay?>(null)
         private set
@@ -165,7 +165,7 @@ class MathViewModel(
         it.name in settings.getStringSet("disabled_reading_games", emptySet()).orEmpty()
     }.toSet())
         private set
-    var timeLimitMinutes by mutableStateOf(normalizeTimeLimitMinutes(settings.getInt("time_limit_minutes", 0)))
+    var timeLimitSeconds by mutableStateOf(settings.readTimeLimitSeconds())
         private set
     var activeTimeLimitMs by mutableStateOf<Long?>(null)
         private set
@@ -1048,9 +1048,9 @@ class MathViewModel(
         settings.edit().putStringSet("disabled_reading_games", disabledReadingGames.map { it.name }.toSet()).apply()
     }
 
-    fun chooseTimeLimitMinutes(value: Int) {
-        timeLimitMinutes = normalizeTimeLimitMinutes(value)
-        settings.edit().putInt("time_limit_minutes", timeLimitMinutes).apply()
+    fun chooseTimeLimitSeconds(value: Int) {
+        timeLimitSeconds = normalizeTimeLimitSeconds(value)
+        settings.edit().putInt("time_limit_seconds", timeLimitSeconds).apply()
     }
 
     fun chooseShowCorrectAnswers(value: Boolean) {
