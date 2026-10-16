@@ -673,6 +673,8 @@ class ReadingScreenTest {
 
     @Test fun allFiveRetainedGamesAppearWithRecommendedGamesFirst() {
         show(readingFixture().copy(page = ReadingPage.MENU))
+        compose.onNodeWithTag("reading-game-CAPTION").assertDoesNotExist()
+        compose.onNodeWithText("Caption Quest").assertDoesNotExist()
         val expected = listOf("reading-game-MISSING", "reading-game-SEQUENCE", "reading-game-STUDIO",
             "reading-game-SCRAMBLE", "reading-game-DETECTIVE")
         val nodes = compose.onAllNodes(androidx.compose.ui.test.SemanticsMatcher("Game tile") {

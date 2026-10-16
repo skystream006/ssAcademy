@@ -175,6 +175,8 @@ class RewardsSettingsTest {
         compose.onNodeWithText("Reading Settings").performScrollTo().performClick()
         compose.onNodeWithTag("active-reading-games").performScrollTo().performClick()
         compose.onNodeWithTag("active-reading-games-dialog").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Caption Quest").assertDoesNotExist()
+        compose.onNodeWithText("Caption Quest").assertDoesNotExist()
         ReadingGame.entries.forEach { game ->
             compose.onNodeWithContentDescription(game.title).performScrollTo().assertIsOn()
                 .performClick().assertIsOff()
@@ -216,7 +218,7 @@ class RewardsSettingsTest {
 
     @Test fun readingGamePreferencesIgnoreUnknownNamesAndCanRestoreAllDefaults() {
         application.getSharedPreferences("settings", 0).edit()
-            .putStringSet("disabled_reading_games", setOf("MISSING", "UNKNOWN_GAME")).commit()
+            .putStringSet("disabled_reading_games", setOf("MISSING", "CAPTION", "UNKNOWN_GAME")).commit()
         val model = MathViewModel(application)
         assertEquals(setOf(ReadingGame.MISSING), model.disabledReadingGames)
         model.chooseReadingGameEnabled(ReadingGame.MISSING, true)
