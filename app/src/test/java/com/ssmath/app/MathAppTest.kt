@@ -65,6 +65,89 @@ class MathAppTest {
         MathViewModel(application, ProblemGenerator(Random(7)), clock = { now },
             wallClock = { 1_700_000_000_000 }, ioDispatcher = ioDispatcher)
 
+    @Test fun multiplicationMatrixLaunchesFromMathAndShowsAllAnswersInResultsAndHistory() {
+        val model = model(Dispatchers.Unconfined)
+        compose.setContent { MathAppContent(model) }
+        compose.onNodeWithTag("subject-Math").performClick()
+        compose.onNodeWithTag("multiplication-matrix-game").performScrollTo().performClick()
+        compose.onNodeWithText("Multiplication Matrix Rewards Game").assertIsDisplayed()
+        compose.onNodeWithText("Multiplication · numbers 1 to 11 · 121 questions").assertIsDisplayed()
+        compose.onNodeWithTag("start-button").performScrollTo().performClick()
+        compose.onNodeWithTag("question-progress").assertTextEquals("Question 1 of 121")
+        compose.onNodeWithTag("answer-input").performTextInput("0")
+        compose.onNodeWithTag("submit-answer").performClick()
+        compose.onNodeWithTag("question-progress").assertTextEquals("Question 2 of 121")
+        compose.runOnIdle {
+            repeat(120) {
+                model.updateAnswer(model.game!!.problem.answer.toString())
+                model.submitAnswer()
+            }
+            model.dismissCelebration()
+            model.dismissReward()
+        }
+        compose.onNodeWithTag("result-correct").assertTextEquals("You got 120 right!")
+        compose.onNode(hasScrollToIndexAction()).performScrollToIndex(1)
+        compose.onNodeWithTag("matrix-cell-1-1").performScrollTo()
+            .assertContentDescriptionEquals("1 × 1 = 0: Wrong. Correct answer: 1")
+        compose.onNodeWithTag("matrix-cell-1-11").performScrollTo()
+            .assertIsDisplayed().assertContentDescriptionEquals("1 × 11 = 11: Correct")
+        compose.onNode(hasScrollToIndexAction()).performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 10_000f) }
+        compose.onNodeWithTag("matrix-cell-11-11").performScrollTo()
+            .assertIsDisplayed().assertContentDescriptionEquals("11 × 11 = 121: Correct")
+        compose.onNodeWithTag("done-button").performClick()
+        compose.runOnIdle { model.openHistory() }
+        compose.onNodeWithText("Multiplication Matrix · 1 to 11").performClick()
+        compose.onNode(hasScrollToIndexAction()).performScrollToIndex(1)
+        compose.onNodeWithTag("matrix-cell-1-1").performScrollTo()
+            .assertContentDescriptionEquals("1 × 1 = 0: Wrong. Correct answer: 1")
+        compose.onNode(hasScrollToIndexAction()).performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 10_000f) }
+        compose.onNodeWithTag("matrix-cell-11-11").performScrollTo()
+            .assertIsDisplayed().assertContentDescriptionEquals("11 × 11 = 121: Correct")
+    }
+
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun matrixResultsShowWrongAnswersInRedAndUnansweredCellsAtLargeTextSize() {
+        val correctionVisible = mutableStateOf(true)
+        val result = PracticeResult(1, 1, Operation.MULTIPLICATION, 11, 1000,
+            listOf(Attempt(Problem(1, 1, Operation.MULTIPLICATION), 1),
+                Attempt(Problem(1, 2, Operation.MULTIPLICATION), 999999999)),
+            questionCount = 121, timedOut = true, isMultiplicationMatrix = true)
+        compose.setContent {
+            MathTheme(textSizePercent = 200) {
+                ResultsContent(result, "Results", correctionVisible.value) {}
+            }
+        }
+        compose.onNode(hasScrollToIndexAction()).performScrollToIndex(1)
+        compose.onNodeWithTag("matrix-cell-1-1").performScrollTo()
+            .assertContentDescriptionEquals("1 × 1 = 1: Correct")
+        val wrongCell = compose.onNodeWithTag("matrix-cell-1-2").performScrollTo().assertIsDisplayed()
+            .assertContentDescriptionEquals("1 × 2 = 999999999: Wrong. Correct answer: 2")
+        val bounds = wrongCell.fetchSemanticsNode().boundsInRoot
+        compose.runOnIdle {
+            val view = compose.activity.findViewById<View>(android.R.id.content)
+            val image = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+            try {
+                view.draw(Canvas(image))
+                assertTrue((bounds.top.toInt() until bounds.bottom.toInt()).any { y ->
+                    (bounds.left.toInt() until bounds.right.toInt()).any { x ->
+                        val color = Color(image.getPixel(x, y))
+                        kotlin.math.abs(color.red - WrongRed.red) < 0.01f &&
+                            kotlin.math.abs(color.green - WrongRed.green) < 0.01f &&
+                            kotlin.math.abs(color.blue - WrongRed.blue) < 0.01f
+                    }
+                })
+            } finally {
+                image.recycle()
+            }
+        }
+        compose.runOnIdle { correctionVisible.value = false }
+        wrongCell.assertContentDescriptionEquals("1 × 2 = 999999999: Wrong")
+        compose.onNode(hasScrollToIndexAction()).performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 10_000f) }
+        compose.onNodeWithTag("matrix-cell-11-11").performScrollTo()
+            .assertIsDisplayed().assertContentDescriptionEquals("11 × 11: Not answered")
+    }
+
     @Test
     @GraphicsMode(GraphicsMode.Mode.NATIVE)
     fun homeCollectionButtonsShowImagesBeforeLabelsAtEveryTextSize() {

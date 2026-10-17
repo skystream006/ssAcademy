@@ -10,6 +10,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -302,6 +304,10 @@ private fun HomeScreen(model: MathViewModel) {
                     modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("rewards-game")) {
                     Text("Rewards Game", textAlign = TextAlign.Center)
                 }
+                Button(onClick = model::openMultiplicationMatrixGame,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("multiplication-matrix-game")) {
+                    Text("Multiplication Matrix Rewards Game", textAlign = TextAlign.Center)
+                }
             }
         } else {
             SubjectGrid(model::openMathGames, { readingRequested = true }, Modifier.weight(1f))
@@ -586,13 +592,21 @@ private fun ReadyDialog(model: MathViewModel) {
         "first up to ${parameters.first} · second up to ${parameters.second}"
         else "numbers ${parameters.first} to ${parameters.second}"
     DialogCard {
-        Text(if (model.gameMode == GameMode.PRACTICE) "Practice Game" else "Rewards Game",
+        Text(if (model.readyMultiplicationMatrix) "Multiplication Matrix Rewards Game"
+            else if (model.gameMode == GameMode.PRACTICE) "Practice Game" else "Rewards Game",
             style = MaterialTheme.typography.titleMedium)
         Text("Press Start when Ready", style = MaterialTheme.typography.headlineSmall,
             textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
         Text("${operation.label} · $numbers · ${parameters.questionCount} questions",
             style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.fillMaxWidth())
+        if (model.readyMultiplicationMatrix) {
+            Text("Answer each row in order: 1 × 1 to 1 × 11, then 2 × 1 to 2 × 11, up to 11 × 11.")
+            Text("The same Rewards Game rules apply: finish all 121 questions with more than 90% correct " +
+                "before the time limit, if enabled. The game ends at 13 wrong answers.")
+            if (model.rewardsEnabled) Text("Eligible for enabled Tier 2 prize fragments.")
+            else Text("Prize fragments are unavailable while Math Rewards System is OFF.")
+        }
         model.readyTimeLimitMs?.let { limit ->
             Text("Time limit: ${formatDuration(limit)}", modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Center)
@@ -769,10 +783,13 @@ internal fun ResultsContent(result: PracticeResult, title: String?, showCorrectA
                     title?.let { Text(it, style = MaterialTheme.typography.headlineMedium) }
                     Text("You got ${result.correct} right!", style = MaterialTheme.typography.titleLarge,
                         color = CorrectGreen, modifier = Modifier.testTag("result-correct"))
-                    Text("${result.operation.label} · ${result.numberDescription}",
+                    Text("${result.gameLabel} · ${result.numberDescription}",
                         style = MaterialTheme.typography.bodyMedium)
                     Text("Wrong: ${result.wrong} · Time: ${formatDuration(result.durationMs)}",
                         style = MaterialTheme.typography.bodyMedium)
+                    if (result.isMultiplicationMatrix) {
+                        Text("Answered: ${result.attempts.size} of ${result.questionCount} · ${result.percentCorrectText}% correct")
+                    }
                     if (result.timedOut) Text("Time's up!", color = WrongRed)
                     result.pokemonReward?.let {
                         Text("My Pokémons: ${it.collectionLabel}", style = MaterialTheme.typography.titleMedium)
@@ -792,9 +809,77 @@ internal fun ResultsContent(result: PracticeResult, title: String?, showCorrectA
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            itemsIndexed(result.attempts) { index, attempt -> AttemptRow(index + 1, attempt, showCorrectAnswers, verticalEquations) }
+            if (result.isMultiplicationMatrix) {
+                item { MultiplicationMatrixAnswers(result, showCorrectAnswers) }
+            } else {
+                itemsIndexed(result.attempts) { index, attempt -> AttemptRow(index + 1, attempt, showCorrectAnswers, verticalEquations) }
+            }
         }
         Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) { actions() }
+    }
+}
+
+@Composable
+internal fun MultiplicationMatrixAnswers(result: PracticeResult, showCorrectAnswers: Boolean) {
+    val attempts = remember(result.attempts) { result.attempts.associateBy { it.problem.left to it.problem.right } }
+    val measurer = rememberTextMeasurer()
+    val answerStyle = MaterialTheme.typography.bodyLarge
+    val correctionStyle = MaterialTheme.typography.bodySmall
+    val answerWidth = (result.attempts.map { it.given.toString() } + "121").maxOf {
+        measurer.measure(it, answerStyle, softWrap = false).size.width
+    }
+    val correctionSize = measurer.measure("= 121", correctionStyle, softWrap = false).size
+    val answerHeight = measurer.measure("121", answerStyle, softWrap = false).size.height
+    val density = LocalDensity.current
+    val cellWidth = maxOf(48.dp, with(density) { maxOf(answerWidth, correctionSize.width).toDp() } + 16.dp)
+    val cellHeight = maxOf(48.dp, with(density) { (answerHeight + correctionSize.height).toDp() } + 16.dp)
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Answer matrix", style = MaterialTheme.typography.titleLarge)
+        Text("Your answers: green = correct, red = wrong, — = not answered. Scroll to see the whole matrix.")
+        Column(Modifier.horizontalScroll(rememberScrollState()).testTag("multiplication-matrix")) {
+            for (row in 0..MultiplicationMatrix.SIZE) {
+                Row {
+                    for (column in 0..MultiplicationMatrix.SIZE) {
+                        val header = row == 0 || column == 0
+                        val attempt = attempts[row to column]
+                        val color = when {
+                            header -> MaterialTheme.colorScheme.onSecondaryContainer
+                            attempt == null -> MaterialTheme.colorScheme.onSurfaceVariant
+                            attempt.correct -> CorrectGreen
+                            else -> WrongRed
+                        }
+                        val background = when {
+                            header -> MaterialTheme.colorScheme.secondaryContainer
+                            attempt == null -> MaterialTheme.colorScheme.surfaceContainer
+                            else -> color.copy(alpha = 0.12f)
+                        }
+                        val answer = when {
+                            row == 0 && column == 0 -> "×"
+                            row == 0 -> column.toString()
+                            column == 0 -> row.toString()
+                            else -> attempt?.given?.toString() ?: "—"
+                        }
+                        val correction = attempt?.takeIf { !it.correct && showCorrectAnswers }?.problem?.answer
+                        val description = when {
+                            row == 0 && column == 0 -> "Multiplication"
+                            row == 0 -> "Column $column"
+                            column == 0 -> "Row $row"
+                            attempt == null -> "$row × $column: Not answered"
+                            else -> "$row × $column = $answer: ${if (attempt.correct) "Correct" else "Wrong"}" +
+                                (correction?.let { ". Correct answer: $it" } ?: "")
+                        }
+                        Column(Modifier.size(cellWidth, cellHeight).background(background)
+                            .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
+                            .testTag("matrix-cell-$row-$column").clearAndSetSemantics { contentDescription = description },
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center) {
+                            Text(answer, style = answerStyle, color = color, maxLines = 1)
+                            if (!header) Text(correction?.let { "= $it" } ?: "", style = correctionStyle, color = color)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

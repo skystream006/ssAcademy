@@ -686,7 +686,7 @@ fun HistoryScreen(model: MathViewModel) {
                 LazyColumn(Modifier.fillMaxSize().testTag("history-list"), contentPadding = PaddingValues(bottom = 16.dp)) {
                     items(model.history, key = { it.id }) { result ->
                         ListItem(
-                            headlineContent = { Text("${result.operation.label} · ${result.numberDescription.removePrefix("numbers ")}") },
+                            headlineContent = { Text("${result.gameLabel} · ${result.numberDescription.removePrefix("numbers ")}") },
                             supportingContent = {
                                 Column {
                                     Text("${formatFinishedAt(result.finishedAt)}\n${result.correct} right · ${result.wrong} wrong · ${formatDuration(result.durationMs)}")

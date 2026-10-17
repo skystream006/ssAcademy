@@ -135,6 +135,30 @@ class GameModesTest {
         assertNull(model.celebration)
     }
 
+    @Test fun multiplicationMatrixRejectsACompletedGameBelowTheAccuracyThreshold() {
+        val model = model()
+        model.openMultiplicationMatrixGame()
+        model.start()
+        repeat(120) { answer(model, correct = it >= 12) }
+        assertEquals(Screen.PLAYING, model.screen)
+        answer(model, correct = false)
+        assertEquals(121, model.lastResult!!.attempts.size)
+        assertEquals(108, model.lastResult!!.correct)
+        assertEquals("89.26", model.lastResult!!.percentCorrectText)
+        assertNull(model.lastResult!!.prizeType)
+    }
+
+    @Test fun multiplicationMatrixDoesNotFallBackToTierOneWhenTierTwoIsDisabled() {
+        settings.edit().putStringSet("disabled_rewards",
+            RewardType.entries.filter { it.tier == RewardTier.TIER_2 }.map { it.name }.toSet()).commit()
+        val model = model()
+        model.openMultiplicationMatrixGame()
+        model.start()
+        repeat(121) { answer(model) }
+        assertEquals(121, model.lastResult!!.correct)
+        assertNull(model.lastResult!!.prizeType)
+    }
+
     @Test fun multiplicationMatrixScalesAndSnapshotsTimerAndRejectsAnswersAtTheDeadline() {
         settings.edit().putBoolean("show_timer", true).putInt("time_limit_seconds", 30).commit()
         val model = model()

@@ -10,7 +10,7 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    your collections; Back returns you to the home screen without losing your setup choices.
    Below the collections, four illustrated square buttons form a 2-by-2 subject grid:
    **Math**, **Reading**, **Science**, and **Advanced**. Tap **Math** to choose
-   **Practice Game** or **Rewards Game**; the filled **Back to subjects** button or Android Back returns
+   **Practice Game**, **Rewards Game**, or **Multiplication Matrix Rewards Game**; the filled **Back to subjects** button or Android Back returns
    to the subject grid. Tap **Reading** for the offline reading activities described below.
    If no activity pack has been imported, a dialog explains how to import one and offers
    **Open Settings**; **Cancel** leaves you on Home without changing saved progress.
@@ -38,8 +38,15 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    do not change your Practice Game choices. Change the number limits in
    **Settings > Math Settings > Default Math Reward Game Settings**.
    **Cancel** or Android Back closes either game dialog.
+   **Multiplication Matrix Rewards Game** has a fixed **121 questions**, covering every pair
+   from **1 × 1 through 11 × 11** in row order: 1 × 1, 1 × 2, …, 1 × 11, then
+   2 × 1, and so on. It does not change your other games' saved number limits or question counts.
+   The same rewards rules apply: finish all questions with **more than 90% correct** for an
+   enabled **Tier 2** prize fragment, with Math Rewards System enabled at start and finish.
+   The configured time limit per 5 questions scales to all 121 questions, and the game stops
+   at **13 wrong answers** or when time runs out.
 2. **Press Start when Ready** – press **Start** to begin. The timer starts now.
-3. **Play** – in either mode, addition, subtraction and multiplication use two random numbers
+3. **Play** – except for the ordered matrix game, addition, subtraction and multiplication use two random numbers
    between the minimum and maximum, inclusive. Subtraction never goes below zero.
    Division always has a whole-number answer, using a first number from 1 to its first maximum
    and a second number from 1 to its second maximum, choosing only exactly divisible pairs.
@@ -58,6 +65,11 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    got right, plus every answered problem with a green check (correct) or a red X
    (wrong, with the correct answer if **Show correct answers** is enabled).
    Results are saved with the date and time.
+   Matrix games show an **11 × 11 answer matrix** in Results and Practice History, with
+   row and column labels from 1 to 11. Your submitted answers are green when correct and
+   **red when wrong**; wrong cells also show the correct product when **Show correct answers**
+   is enabled. Unanswered cells are marked **—** if the game ends early. Scroll horizontally
+   and vertically to review the entire matrix.
    In Rewards Game, if all the chosen questions were answered, even with mistakes, one of 162 randomly chosen
    congratulations animations plays: dolphins, whales, or anchovies jumping out
    of the water, a balloon-and-confetti party, a candy shower, Pikachu running toward
