@@ -36,8 +36,10 @@ data class PracticeResult(
     val prize: PrizeAward? = null,
     val maximumSecond: Int? = null,
     val pokemonReward: Celebration? = null,
-    val gameMode: GameMode = GameMode.REWARDS
+    val gameMode: GameMode = GameMode.REWARDS,
+    val isMultiplicationMatrix: Boolean = false
 ) {
+    val gameLabel: String get() = if (isMultiplicationMatrix) "Multiplication Matrix" else operation.label
     val numberDescription: String get() =
         if (operation == Operation.DIVISION && maximumSecond != null) "first up to $maximum · second up to $maximumSecond"
         else "numbers $minimum to $maximum"

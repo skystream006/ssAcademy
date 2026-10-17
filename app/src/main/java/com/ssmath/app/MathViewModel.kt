@@ -58,10 +58,12 @@ class MathViewModel(
         private set
     var gameMode by mutableStateOf(GameMode.PRACTICE)
         private set
-    private data class ReadyGame(val mode: GameMode, val operation: Operation, val parameters: GameParameters)
+    private data class ReadyGame(val mode: GameMode, val operation: Operation, val parameters: GameParameters,
+        val isMultiplicationMatrix: Boolean = false)
     private var readyGame by mutableStateOf<ReadyGame?>(null)
     val readyOperation: Operation? get() = readyGame?.operation
     val readyParameters: GameParameters? get() = readyGame?.parameters
+    val readyMultiplicationMatrix: Boolean get() = readyGame?.isMultiplicationMatrix == true
     val readyTimeLimitMs: Long?
         get() {
             val ready = readyGame ?: return null
@@ -281,6 +283,13 @@ class MathViewModel(
         setupDialog = SetupDialog.REWARDS
     }
 
+    fun openMultiplicationMatrixGame() {
+        if (screen != Screen.SETUP || overlay != null || setupDialog != null) return
+        ready(GameMode.REWARDS, Operation.MULTIPLICATION,
+            GameParameters("1", MultiplicationMatrix.SIZE.toString(), MultiplicationMatrix.QUESTION_COUNT.toString()),
+            isMultiplicationMatrix = true)
+    }
+
     fun dismissSetupDialog() { setupDialog = null }
 
     fun openRewardsSetup() {
@@ -318,10 +327,11 @@ class MathViewModel(
         ready(GameMode.REWARDS, operation, GameParameters(parameters.firstText, parameters.secondText, count.toString()))
     }
 
-    private fun ready(mode: GameMode, operation: Operation, parameters: GameParameters) {
+    private fun ready(mode: GameMode, operation: Operation, parameters: GameParameters,
+        isMultiplicationMatrix: Boolean = false) {
         mathGamesOpen = true
         gameMode = mode
-        readyGame = ReadyGame(mode, operation, parameters)
+        readyGame = ReadyGame(mode, operation, parameters, isMultiplicationMatrix)
         setupDialog = null
         screen = Screen.READY
     }
@@ -363,7 +373,7 @@ class MathViewModel(
             cancelRewardsSetup()
             return
         }
-        val returnDialog = if (screen == Screen.READY)
+        val returnDialog = if (screen == Screen.READY && !readyMultiplicationMatrix)
             if (gameMode == GameMode.PRACTICE) SetupDialog.PRACTICE else SetupDialog.REWARDS
         else null
         if (screen == Screen.PLAYING) DebugLog.event(DebugEvent.GAME_ABANDONED)
@@ -393,7 +403,8 @@ class MathViewModel(
         val maximumSecond = if (division) parameters.second ?: return else maximum
         val questionCount = parameters.questionCount ?: return
         gameMode = ready.mode
-        game = GameState.start(operation, maximum, generator, questionCount, minimum, maximumSecond)
+        game = if (ready.isMultiplicationMatrix) GameState.startMultiplicationMatrix()
+            else GameState.start(operation, maximum, generator, questionCount, minimum, maximumSecond)
         progressIcon = ProgressIcon.entries.random(progressIconRandom)
         answerText = ""
         celebration = null
@@ -436,6 +447,7 @@ class MathViewModel(
         val result = PracticeResult(latestResultId, finishedAt, state.operation, state.maximum, duration, state.attempts,
             minimum = state.minimum, maximumSecond = state.maximumSecond.takeIf { state.operation == Operation.DIVISION },
             questionCount = state.questionCount, timedOut = expired, gameMode = gameMode,
+            isMultiplicationMatrix = state.isMultiplicationMatrix,
             prizeType = selectPrize(state.questionCount, state.correct, state.attempts.size,
                 rewardsEnabledAtStart, rewardsEnabled, expired, rewardRandom, disabledRewards))
         val pending = PendingResult(result)

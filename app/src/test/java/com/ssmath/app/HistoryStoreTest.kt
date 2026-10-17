@@ -49,6 +49,22 @@ class HistoryStoreTest {
         assertEquals(1, result.minimum)
         assertEquals(10, result.maximum)
         assertEquals(1, result.correct)
+        assertFalse(result.isMultiplicationMatrix)
+    }
+
+    @Test fun matrixIdentityAndAnswersRoundTripWithoutReclassifyingOrdinaryMultiplication() {
+        val attempts = List(121) { index ->
+            val problem = MultiplicationMatrix.problemAt(index)
+            Attempt(problem, if (index == 11) 0 else problem.answer)
+        }
+        val matrix = PracticeResult(1, 1, Operation.MULTIPLICATION, 11, 1000, attempts,
+            isMultiplicationMatrix = true)
+        val ordinary = matrix.copy(id = 2, finishedAt = 2, isMultiplicationMatrix = false)
+        store.add(matrix)
+        store.add(ordinary)
+        assertEquals(listOf(ordinary, matrix), HistoryStore(file).load())
+        assertEquals("Multiplication Matrix", matrix.gameLabel)
+        assertEquals("Multiplication", ordinary.gameLabel)
     }
 
     @Test fun bothGameModesRoundTripWithoutChangingResultMetadata() {

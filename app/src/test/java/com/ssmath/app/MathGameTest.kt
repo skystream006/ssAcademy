@@ -7,6 +7,33 @@ import org.junit.Test
 class MathGameTest {
     private val generator = ProblemGenerator(Random(42))
 
+    @Test fun multiplicationMatrixVisitsEveryPairInRowOrderExactlyOnce() {
+        var game = GameState.startMultiplicationMatrix()
+        for (left in 1..11) {
+            for (right in 1..11) {
+                assertFalse(game.finished)
+                assertTrue(game.isMultiplicationMatrix)
+                assertEquals(121, game.questionCount)
+                assertEquals(Problem(left, right, Operation.MULTIPLICATION), game.problem)
+                game = game.answer(left * right, generator)
+            }
+        }
+        assertTrue(game.perfect)
+        assertEquals(121, game.attempts.map { it.problem }.toSet().size)
+        assertThrows(IllegalStateException::class.java) { game.answer(121, generator) }
+    }
+
+    @Test fun multiplicationMatrixUsesTheExistingWrongAnswerLimit() {
+        var game = GameState.startMultiplicationMatrix()
+        assertEquals(13, game.maxWrongAnswers)
+        repeat(12) { game = game.answer(0, generator) }
+        assertFalse(game.finished)
+        assertEquals(Problem(2, 2, Operation.MULTIPLICATION), game.problem)
+        game = game.answer(0, generator)
+        assertTrue(game.finished)
+        assertEquals(13, game.wrong)
+    }
+
     @Test fun everyOperationKeepsBothNumbersWithinTheMaximum() {
         listOf(1, 2, 7, 12, 100).forEach { maximum ->
             Operation.entries.forEach { operation ->
