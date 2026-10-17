@@ -66,6 +66,136 @@ class GameModesTest {
         shadowOf(Looper.getMainLooper()).idle()
     }
 
+    @Test fun multiplicationMatrixHasFixedSettingsAndReturnsToMathWithoutChangingOtherGames() {
+        val model = model()
+        val defaults = model.rewardsDefaults
+        model.openSettings()
+        model.openMultiplicationMatrixGame()
+        assertEquals(Screen.SETUP, model.screen)
+        model.closeOverlay()
+        model.openRewardsGame()
+        model.openMultiplicationMatrixGame()
+        assertEquals(SetupDialog.REWARDS, model.setupDialog)
+        model.dismissSetupDialog()
+        model.openMultiplicationMatrixGame()
+        assertEquals(GameMode.REWARDS, model.gameMode)
+        assertTrue(model.readyMultiplicationMatrix)
+        assertEquals(GameParameters("1", "11", "121"), model.readyParameters)
+        model.backToSetup()
+        assertTrue(model.mathGamesOpen)
+        assertNull(model.setupDialog)
+        assertFalse(model.readyMultiplicationMatrix)
+        model.openMultiplicationMatrixGame()
+        model.start()
+        answer(model)
+        model.openMultiplicationMatrixGame()
+        assertEquals(1, model.game!!.attempts.size)
+        model.backToSetup()
+        assertTrue(model.history.isEmpty())
+        assertEquals(defaults, model.rewardsDefaults)
+        assertEquals("10", model.questionCountText)
+        readyRewards(model, count = 25, operation = Operation.MULTIPLICATION)
+        assertFalse(model.readyMultiplicationMatrix)
+        model.start()
+        assertFalse(model.game!!.isMultiplicationMatrix)
+    }
+
+    @Test fun multiplicationMatrixRewards109Of121CorrectAndPersistsItsIdentity() {
+        val model = model()
+        model.openMultiplicationMatrixGame()
+        model.start()
+        repeat(121) { answer(model, correct = it >= 12) }
+        val result = model.lastResult!!
+        assertEquals(Screen.RESULTS, model.screen)
+        assertTrue(result.isMultiplicationMatrix)
+        assertEquals(GameMode.REWARDS, result.gameMode)
+        assertEquals(109, result.correct)
+        assertEquals("90.08", result.percentCorrectText)
+        assertEquals(RewardTier.TIER_2, result.prizeType!!.tier)
+        model.dismissCelebration()
+        model.claimReward()
+        shadowOf(Looper.getMainLooper()).idle()
+        assertNotNull(model.lastResult!!.prize)
+        val restored = model()
+        assertEquals(model.lastResult, restored.history.single())
+        assertTrue(restored.history.single().isMultiplicationMatrix)
+        assertEquals(model.rewardBalances, restored.rewardBalances)
+    }
+
+    @Test fun multiplicationMatrixStopsAt13WrongWithoutRewards() {
+        val model = model()
+        model.openMultiplicationMatrixGame()
+        model.start()
+        repeat(13) { answer(model, correct = false) }
+        assertEquals(Screen.RESULTS, model.screen)
+        assertEquals(13, model.lastResult!!.attempts.size)
+        assertEquals(121, model.lastResult!!.questionCount)
+        assertTrue(model.lastResult!!.isMultiplicationMatrix)
+        assertNull(model.lastResult!!.prizeType)
+        assertNull(model.celebration)
+    }
+
+    @Test fun multiplicationMatrixRejectsACompletedGameBelowTheAccuracyThreshold() {
+        val model = model()
+        model.openMultiplicationMatrixGame()
+        model.start()
+        repeat(120) { answer(model, correct = it >= 12) }
+        assertEquals(Screen.PLAYING, model.screen)
+        answer(model, correct = false)
+        assertEquals(121, model.lastResult!!.attempts.size)
+        assertEquals(108, model.lastResult!!.correct)
+        assertEquals("89.26", model.lastResult!!.percentCorrectText)
+        assertNull(model.lastResult!!.prizeType)
+    }
+
+    @Test fun multiplicationMatrixDoesNotFallBackToTierOneWhenTierTwoIsDisabled() {
+        settings.edit().putStringSet("disabled_rewards",
+            RewardType.entries.filter { it.tier == RewardTier.TIER_2 }.map { it.name }.toSet()).commit()
+        val model = model()
+        model.openMultiplicationMatrixGame()
+        model.start()
+        repeat(121) { answer(model) }
+        assertEquals(121, model.lastResult!!.correct)
+        assertNull(model.lastResult!!.prizeType)
+    }
+
+    @Test fun multiplicationMatrixScalesAndSnapshotsTimerAndRejectsAnswersAtTheDeadline() {
+        settings.edit().putBoolean("show_timer", true).putInt("time_limit_seconds", 30).commit()
+        val model = model()
+        model.openMultiplicationMatrixGame()
+        assertEquals(726_000L, model.readyTimeLimitMs)
+        model.start()
+        model.openSettings()
+        now += 60_000
+        model.chooseTimeLimitSeconds(60)
+        assertEquals(726_000L, model.activeTimeLimitMs)
+        model.closeOverlay()
+        now += 725_999
+        answer(model)
+        assertEquals(Screen.PLAYING, model.screen)
+        now++
+        answer(model)
+        assertEquals(Screen.RESULTS, model.screen)
+        assertTrue(model.lastResult!!.timedOut)
+        assertEquals(1, model.lastResult!!.attempts.size)
+        assertEquals(726_000L, model.lastResult!!.durationMs)
+        assertNull(model.lastResult!!.prizeType)
+        assertNull(model.celebration)
+    }
+
+    @Test fun multiplicationMatrixRespectsDisabledRewardsAndTimer() {
+        settings.edit().putBoolean("show_timer", true).putInt("time_limit_seconds", 30)
+            .putBoolean("rewards_enabled", false).commit()
+        val model = model()
+        model.openMultiplicationMatrixGame()
+        assertNull(model.readyTimeLimitMs)
+        model.start()
+        assertNull(model.activeTimeLimitMs)
+        repeat(121) { answer(model) }
+        assertNull(model.lastResult!!.prizeType)
+        assertNotNull(model.celebration)
+    }
+
     @Test fun bothModesKeepTheSameIconForEveryJumpAndSelectOnlyWhenStartingANewGame() {
         var starts = 0
         val random = object : Random() {

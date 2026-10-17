@@ -83,6 +83,16 @@ data class Attempt(val problem: Problem, val given: Int) {
     val correct: Boolean get() = given == problem.answer
 }
 
+object MultiplicationMatrix {
+    const val SIZE = 11
+    const val QUESTION_COUNT = SIZE * SIZE
+
+    fun problemAt(index: Int): Problem {
+        require(index in 0 until QUESTION_COUNT)
+        return Problem(index / SIZE + 1, index % SIZE + 1, Operation.MULTIPLICATION)
+    }
+}
+
 /** Accepts whole numbers from [MIN_MAXIMUM] to [MAX_MAXIMUM]; anything else is invalid. */
 fun parseMaximum(text: String): Int? {
     val trimmed = text.trim()
@@ -154,7 +164,8 @@ data class GameState(
     val attempts: List<Attempt> = emptyList(),
     val questionCount: Int = DEFAULT_QUESTION_COUNT,
     val minimum: Int = MIN_MAXIMUM,
-    val maximumSecond: Int = maximum
+    val maximumSecond: Int = maximum,
+    val isMultiplicationMatrix: Boolean = false
 ) {
     init {
         require(minimum in MIN_MAXIMUM..maximum) { "Minimum must be between $MIN_MAXIMUM and the maximum." }
@@ -162,6 +173,9 @@ data class GameState(
         require(questionCount in MIN_QUESTION_COUNT..MAX_QUESTION_COUNT) {
             "Question count must be between $MIN_QUESTION_COUNT and $MAX_QUESTION_COUNT."
         }
+        require(!isMultiplicationMatrix || (operation == Operation.MULTIPLICATION &&
+            minimum == 1 && maximum == MultiplicationMatrix.SIZE && maximumSecond == MultiplicationMatrix.SIZE &&
+            questionCount == MultiplicationMatrix.QUESTION_COUNT))
     }
 
     val correct: Int get() = attempts.count { it.correct }
@@ -174,10 +188,16 @@ data class GameState(
     fun answer(value: Int, generator: ProblemGenerator): GameState {
         check(!finished) { "The game is over." }
         val next = copy(attempts = attempts + Attempt(problem, value))
-        return if (next.finished) next else next.copy(problem = generator.next(operation, maximum, problem, minimum, maximumSecond))
+        return if (next.finished) next else next.copy(problem =
+            if (isMultiplicationMatrix) MultiplicationMatrix.problemAt(next.attempts.size)
+            else generator.next(operation, maximum, problem, minimum, maximumSecond))
     }
 
     companion object {
+        fun startMultiplicationMatrix() = GameState(
+            Operation.MULTIPLICATION, MultiplicationMatrix.SIZE, MultiplicationMatrix.problemAt(0),
+            questionCount = MultiplicationMatrix.QUESTION_COUNT, isMultiplicationMatrix = true)
+
         fun start(operation: Operation, maximum: Int, generator: ProblemGenerator,
             questionCount: Int = DEFAULT_QUESTION_COUNT, minimum: Int = MIN_MAXIMUM, maximumSecond: Int = maximum) =
             GameState(operation, maximum, generator.next(operation, maximum, minimum = minimum, maximumSecond = maximumSecond),
