@@ -402,7 +402,8 @@ class RewardsSettingsTest {
         compose.setContent { MathTheme { SettingsScreen(model) } }
         compose.openGameSettings()
         compose.onNodeWithText("Time limit per 5 questions").performScrollTo().assertIsDisplayed()
-        listOf(30 to "30 seconds", 60 to "1 minute", 120 to "2 minutes",
+        listOf(15 to "15 seconds", 30 to "30 seconds", 45 to "45 seconds",
+            60 to "1 minute", 120 to "2 minutes",
             180 to "3 minutes", 240 to "4 minutes").forEach { (seconds, label) ->
             compose.onNodeWithTag("time-limit").performScrollTo().performClick()
             compose.onNodeWithText(label).performScrollTo().performClick()
