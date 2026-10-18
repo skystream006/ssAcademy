@@ -15,7 +15,7 @@ internal fun ComposeContentTestRule.openAdminSettings() {
     if (onAllNodesWithTag("admin-pin-confirm").fetchSemanticsNodes().isNotEmpty()) {
         onNodeWithTag("admin-pin-confirm").performScrollTo().performTextInput("4826")
     }
-    onNodeWithTag("admin-pin-submit").performScrollTo().performClick()
+    onNodeWithTag("admin-pin-submit").performClick()
     waitUntil(10_000) {
         onAllNodesWithTag("admin-dialog").fetchSemanticsNodes().isNotEmpty()
     }
