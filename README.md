@@ -29,8 +29,9 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    gives only **Other** animations. Once all five Other scenes have been collected,
    practice can repeat them.
    **Rewards Game** asks **How many questions would you like?** each time you open
-   its dialog. Select **15** (Poké Ball), **25** (blue gift box), or **50**
-   (royal purple gift box) questions, review the obtainable reward criteria,
+   its dialog. Select **15** (Poké Ball), the saved Admin **Tier 1 minimum**
+   (blue gift box, default **25**), or **Tier 2 minimum**
+   (royal purple gift box, default **50**) questions, review the obtainable reward criteria,
    then choose a math type to use its saved number limits. The list explains
    Other animations, Pokémon eligibility, and both prize tiers with their enabled
    reward types; unavailable prizes are indicated when rewards are disabled.
@@ -320,8 +321,9 @@ restarting or updating the activity library, using the activity revision assigne
 Older single-activity results show their latest saved response, not every earlier retry.
 Use **Settings → Admin Menu → Game Settings → Reading Settings →
 Set Reading Level** to choose a level, and **Reading Progress** to view the private dashboard.
-Select **15**, **25**, or **50** under **How many questions would you like?**, using
-the same Poké Ball, blue gift, and purple gift buttons as Math. Then tap a game to
+Under **How many questions would you like?**, the Poké Ball selects **15** questions,
+while the blue and purple gift buttons select the saved Admin **Tier 1** and **Tier 2**
+minimums (defaults **25** and **50**), just like Math. Then tap a game to
 reserve that many activities at your selected reading level.
 Tapping a game before choosing a count shows a reminder toast.
 Tap **Submit Answer** to save your response and move straight to the next question;

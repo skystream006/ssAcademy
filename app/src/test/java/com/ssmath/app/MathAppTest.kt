@@ -638,6 +638,48 @@ class MathAppTest {
         compose.onNodeWithTag("question-count-input").performScrollTo().assertTextContains("37")
     }
 
+    @Test fun giftChoicesUseSavedMinimumsAndRefreshWhenAdminSavesAgain() {
+        model().chooseRewardThresholds(20, 40)
+        val model = model()
+        compose.setContent { MathAppContent(model) }
+        compose.onNodeWithTag("subject-Math").performClick()
+        compose.onNodeWithTag("rewards-game").performClick()
+        val images = listOf("Poké Ball", "Blue gift box", "Royal purple gift box")
+        for (thresholds in listOf(RewardThresholds(20, 40), RewardThresholds(1, 1000),
+            RewardThresholds(15, 30), RewardThresholds(10, 15))) {
+            compose.runOnIdle { model.chooseRewardThresholds(thresholds.tier1Minimum, thresholds.tier2Minimum) }
+            compose.onNodeWithTag("rewards-operation-ADDITION").performScrollTo().assertIsNotEnabled()
+            val counts = listOf(15, thresholds.tier1Minimum, thresholds.tier2Minimum)
+            images.forEachIndexed { index, image ->
+                compose.onNodeWithContentDescription(image).performScrollTo()
+                    .assertTextEquals(counts[index].toString()).performClick().assertIsSelected()
+                images.filterNot { it == image }.forEach {
+                    compose.onNodeWithContentDescription(it).assertIsNotSelected()
+                }
+                compose.onNodeWithTag("rewards-operation-ADDITION").performScrollTo().performClick()
+                compose.onNodeWithTag("start-button").performScrollTo().performClick()
+                assertEquals(counts[index], model.game?.questionCount)
+                compose.runOnIdle { model.backToSetup() }
+                compose.onNodeWithTag("rewards-game").performClick()
+            }
+            assertEquals(thresholds, model().rewardThresholds)
+        }
+    }
+
+    @Test fun disabledGiftChoicesDoNotSelectOrChangeCounts() {
+        var count: Int? = null
+        compose.setContent {
+            MathTheme {
+                RewardsQuestionCountChoices(null, { count = it }, enabled = false,
+                    thresholds = RewardThresholds(1, 1000))
+            }
+        }
+        listOf("Poké Ball", "Blue gift box", "Royal purple gift box").forEach {
+            compose.onNodeWithContentDescription(it).assertIsNotEnabled().performClick().assertIsNotSelected()
+        }
+        assertNull(count)
+    }
+
     @Test fun configuredRewardThresholdsAndMatrixTierAppearBeforePlay() {
         val model = model()
         model.chooseRewardThresholds(15, 25)

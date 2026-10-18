@@ -1104,6 +1104,7 @@ class MathViewModel(
 
     fun chooseRewardThresholds(tier1Minimum: Int, tier2Minimum: Int) {
         if (tier1Minimum !in 1..1000 || tier2Minimum !in 1..1000 || tier1Minimum >= tier2Minimum) return
+        if (rewardThresholds != RewardThresholds(tier1Minimum, tier2Minimum)) rewardsQuestionCountText = ""
         rewardThresholds = RewardThresholds(tier1Minimum, tier2Minimum)
         settings.edit().putInt("reward_tier_1_minimum", tier1Minimum)
             .putInt("reward_tier_2_minimum", tier2Minimum).apply()

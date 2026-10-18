@@ -16,6 +16,24 @@ internal fun readingSessionFixture(
 )
 
 class ReadingSessionTest {
+    @Test fun configuredSessionCountsIncludeBoundariesAndCompleteNormally() {
+        for (count in listOf(1, 14, 16, 20, 40, 1000)) {
+            val data = readingSessionFixture(count = count)
+            assertEquals(count, data.activeSession?.questionCount)
+            assertEquals(count, data.attempts.size)
+            ReadingEngine.validate(data)
+        }
+        for (count in listOf(1, 20, 40)) {
+            var data = readingSessionFixture(count = count)
+            repeat(count) {
+                data = ReadingEngine.nextSessionActivity(readingSolve(data))
+            }
+            assertEquals(count, data.sessionCorrect(requireNotNull(data.activeSession)))
+            assertNotNull(data.activeSession?.finishedAt)
+            ReadingEngine.validate(data)
+        }
+    }
+
     @Test fun finishAndWrongFinalSubmitStoreNewThresholdsWithoutReinterpretingCompletedSessions() {
         val thresholds = RewardThresholds(15, 25)
         for (count in listOf(15, 25)) for (wrongFinalAnswer in listOf(false, true)) {
@@ -275,7 +293,7 @@ class ReadingSessionTest {
         val session = requireNotNull(data.activeSession)
         val invalid = listOf(
             data.copy(sessions = listOf(session, session)),
-            data.copy(sessions = listOf(session.copy(attemptIds = session.attemptIds.dropLast(1)))),
+            data.copy(sessions = listOf(session.copy(attemptIds = emptyList()))),
             data.copy(sessions = listOf(session.copy(attemptIds = List(15) { session.attemptIds.first() }))),
             data.copy(sessions = listOf(session.copy(attemptIds = session.attemptIds.dropLast(1) + "missing"))),
             data.copy(sessions = listOf(session.copy(ownerId = "reader-b"))),
@@ -286,7 +304,7 @@ class ReadingSessionTest {
             data.copy(sessions = listOf(session.copy(elapsedMs = -1)))
         )
         invalid.forEach { assertThrows(IllegalArgumentException::class.java) { ReadingEngine.validate(it) } }
-        for (count in listOf(-1, 0, 1, 14, 16, 1000)) {
+        for (count in listOf(Int.MIN_VALUE, -1, 0, 1001, Int.MAX_VALUE)) {
             assertThrows(IllegalArgumentException::class.java) { readingSessionFixture(count = count) }
         }
     }

@@ -69,6 +69,29 @@ class ReadingSqliteStoreTest {
         it.getLong(0)
     }
 
+    @Test fun configuredAndLegacySessionCountsSurviveSqliteReloadAndRejectInvalidCounts() {
+        install()
+        var data = reader()
+        val counts = listOf(15, 25, 50, 1, 20, 40, 1000)
+        counts.forEach { count ->
+            data = store.startSession(data, ReadingGame.MISSING, ReadingLevel.SPROUT, count, true)
+            assertEquals(count, data.activeSession?.questionCount)
+        }
+        val sessions = data.sessions
+        database.close()
+        database = ReadingDatabase(application, "rotation.db")
+        store = ReadingSqliteStore(application, database, legacy)
+        data = store.load()
+        assertEquals(sessions, data.sessions)
+        assertEquals(counts, data.sessions.map { it.questionCount })
+        for (count in listOf(Int.MIN_VALUE, -1, 0, 1001, Int.MAX_VALUE)) {
+            assertThrows(IllegalArgumentException::class.java) {
+                store.startSession(data, ReadingGame.MISSING, ReadingLevel.SPROUT, count, true)
+            }
+            assertEquals(data, store.load())
+        }
+    }
+
     @Test fun customThresholdPrizesSurviveSqliteReloadAndLegacyDefaultsRemainReadable() {
         install()
         var data = reader()

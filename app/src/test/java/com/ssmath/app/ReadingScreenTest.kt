@@ -13,6 +13,9 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -67,7 +70,8 @@ class ReadingScreenTest {
 
     private fun show(data: ReadingData, speech: Boolean = false, percent: Int = 100, history: Boolean = false,
                      disabled: Set<ReadingGame> = emptySet(), welcome: Boolean = false,
-                     clock: () -> Long = android.os.SystemClock::elapsedRealtime) {
+                     clock: () -> Long = android.os.SystemClock::elapsedRealtime,
+                     appModel: MathViewModel? = null) {
         val store = ReadingStore(file)
         store.load()
         store.save(data)
@@ -87,7 +91,7 @@ class ReadingScreenTest {
                 if (history) ReadingHistoryContent(model)
                 else ReadingModule(model, { exited++ }, textSize.intValue, { textSize.intValue = it },
                     narrationAvailable = speech, speak = { lastSpoken = it; speechWorks }, stop = { stopped++ },
-                    disabledGames = disabledGames.value)
+                    disabledGames = disabledGames.value, appModel = appModel)
                 if (welcome) AcademyWelcome(model)
             }
         }
@@ -107,6 +111,39 @@ class ReadingScreenTest {
             model.data?.let(condition) == true && !model.saving
         }
         compose.waitForIdle()
+    }
+
+    @Test fun giftChoicesUseSavedAdminMinimumsAndLaunchMatchingReadingSessions() {
+        MathViewModel(application).chooseRewardThresholds(20, 40)
+        val appModel = MathViewModel(application)
+        show(readingFixture().copy(page = ReadingPage.MENU), appModel = appModel)
+        for (thresholds in listOf(RewardThresholds(20, 40), RewardThresholds(1, 1000),
+            RewardThresholds(15, 30), RewardThresholds(10, 15))) {
+            compose.runOnIdle { appModel.chooseRewardThresholds(thresholds.tier1Minimum, thresholds.tier2Minimum) }
+            val choices = listOf(15 to "Poké Ball", thresholds.tier1Minimum to "Blue gift box",
+                thresholds.tier2Minimum to "Royal purple gift box")
+            choices.forEach { (count, image) ->
+                compose.onNodeWithContentDescription(image).performScrollTo()
+                    .assertTextEquals(count.toString()).performClick().assertIsSelected()
+                choices.filterNot { it.second == image }.forEach {
+                    compose.onNodeWithContentDescription(it.second).assertIsNotSelected()
+                }
+                click("reading-game-MISSING")
+                waitFor { it.page == ReadingPage.ACTIVITY && it.activeSession?.questionCount == count }
+                assertEquals(count, model.data?.activeSession?.attemptIds?.size)
+                assertEquals(count, ReadingStore(file).load().activeSession?.questionCount)
+                click("reading-back")
+                waitFor { it.page == ReadingPage.MENU }
+            }
+            // An already selected old minimum must not silently launch after a settings update.
+            compose.onNodeWithContentDescription("Blue gift box").performScrollTo().performClick()
+        }
+        compose.runOnIdle { appModel.chooseRewardThresholds(12, 24) }
+        compose.onNodeWithContentDescription("Blue gift box").assertTextEquals("12").assertIsNotSelected()
+        compose.onNodeWithContentDescription("Royal purple gift box").assertTextEquals("24").assertIsNotSelected()
+        click("reading-game-MISSING")
+        assertEquals(ReadingPage.MENU, model.data?.page)
+        assertEquals("Please select the number of questions.", ShadowToast.getTextOfLatestToast())
     }
 
     @Test fun historyReviewsSavedGamesWithoutChangingTheActiveReaderDraftOrScores() {
