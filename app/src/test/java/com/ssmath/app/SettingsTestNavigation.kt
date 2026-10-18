@@ -7,14 +7,28 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextInput
 
 internal fun ComposeContentTestRule.openAdminSettings() {
+    onNodeWithTag("admin-menu").performScrollTo().performClick()
+    onNodeWithTag("admin-pin").performTextInput("4826")
+    if (onAllNodesWithTag("admin-pin-confirm").fetchSemanticsNodes().isNotEmpty()) {
+        onNodeWithTag("admin-pin-confirm").performTextInput("4826")
+    }
+    onNodeWithTag("admin-pin-submit").performScrollTo().performClick()
+    waitUntil(10_000) {
+        onAllNodesWithTag("admin-dialog").fetchSemanticsNodes().isNotEmpty()
+    }
+    onNodeWithTag("admin-dialog").assertIsDisplayed()
+}
+
+internal fun ComposeContentTestRule.openDebugSettings() {
     if (onAllNodesWithTag("debug-logging-description").fetchSemanticsNodes().isEmpty()) {
         onNodeWithText("Debug logging").performScrollTo().performClick()
     }
     val description = onNodeWithTag("debug-logging-description").performScrollTo()
     repeat(7) { description.performClick() }
-    onNodeWithTag("admin-dialog").assertIsDisplayed()
+    onNodeWithTag("debug-dialog").assertIsDisplayed()
 }
 
 internal fun ComposeContentTestRule.openGameSettings(subject: Subject = Subject.MATH) {

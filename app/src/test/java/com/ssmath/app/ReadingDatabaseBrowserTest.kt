@@ -61,7 +61,7 @@ class ReadingDatabaseBrowserTest {
 
     @Test
     @Config(qualifiers = "w360dp-h800dp")
-    fun adminPanelOpensTheInstalledDatabaseAndBackReturnsToAdmin() {
+    fun debugMenuOpensTheInstalledDatabaseAndBackReturnsToDebugMenu() {
         DebugLog.initialize(application)
         application.deleteDatabase("reading.db")
         ReadingDatabase(application).use { installed ->
@@ -73,7 +73,7 @@ class ReadingDatabaseBrowserTest {
         compose.onNodeWithText("Debug logging").performScrollTo().performClick()
         val description = compose.onNodeWithTag("debug-logging-description").performScrollTo()
         repeat(7) { description.performClick() }
-        compose.onNodeWithText("Admin").assertIsDisplayed()
+        compose.onNodeWithText("Debug Menu").assertIsDisplayed()
         compose.onNodeWithTag("reading-database-open").assertDoesNotExist()
         compose.onNodeWithText("Reading activities").performScrollTo().performClick()
         compose.onNodeWithTag("reading-database-open").performScrollTo().performClick()
@@ -83,12 +83,12 @@ class ReadingDatabaseBrowserTest {
         awaitTag("reading-database-detail")
         compose.onNodeWithText("Back to activities").performClick()
         awaitTag("reading-database-row-${first.id}")
-        compose.onNodeWithText("Back to admin").performClick()
+        compose.onNodeWithText("Back to Debug Menu").performClick()
         compose.onNodeWithTag("reading-database-browser").assertDoesNotExist()
-        compose.onNodeWithText("Admin").assertIsDisplayed()
+        compose.onNodeWithText("Debug Menu").assertIsDisplayed()
         compose.onNodeWithTag("reading-database-open").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Close").performClick()
-        compose.onNodeWithText("Admin").assertDoesNotExist()
+        compose.onNodeWithText("Debug Menu").assertDoesNotExist()
         ReadingDatabase(application).use { assertEquals(1, ReadingCatalog(it).status().counts.values.sum()) }
         application.deleteDatabase("reading.db")
     }
@@ -133,7 +133,7 @@ class ReadingDatabaseBrowserTest {
         compose.setContent { ReadingDatabaseBrowser({}, databaseName, backLabel = "Back to test panel") }
         awaitTag("reading-database-empty")
         compose.onNodeWithText("Back to test panel").assertIsDisplayed()
-        compose.onNodeWithText("No reading activities installed. Import reading activities in Admin > Game Settings > Reading Settings first.")
+        compose.onNodeWithText("No reading activities installed. Import reading activities in Settings > Admin Menu > Game Settings > Reading Settings first.")
             .assertIsDisplayed()
         compose.onNodeWithTag("reading-database-next").assertIsNotEnabled()
         compose.onNodeWithTag("reading-database-previous").assertIsNotEnabled()

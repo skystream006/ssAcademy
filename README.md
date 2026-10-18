@@ -36,7 +36,7 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    reward types; unavailable prizes are indicated when rewards are disabled.
    Question counts are chosen per game, not saved in Rewards Game defaults, and
    do not change your Practice Game choices. Change the number limits in
-   **Settings > Admin > Game Settings > Math Settings > Default Math Reward Game Settings**.
+   **Settings > Admin Menu > Game Settings > Math Settings > Default Math Reward Game Settings**.
    **Cancel** or Android Back closes either game dialog.
    **Multiplication Matrix Rewards Game** has a fixed **121 questions**, covering every pair
    from **1 × 1 through 11 × 11** in row order: 1 × 1, 1 × 2, …, 1 × 11, then
@@ -131,9 +131,15 @@ The semi-transparent (50% opacity) settings button in the bottom-right corner op
 **Rewards**, **Result Histories**, and each subject's settings are collapsed by default; tap a heading to
 expand or collapse it without changing your choices. **Rewards** contains
 **My Rewards** and **My Pokémons**. **Result Histories** contains all four subjects'
-practice histories, accessible without opening Admin.
-Subject settings are under **Admin > Game Settings** (see [Debug logging](#debug-logging)
-for opening Admin); every Admin section starts collapsed.
+practice histories, accessible without opening Admin Menu.
+**Admin Menu** is directly available in Settings. On first use (or whenever no PIN is
+configured), create and confirm a **4–8 digit PIN**. Enter that PIN each time you open
+Admin Menu; cancelling keeps it locked. The PIN is stored only as a salted password
+hash on this device. Five incorrect attempts pause access for 30 seconds.
+Closing the menu, leaving Settings, or recreating the screen locks it again.
+Admin Menu contains **Game Settings**, **My Rewards** (removal controls), and
+**Available Rewards**; every section starts collapsed. Settings subsections have
+darker backgrounds, including nested subject settings.
 **Math Settings** contains **Math Rewards System**,
 **Show timer** (and its conditional **Time limit per 5 questions**), **Show correct answers**,
 **Vertical equations**, and **Default Math Reward Game Settings**.
@@ -192,7 +198,7 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   does this for every deleted result. Balances never go below zero if rewards were
   already used. The result's My Pokémons reward is also removed unless another saved
   result earned the same celebration. Older collection entries without a linked result
-  are kept, as are unrelated celebrations added through Admin.
+  are kept, as are unrelated celebrations added through Debug Menu.
 - **Default Math Reward Game Settings** – set default number limits for all four math types.
   **Save defaults** saves all four together; **Back** discards unsaved edits.
   Both return to Settings. Division's two maximums are independent. Limits are
@@ -210,7 +216,7 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   Bed Time features a sleeping child, floating Zs, and twinkling stars; Restaurant
   features a swaying striped awning and a steaming meal. Their artwork animates
   when revealed and in My Rewards and Use rewards.
-  Individual rewards can be enabled or disabled in the **Admin** dialog described below.
+  Individual rewards can be enabled or disabled in **Settings > Admin Menu > Available Rewards**.
   Only enabled rewards from the qualifying tier are selected; if none are enabled in
   that tier, no prize is awarded. Existing prizes and fragments remain available.
   Fewer than 25 questions and exactly 90% correct do not qualify.
@@ -272,7 +278,7 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
 On first startup, **Welcome to the Academy! What is your name?** asks for one local
 name (a nickname is enough) to use across the app. An existing saved reader name is
 reused; there is no add-reader or switch-reader screen.
-On a new installation, open **Settings → Admin → Game Settings → Reading Settings → Import / Update Reading Activities**
+On a new installation, open **Settings → Admin Menu → Game Settings → Reading Settings → Import / Update Reading Activities**
 to install the repository's reading library. Internet is required for import/update only;
 installed activities and saved drafts work offline. Empty games explain where to import.
 **Summit**, above Trail, adds more complex sentences, vocabulary in context, inference,
@@ -290,7 +296,7 @@ Unsubmitted drafts and unfinished questions are labeled separately from incorrec
 Games and responses are saved automatically on this device and remain reviewable offline after
 restarting or updating the activity library, using the activity revision assigned at launch.
 Older single-activity results show their latest saved response, not every earlier retry.
-Use **Settings → Admin → Game Settings → Reading Settings →
+Use **Settings → Admin Menu → Game Settings → Reading Settings →
 Set Reading Level** to choose a level, and **Reading Progress** to view the private dashboard.
 Select **15**, **25**, or **50** under **How many questions would you like?**, using
 the same Poké Ball, blue gift, and purple gift buttons as Math. Then tap a game to
@@ -560,27 +566,27 @@ answers, practice results or other personal content. Logs are stored privately o
 the device and can be viewed, shared or cleared from Settings.
 
 Tap the description beginning **Off by default** below **Enable debug logging**
-seven times to open the **Admin** dialog. Opening or closing it does not add animations.
-All sections start collapsed: **Game Settings** (with separate collapsed subject settings),
-**My Pokémons**, **My Rewards**, **Reading activities**, and **Available rewards**.
+seven times to open the **Debug Menu** dialog. Opening or closing it does not add animations.
+Its **My Pokémons** and **Reading activities** sections start collapsed.
+Game settings and reward controls are instead in the PIN-protected **Admin Menu**.
 Expand **My Pokémons**, then press **Add all animations** to add all celebrations, including **Mega Pokémons**, to **My Pokémons**, without
-duplicating ones already collected or changing history and rewards. This admin action
+duplicating ones already collected or changing history and rewards. This debug action
 unlocks every animation; earning Mega Pokémons through gameplay still requires the math matrix game.
 
-Expand **My Rewards**, then press **Remove rewards** to view available balances by tier. Choose **Remove 1 fragment**
+In **Settings > Admin Menu**, expand **My Rewards**, then press **Remove rewards** to view available balances by tier. Choose **Remove 1 fragment**
 or **Remove 1 whole reward** for a reward, then confirm **Remove**; **Cancel** leaves it
 unchanged. Each action removes one of the selected units, without breaking whole rewards
 into fragments or changing the other units, practice history, or My Pokémons. Empty balances
 cannot be removed. Changes are saved on this device and cannot be undone; claimed gifts
-cannot be claimed again. **Back to admin** returns to the Admin dialog.
+cannot be claimed again. **Back to Admin Menu** returns to the unlocked Admin Menu.
 
-Expand **Reading activities**, then press **View reading activities database** to browse the installed activity library,
+In **Debug Menu**, expand **Reading activities**, then press **View reading activities database** to browse the installed activity library,
 filter by game and level, and inspect activity IDs, passages, questions, correct
 answers, orders, and story prompts. The browser is read-only and works offline.
 
-Under **Available rewards**, enable or disable each reward, grouped by tier. Choices
+Under **Admin Menu > Available Rewards**, enable or disable each reward, grouped by tier. Choices
 are saved on this device and apply when a practice finishes, including a practice
 already in progress. Disabling every reward in a tier means no prize for that tier;
 it does not prevent celebrations or remove existing prizes and fragments, including
 unopened gifts in history. Re-enable a reward to make it available for future awards.
-All admin sections work even while debug logging and the rewards system are disabled.
+Both menus work even while debug logging and the rewards system are disabled.
