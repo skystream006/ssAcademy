@@ -96,7 +96,8 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    Matrix completions award **two animations**: one of **95 Mega Pokémon forms** and
    one standard **Pokémon or Other** scene, shown in that order before any Tier 2 gift. Mega forms include
    the separate X/Y/Z variants and three Tatsugiri entries. Each shows **Mega Pokémon**,
-   its name and its supplied Ndex (including suffixes) and appears in the separate
+   its name and its supplied Ndex (including form suffixes) followed by `-M`
+   (for example, `#0154-M` or `#0026x-M`) and appears in the separate
    **Mega Pokémons** collection section, with an offline preview and replay.
    Matrix games prefer uncollected scenes independently in the Mega and standard pools,
    allowing repeats in each pool once it is complete. Both celebrations are saved with the result.
