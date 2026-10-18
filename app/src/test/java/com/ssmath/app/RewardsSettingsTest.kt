@@ -321,6 +321,41 @@ class RewardsSettingsTest {
         assertEquals(300, restored.timeLimitSeconds)
     }
 
+    @Test fun backgroundPauseButtonIsBesideTimerAndRemembersBothStates() {
+        val model = MathViewModel(application)
+        model.chooseShowTimer(true)
+        compose.setContent { MathTheme { SettingsScreen(model) } }
+        compose.openGameSettings()
+        compose.onNodeWithTag("time-limit").performScrollTo()
+        val dropdown = compose.onNodeWithTag("time-limit").fetchSemanticsNode().boundsInRoot
+        val pauseButton = compose.onNodeWithContentDescription("Pause in background").assertIsDisplayed().assertIsOn()
+        val button = pauseButton.fetchSemanticsNode().boundsInRoot
+        assertTrue(button.left >= dropdown.right)
+        assertTrue(button.top < dropdown.bottom && button.bottom > dropdown.top)
+        pauseButton.performClick().assertIsOff()
+        assertFalse(model.pauseInBackground)
+        assertFalse(MathViewModel(application).pauseInBackground)
+        compose.onNodeWithText("Pause in background: Off.", substring = true).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithContentDescription("Show timer").performScrollTo().performClick()
+        pauseButton.assertDoesNotExist()
+        compose.onNodeWithContentDescription("Show timer").performClick()
+        pauseButton.performScrollTo().assertIsOff().performClick().assertIsOn()
+        assertTrue(MathViewModel(application).pauseInBackground)
+    }
+
+    @Test
+    @Config(qualifiers = "w320dp-h800dp")
+    fun backgroundPauseButtonRemainsReachableWithLargeText() {
+        val model = MathViewModel(application)
+        model.chooseShowTimer(true)
+        model.chooseTimeLimitSeconds(900)
+        compose.setContent { MathTheme(textSizePercent = 200) { SettingsScreen(model) } }
+        compose.openGameSettings()
+        compose.onNodeWithTag("time-limit").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithContentDescription("Pause in background")
+            .performScrollTo().assertIsDisplayed().assertIsOn().performClick().assertIsOff()
+    }
+
     @Test fun upperRightUseRewardsActionConfirmsAndUpdatesTheInventory() {
         val file = File(application.filesDir, "practice_history.json")
         val store = HistoryStore(file)

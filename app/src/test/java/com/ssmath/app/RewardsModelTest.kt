@@ -452,6 +452,96 @@ class RewardsModelTest {
         assertEquals(300_000L, model.lastResult!!.durationMs)
     }
 
+    @Test fun backgroundPausingDefaultsOnAndIsRemembered() {
+        val first = model()
+        assertTrue(first.pauseInBackground)
+        first.choosePauseInBackground(false)
+        val restored = model()
+        assertFalse(restored.pauseInBackground)
+        restored.choosePauseInBackground(true)
+        assertTrue(model().pauseInBackground)
+    }
+
+    @Test fun disablingBackgroundPausingKeepsCountingButStillBlocksInputAndPausesInOverlays() {
+        val model = model()
+        model.chooseShowTimer(true)
+        model.choosePauseInBackground(false)
+        start(model, count = 25, minutes = 1)
+        now += 1_000
+        val initialAnswer = model.game!!.problem.answer.toString()
+        model.updateAnswer(initialAnswer)
+        model.setForeground(false)
+        now += 2_000
+        model.updateAnswer("99")
+        model.submitAnswer()
+        assertEquals(initialAnswer, model.answerText)
+        assertTrue(model.game!!.attempts.isEmpty())
+        assertEquals(3_000L, model.elapsedMs())
+        listOf<() -> Unit>(model::openSettings, model::openHistory, model::openRewards,
+            model::openPokemons).forEach { open ->
+            open()
+            now += 400_000
+            assertEquals(3_000L, model.elapsedMs())
+            assertFalse(model.checkTimeLimit())
+            while (model.overlay != null) model.closeOverlay()
+        }
+        model.setForeground(true)
+        now += 1_000
+        assertEquals(4_000L, model.elapsedMs())
+        assertEquals(Screen.PLAYING, model.screen)
+    }
+
+    @Test fun disablingBackgroundPausingAllowsTimeoutWithoutInput() {
+        val model = model()
+        model.chooseShowTimer(true)
+        model.choosePauseInBackground(false)
+        start(model, count = 25, minutes = 1)
+        model.setForeground(false)
+        now += 400_000
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(200))
+        assertEquals(Screen.RESULTS, model.screen)
+        assertTrue(model.lastResult!!.timedOut)
+        assertEquals(300_000L, model.lastResult!!.durationMs)
+        assertNull(model.lastResult!!.prizeType)
+        assertNull(model.celebration)
+        model.setForeground(true)
+        assertEquals(1, model.history.size)
+    }
+
+    @Test fun backgroundTimeoutIsCheckedImmediatelyOnResumeAfterSuspendedCallbacks() {
+        val model = model()
+        model.chooseShowTimer(true)
+        model.choosePauseInBackground(false)
+        start(model, count = 25, minutes = 1)
+        answer(model)
+        model.setForeground(false)
+        now += 400_000
+        model.setForeground(true)
+        assertEquals(Screen.RESULTS, model.screen)
+        assertTrue(model.lastResult!!.timedOut)
+        assertEquals(300_000L, model.lastResult!!.durationMs)
+        assertEquals(1, model.lastResult!!.attempts.size)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(200))
+        assertEquals(1, model.history.size)
+    }
+
+    @Test fun changingBackgroundPausingDoesNotCountPreviouslyPausedTimeOrLoseElapsedTime() {
+        val model = model()
+        start(model)
+        now += 1_000
+        model.setForeground(false)
+        now += 10_000
+        model.choosePauseInBackground(false)
+        assertEquals(1_000L, model.elapsedMs())
+        now += 2_000
+        model.choosePauseInBackground(true)
+        now += 10_000
+        assertEquals(3_000L, model.elapsedMs())
+        model.setForeground(true)
+        now += 1_000
+        assertEquals(4_000L, model.elapsedMs())
+    }
+
     @Test fun timeLimitIsCapturedAtStartAndCannotBeDisabledByHidingTheTimer() {
         val model = model()
         model.chooseShowTimer(true)

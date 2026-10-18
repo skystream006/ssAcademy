@@ -864,7 +864,7 @@ class GameModesTest {
         repeat(50) { answer(model) }
         assertEquals(CelebrationCategory.OTHER, model.celebration!!.category)
         assertNull(model.lastResult!!.prizeType)
-        assertEquals(Celebration.standardCelebrations.toSet(), model.pokemons)
+        assertEquals(Celebration.entries.toSet(), model.pokemons)
     }
 
     @Test fun rewardsRetainPokemonAnimationsPrizeTiersAndExistingInventory() {
@@ -916,6 +916,32 @@ class GameModesTest {
                 model.done()
             }
         }
+    }
+
+    @Test fun practiceAndMatrixBothRespectTheBackgroundPauseSetting() {
+        val model = model()
+        model.chooseShowTimer(true)
+        model.chooseTimeLimitSeconds(30)
+        model.choosePauseInBackground(false)
+        readyPractice(model)
+        model.start()
+        model.setForeground(false)
+        now += 1_000
+        assertEquals(1_000L, model.elapsedMs())
+        assertNull(model.activeTimeLimitMs)
+        model.setForeground(true)
+        model.backToSetup()
+        model.openMultiplicationMatrixGame()
+        model.start()
+        assertEquals(726_000L, model.activeTimeLimitMs)
+        model.setForeground(false)
+        now += 726_000
+        model.setForeground(true)
+        assertTrue(model.lastResult!!.isMultiplicationMatrix)
+        assertTrue(model.lastResult!!.timedOut)
+        assertEquals(726_000L, model.lastResult!!.durationMs)
+        assertNull(model.lastResult!!.prizeType)
+        assertNull(model.celebration)
     }
 
     @Test fun practiceKeepsElapsedTimerWithoutApplyingTheRewardsTimeLimit() {

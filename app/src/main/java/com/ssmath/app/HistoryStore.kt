@@ -281,9 +281,11 @@ class HistoryStore(private val file: File) {
         ))
     }
 
-    fun collectPokemons(celebrations: Collection<Celebration>): PracticeSnapshot {
+    fun collectPokemons(celebrations: Collection<Celebration>, includeMegaPokemons: Boolean = false): PracticeSnapshot {
         val snapshot = loadSnapshot()
-        val collected = snapshot.pokemons + celebrations.filter { it.category != CelebrationCategory.MEGA_POKEMONS }
+        val collected = snapshot.pokemons + celebrations.filter {
+            includeMegaPokemons || it.category != CelebrationCategory.MEGA_POKEMONS
+        }
         if (collected == snapshot.pokemons) return snapshot
         return save(snapshot.copy(pokemons = collected))
     }

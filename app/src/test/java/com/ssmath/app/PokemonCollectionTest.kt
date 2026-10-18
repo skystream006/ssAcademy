@@ -170,7 +170,7 @@ class PokemonCollectionTest {
             val presented = model.celebration!!
             assertEquals(CelebrationCategory.OTHER, presented.category)
             model.collectPresentedCelebration(presented)
-            assertEquals(Celebration.standardCelebrations.toSet(), model.pokemons)
+            assertEquals(Celebration.entries.toSet(), model.pokemons)
             model.done()
         }
     }
@@ -447,7 +447,7 @@ class PokemonCollectionTest {
         repeat(2) { model.collectAllCelebrations() }
         model.clearHistory()
         dispatcher.drain()
-        assertEquals(Celebration.standardCelebrations.toSet() - Celebration.PIKACHU, model.pokemons)
+        assertEquals(Celebration.entries.toSet() - Celebration.PIKACHU, model.pokemons)
         assertEquals(0, model.rewardBalances.values.sumOf { it.totalFragments })
         assertTrue(model.history.isEmpty())
         assertEquals(model.pokemons, model().pokemons)
@@ -510,7 +510,7 @@ class PokemonCollectionTest {
         assertEquals(before, file.readText())
         assertTrue(blockedWrite.delete())
         model.collectAllCelebrations()
-        assertEquals(Celebration.standardCelebrations.toSet(), model().pokemons)
+        assertEquals(Celebration.entries.toSet(), model().pokemons)
     }
 
     private class QueuedDispatcher : CoroutineDispatcher() {

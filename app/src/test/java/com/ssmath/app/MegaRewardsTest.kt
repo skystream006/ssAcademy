@@ -280,7 +280,7 @@ class MegaRewardsTest {
             store.collectPokemon(completed.id, Celebration.MEGA_MEGANIUM).pokemons)
     }
 
-    @Test fun readingReceiptsAndAdminCannotGrantMegaButKeepAlreadyEarnedForms() {
+    @Test fun readingReceiptsCannotGrantMegaButAdminAddsAllWithoutChangingHistoryOrRewards() {
         val store = HistoryStore(file)
         val receipt = ReadingRewardResult("session", "reader", ReadingGame.MISSING, ReadingLevel.SPROUT,
             1, 121, 121, 121, celebration = Celebration.MEGA_MEGANIUM)
@@ -294,8 +294,9 @@ class MegaRewardsTest {
         assertEquals(existing, store.collectReadingCelebration(receipt.sessionId, Celebration.MEGA_MEGANIUM))
         assertEquals(existing, store.collectPokemon(Celebration.MEGA_EMBOAR))
         val model = model()
-        model.collectAllCelebrations()
-        assertEquals(standard + Celebration.MEGA_MEGANIUM, model.pokemons)
-        assertEquals(model.pokemons, store.collectPokemons(Celebration.entries).pokemons)
+        repeat(2) { model.collectAllCelebrations() }
+        assertEquals(Celebration.entries.toSet(), model.pokemons)
+        assertEquals(existing.copy(pokemons = Celebration.entries.toSet()), store.loadSnapshot())
+        assertEquals(model.pokemons, model().pokemons)
     }
 }
