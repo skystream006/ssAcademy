@@ -143,12 +143,14 @@ class PokemonSettingsTest {
         }
         compose.mainClock.advanceTimeBy(64)
         assertSectionCount(CelebrationCategory.MEGA_POKEMONS, "1/95")
+        val before = store.loadSnapshot()
         compose.onNodeWithTag("pokemon-gallery").performScrollToKey(mega.name)
         compose.onNodeWithTag("pokemon-${mega.name}").assert(hasText(mega.collectionLabel)).performClick()
+        compose.waitForIdle()
         compose.mainClock.advanceTimeBy(64)
         compose.onNodeWithTag("celebration-${mega.name}").assertIsDisplayed()
-        val before = store.loadSnapshot()
         compose.onNodeWithTag("close-celebration").performClick()
+        compose.waitForIdle()
         compose.mainClock.advanceTimeBy(64)
         assertEquals(before, store.loadSnapshot())
     }
