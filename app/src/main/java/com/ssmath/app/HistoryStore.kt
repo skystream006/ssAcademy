@@ -254,6 +254,15 @@ class HistoryStore(private val file: File) {
 
     fun useReward(type: RewardType): PracticeSnapshot = removeReward(type, fragment = false)
 
+    fun addReward(type: RewardType, fragment: Boolean): PracticeSnapshot {
+        val snapshot = loadSnapshot()
+        val balance = snapshot.rewards[type] ?: RewardBalance()
+        val added = if (fragment) balance.addFragment() else balance.addWhole()
+        return save(snapshot.copy(
+            rewards = snapshot.rewards + (type to added)
+        ))
+    }
+
     fun removeReward(type: RewardType, fragment: Boolean): PracticeSnapshot {
         val snapshot = loadSnapshot()
         val balance = snapshot.rewards[type] ?: return snapshot

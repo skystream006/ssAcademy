@@ -145,7 +145,11 @@ configured), create and confirm a **4–8 digit PIN**. Enter that PIN each time 
 Admin Menu; cancelling keeps it locked. The PIN is stored only as a salted password
 hash on this device. Five incorrect attempts pause access for 30 seconds.
 Closing the menu, leaving Settings, or recreating the screen locks it again.
-Admin Menu contains **Game Settings**, **My Rewards** (removal controls), and
+Use **Change PIN** inside Admin Menu to enter your current PIN and confirm a new
+**4–8 digit PIN**, then press **Save PIN**. Successful changes close and lock Admin Menu;
+the next entry requires the new PIN. Cancelling keeps the existing PIN. Incorrect current
+PINs share the same five-attempt, 30-second lockout.
+Admin Menu contains **Game Settings**, **My Rewards** (add/remove controls), and
 **Available Rewards**; every section starts collapsed. Settings subsections have
 darker backgrounds, including nested subject settings.
 **Math Settings** contains **Math Rewards System**,
@@ -588,12 +592,14 @@ Expand **My Pokémons**, then press **Add all animations** to add all celebratio
 duplicating ones already collected or changing history and rewards. This debug action
 unlocks every animation; earning Mega Pokémons through gameplay still requires the math matrix game.
 
-In **Settings > Admin Menu**, expand **My Rewards**, then press **Remove rewards** to view available balances by tier. Choose **Remove 1 fragment**
-or **Remove 1 whole reward** for a reward, then confirm **Remove**; **Cancel** leaves it
-unchanged. Each action removes one of the selected units, without breaking whole rewards
-into fragments or changing the other units, practice history, or My Pokémons. Empty balances
-cannot be removed. Changes are saved on this device and cannot be undone; claimed gifts
-cannot be claimed again. **Back to Admin Menu** returns to the unlocked Admin Menu.
+In **Settings > Admin Menu**, expand **My Rewards**, then press **Add/Remove Rewards** to
+view balances by tier. Choose **Add 1 fragment**, **Add 1 whole reward**, **Remove 1 fragment**,
+or **Remove 1 whole reward**, then confirm **Add** or **Remove**; **Cancel** leaves the balance
+unchanged. Additions work even with reward earning disabled or an empty inventory.
+Every 3 matching fragments become 1 whole reward; adding a whole reward keeps existing
+fragments. Removing a fragment never breaks a whole reward, and unavailable units cannot
+be removed. Adjustments are saved on this device without changing practice history,
+My Pokémons, or existing gift claims. **Back to Admin Menu** returns to the unlocked Admin Menu.
 
 In **Debug Menu**, expand **Reading activities**, then press **View reading activities database** to browse the installed activity library,
 filter by game and level, and inspect activity IDs, passages, questions, correct

@@ -186,6 +186,35 @@ class RewardsTest {
         assertEquals(RewardBalance(3, 0), balance)
     }
 
+    @Test fun addingWholeRewardsPreservesEveryFragmentRemainder() {
+        (0..2).forEach { fragments ->
+            val balance = RewardBalance(2, fragments)
+            assertTrue(balance.canAddWhole)
+            assertTrue(balance.canAddFragment)
+            assertEquals(RewardBalance(3, fragments), balance.addWhole())
+            assertEquals(balance.totalFragments + 3, balance.addWhole().totalFragments)
+        }
+        assertEquals(RewardBalance(1, 0), RewardBalance().addWhole())
+    }
+
+    @Test fun additionLimitsAllowSafeCarriesAndRejectOverflowWithoutChangingBalances() {
+        val maximumWhole = (Int.MAX_VALUE - 2) / 3
+        (0..2).forEach { fragments ->
+            val nearLimit = RewardBalance(maximumWhole - 1, fragments)
+            assertTrue(nearLimit.canAddWhole)
+            assertTrue(nearLimit.canAddFragment)
+            assertEquals(RewardBalance(maximumWhole, fragments), nearLimit.addWhole())
+            val limit = RewardBalance(maximumWhole, fragments)
+            assertFalse(limit.canAddWhole)
+            assertEquals(fragments < 2, limit.canAddFragment)
+            assertThrows(IllegalArgumentException::class.java) { limit.addWhole() }
+            if (fragments < 2) assertEquals(RewardBalance(maximumWhole, fragments + 1), limit.addFragment())
+            else assertThrows(IllegalArgumentException::class.java) { limit.addFragment() }
+            assertEquals(maximumWhole * 3 + fragments, limit.totalFragments)
+        }
+        assertEquals(RewardBalance(maximumWhole, 0), RewardBalance(maximumWhole - 1, 2).addFragment())
+    }
+
     @Test fun invalidBalancesAreRejectedRatherThanLosingInventory() {
         listOf(-1 to 0, 0 to -1, 0 to 3, Int.MAX_VALUE to 0).forEach { (whole, fragments) ->
             assertThrows(IllegalArgumentException::class.java) { RewardBalance(whole, fragments) }

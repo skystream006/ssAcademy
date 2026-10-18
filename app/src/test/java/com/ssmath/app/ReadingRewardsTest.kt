@@ -410,6 +410,39 @@ class ReadingRewardsTest {
         assertEquals(model.rewardBalances, HistoryStore(file).loadSnapshot().rewards)
     }
 
+    @Test fun readingClaimsAndAdminAdditionsSerializeWithoutChangingAwardsOrLosingManualRewardsOnDeletion() {
+        val dispatcher = QueuedDispatcher()
+        val model = model(dispatcher)
+        dispatcher.drain()
+        open(model, finished())
+        dispatcher.drain()
+        model.dismissReadingCelebration()
+        model.claimReadingReward()
+        model.openSettings()
+        model.addReward(RewardType.LOLLIPOP, fragment = true)
+        assertTrue(model.claimingReadingReward)
+        assertTrue(model.removingReward)
+        dispatcher.drain()
+        assertEquals(RewardBalance(0, 2), model.rewardBalances[RewardType.LOLLIPOP])
+        assertEquals(PrizeAward(RewardType.LOLLIPOP, RewardBalance(0, 1)),
+            model.readingRewardResults.single().prize)
+        val claimed = model.readingRewardResults
+        model.chooseSubjectRewardsEnabled(Subject.READING, false)
+        model.chooseRewardEnabled(RewardType.LOLLIPOP, false)
+        model.addReward(RewardType.LOLLIPOP, fragment = false)
+        dispatcher.drain()
+        assertEquals(RewardBalance(1, 2), model.rewardBalances[RewardType.LOLLIPOP])
+        assertEquals(claimed, model.readingRewardResults)
+        model.deleteReadingResults(setOf(claimed.single().sessionId))
+        dispatcher.drain()
+        assertTrue(model.readingRewardResults.isEmpty())
+        assertTrue(model.history.isEmpty())
+        assertEquals(RewardBalance(1, 1), model.rewardBalances[RewardType.LOLLIPOP])
+        assertFalse(model.removingReward)
+        assertFalse(model.claimingReadingReward)
+        assertEquals(model.rewardBalances, model().rewardBalances)
+    }
+
     private class QueuedDispatcher : CoroutineDispatcher() {
         private val tasks = ArrayDeque<Runnable>()
         override fun dispatch(context: CoroutineContext, block: Runnable) { tasks.addLast(block) }

@@ -938,22 +938,30 @@ class MathViewModel(
         }
     }
 
-    fun removeReward(type: RewardType, fragment: Boolean) {
-        val balance = rewardBalances[type] ?: return
+    fun addReward(type: RewardType, fragment: Boolean) = adjustReward(type, fragment, add = true)
+
+    fun removeReward(type: RewardType, fragment: Boolean) = adjustReward(type, fragment, add = false)
+
+    private fun adjustReward(type: RewardType, fragment: Boolean, add: Boolean) {
+        val balance = rewardBalances[type] ?: RewardBalance()
         if (removingReward || overlay != Overlay.SETTINGS ||
-            (if (fragment) balance.fragments else balance.whole) == 0) return
+            (!add && (if (fragment) balance.fragments else balance.whole) == 0)) return
         removingReward = true
         rewardRemovalError = null
         viewModelScope.launch {
             try {
                 storeLock.withLock {
-                    applySnapshot(withContext(ioDispatcher) { store.removeReward(type, fragment) })
+                    applySnapshot(withContext(ioDispatcher) {
+                        if (add) store.addReward(type, fragment) else store.removeReward(type, fragment)
+                    })
                 }
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
                 DebugLog.event(DebugEvent.HISTORY_FAILURE, error = error)
-                rewardRemovalError = "Unable to remove this reward. Free device storage and try again."
+                rewardRemovalError = if (add)
+                    "Unable to add this reward. Check the reward balance limit and device storage, then try again."
+                else "Unable to remove this reward. Free device storage and try again."
             } finally {
                 removingReward = false
             }

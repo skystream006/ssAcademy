@@ -737,6 +737,128 @@ class HistoryStoreTest {
         assertEquals(before, file.readText())
     }
 
+    @Test fun adminAdditionsCreateEachRewardAndUnitFromEmptyInventoryWithoutGameResults() {
+        RewardType.entries.forEach { type ->
+            listOf(true, false).forEach { fragment ->
+                file.delete()
+                val balance = if (fragment) RewardBalance(0, 1) else RewardBalance(1, 0)
+                val expected = PracticeSnapshot(rewards = mapOf(type to balance))
+                assertEquals(expected, store.addReward(type, fragment))
+                assertEquals(expected, HistoryStore(file).loadSnapshot())
+                val removed = store.removeReward(type, fragment)
+                assertEquals(expected.copy(rewards = mapOf(type to RewardBalance())), removed)
+                assertEquals(removed, HistoryStore(file).loadSnapshot())
+            }
+        }
+    }
+
+    @Test fun adminAdditionsCarryFragmentsAndPreserveAllOtherSnapshotData() {
+        store.addNewResult(eligible(1))
+        store.claimReward(1)
+        store.addNewResult(eligible(2))
+        store.addReadingResult(reading())
+        store.claimReadingReward("reading-1")
+        store.collectReadingCelebration("reading-1", Celebration.PIKACHU)
+        store.addReadingResult(reading("pending-reading"))
+        store.deleteReadingResults(setOf("deleted-reading"))
+        RewardType.entries.forEach { type ->
+            listOf(true, false, true, true).forEach { fragment ->
+                val before = store.loadSnapshot()
+                val previous = before.rewards[type] ?: RewardBalance()
+                val total = previous.totalFragments + if (fragment) 1 else 3
+                val expected = before.copy(rewards = before.rewards + (type to RewardBalance(total / 3, total % 3)))
+                assertEquals(expected, store.addReward(type, fragment))
+                assertEquals(expected, HistoryStore(file).loadSnapshot())
+            }
+        }
+    }
+
+    @Test fun manualAdditionsSurviveEarnedHistoryDeletionWithoutAllowingReclaims() {
+        val mathResults = (1L..2L).map { store.addNewResult(eligible(it)).result }
+        mathResults.forEach { store.claimReward(it.id) }
+        val readingResults = (1..2).map { reading("reading-$it") }
+        readingResults.forEach { store.addReadingResult(it); store.claimReadingReward(it.sessionId) }
+        store.addReward(RewardType.LOLLIPOP, fragment = false)
+        val added = store.addReward(RewardType.LOLLIPOP, fragment = true)
+        assertEquals(RewardBalance(2, 2), added.rewards[RewardType.LOLLIPOP])
+        val restored = HistoryStore(file)
+        mathResults.forEach { restored.add(it); assertEquals(added, restored.claimReward(it.id)) }
+        readingResults.forEach {
+            assertEquals(added, restored.addReadingResult(it))
+            assertEquals(added, restored.claimReadingReward(it.sessionId))
+        }
+        restored.delete(mathResults.first().id)
+        assertEquals(RewardBalance(2, 1), restored.loadSnapshot().rewards[RewardType.LOLLIPOP])
+        restored.clear()
+        assertEquals(RewardBalance(2, 0), restored.loadSnapshot().rewards[RewardType.LOLLIPOP])
+        val cleared = restored.deleteReadingResults(readingResults.map { it.sessionId }.toSet())
+        assertEquals(RewardBalance(1, 1), cleared.rewards[RewardType.LOLLIPOP])
+        assertTrue(cleared.history.isEmpty())
+        assertTrue(cleared.readingResults.isEmpty())
+        assertEquals(added.claimedResultIds, cleared.claimedResultIds)
+        assertEquals(added.recordedReadingSessionIds, cleared.recordedReadingSessionIds)
+        mathResults.forEach { restored.add(it); assertEquals(cleared, restored.claimReward(it.id)) }
+        readingResults.forEach {
+            assertEquals(cleared, restored.addReadingResult(it))
+            assertEquals(cleared, restored.claimReadingReward(it.sessionId))
+        }
+        assertEquals(cleared, HistoryStore(file).loadSnapshot())
+    }
+
+    @Test fun failedAdminAdditionsPreserveTheSnapshotAndRetryAddsExactlyOneUnit() {
+        store.addNewResult(eligible(1))
+        store.claimReward(1)
+        store.addReadingResult(reading())
+        store.collectReadingCelebration("reading-1", Celebration.PIKACHU)
+        listOf(true, false).forEach { fragment ->
+            val before = store.loadSnapshot()
+            val bytes = file.readText()
+            val blocked = File(directory, "${file.name}.tmp").apply { mkdir() }
+            repeat(2) {
+                assertThrows(IOException::class.java) { store.addReward(RewardType.LOLLIPOP, fragment) }
+                assertEquals(bytes, file.readText())
+                assertEquals(before, store.loadSnapshot())
+            }
+            assertTrue(blocked.delete())
+            val total = before.rewards.getValue(RewardType.LOLLIPOP).totalFragments + if (fragment) 1 else 3
+            val expected = before.copy(rewards = mapOf(RewardType.LOLLIPOP to RewardBalance(total / 3, total % 3)))
+            assertEquals(expected, store.addReward(RewardType.LOLLIPOP, fragment))
+            assertEquals(expected, HistoryStore(file).loadSnapshot())
+        }
+    }
+
+    @Test fun adminAdditionCapsRejectOverflowAtomicallyAndPermitRemainingFragments() {
+        store.addNewResult(eligible(1))
+        store.claimReward(1)
+        store.addReadingResult(reading())
+        store.collectReadingCelebration("reading-1", Celebration.PIKACHU)
+        val maximumWhole = (Int.MAX_VALUE - 2) / 3
+        val original = store.loadSnapshot().copy(rewards = mapOf(
+            RewardType.LOLLIPOP to RewardBalance(maximumWhole - 1, 0),
+            RewardType.VIDEO_GAME to RewardBalance(3, 1)
+        ))
+        file.writeText(Json.encodeToString(PracticeSnapshot.serializer(), original))
+        val wholeAdded = store.addReward(RewardType.LOLLIPOP, fragment = false)
+        assertEquals(original.copy(rewards = original.rewards + (RewardType.LOLLIPOP to RewardBalance(maximumWhole, 0))),
+            wholeAdded)
+        (0..2).forEach { fragments ->
+            val before = store.loadSnapshot()
+            val bytes = file.readText()
+            assertThrows(IllegalArgumentException::class.java) { store.addReward(RewardType.LOLLIPOP, fragment = false) }
+            assertEquals(bytes, file.readText())
+            if (fragments < 2) {
+                val expected = before.copy(rewards = before.rewards +
+                    (RewardType.LOLLIPOP to RewardBalance(maximumWhole, fragments + 1)))
+                assertEquals(expected, store.addReward(RewardType.LOLLIPOP, fragment = true))
+                assertEquals(expected, HistoryStore(file).loadSnapshot())
+            } else {
+                assertThrows(IllegalArgumentException::class.java) { store.addReward(RewardType.LOLLIPOP, fragment = true) }
+                assertEquals(bytes, file.readText())
+                assertEquals(before, HistoryStore(file).loadSnapshot())
+            }
+        }
+    }
+
     @Test fun adminRemovalPersistsEachUnitWithoutChangingHistoryCollectionsOrOtherRewards() {
         RewardType.entries.forEachIndexed { index, type ->
             repeat(5) {
@@ -958,6 +1080,8 @@ class HistoryStoreTest {
             assertThrows(IOException::class.java) { store.useReward(RewardType.LOLLIPOP) }
             assertThrows(IOException::class.java) { store.removeReward(RewardType.LOLLIPOP, fragment = true) }
             assertThrows(IOException::class.java) { store.removeReward(RewardType.LOLLIPOP, fragment = false) }
+            assertThrows(IOException::class.java) { store.addReward(RewardType.LOLLIPOP, fragment = true) }
+            assertThrows(IOException::class.java) { store.addReward(RewardType.LOLLIPOP, fragment = false) }
             assertThrows(IOException::class.java) { store.delete(1) }
             assertThrows(IOException::class.java) { store.clear() }
             assertEquals(text, file.readText())

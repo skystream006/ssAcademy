@@ -4,6 +4,7 @@ import android.app.Application
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.view.View
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.ComponentDialog
 import androidx.compose.foundation.layout.Column
@@ -13,7 +14,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.core.app.ApplicationProvider
@@ -128,6 +131,137 @@ class AdminMenuTest {
         compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
     }
 
+    @Test fun changingPinRequiresAuthenticationAndSuccessRelocksWithOnlyTheNewPin() {
+        val model = MathViewModel(application)
+        compose.setContent { MathTheme { SettingsScreen(model) } }
+        compose.onNodeWithTag("change-pin").assertDoesNotExist()
+        compose.onNodeWithTag("admin-menu").performScrollTo().performClick()
+        compose.onNodeWithTag("change-pin").assertDoesNotExist()
+        submit("4826", "4826")
+        awaitTag("admin-dialog")
+        openChangePin()
+        listOf("current", "new", "confirm").forEach {
+            compose.onNodeWithTag("change-pin-$it").assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Password))
+        }
+        compose.runOnIdle {
+            val window = requireNotNull(ShadowDialog.getLatestDialog().window)
+            assertTrue(window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0)
+        }
+        fillChangePin("4826", "00123456", "00123456")
+        compose.onNodeWithTag("change-pin-submit").performClick()
+        awaitChangeClosed()
+        compose.onNodeWithTag("admin-dialog").assertDoesNotExist()
+        compose.onNodeWithTag("change-pin").assertDoesNotExist()
+        compose.onNodeWithTag("admin-menu").performScrollTo().performClick()
+        submit("4826")
+        awaitError("Incorrect PIN. Try again.")
+        compose.onNodeWithTag("admin-dialog").assertDoesNotExist()
+        submit("00123456")
+        awaitTag("admin-dialog")
+    }
+
+    @Test fun changePinValidationMismatchAndWrongCurrentPinNeverReplaceCredentials() {
+        val model = MathViewModel(application)
+        compose.setContent { MathTheme { SettingsScreen(model) } }
+        compose.openAdminSettings()
+        val previous = preferences.all.toMap()
+        openChangePin()
+        compose.onNodeWithTag("change-pin-submit").assertIsNotEnabled()
+        listOf("123" to "0000", "4826" to "123", "4826" to "１２３４").forEach { (current, new) ->
+            fillChangePin(current, new, new)
+            compose.onNodeWithTag("change-pin-submit").performClick()
+            awaitError("Use 4–8 digits for each PIN.")
+            assertChangeFieldsEmpty()
+            assertEquals(previous, preferences.all)
+        }
+        fillChangePin("4826", "0000", "1111")
+        compose.onNodeWithTag("change-pin-submit").performClick()
+        awaitError("PINs do not match.")
+        assertChangeFieldsEmpty()
+        assertEquals(previous, preferences.all)
+
+        repeat(5) { attempt ->
+            fillChangePin("9999", "0000", "0000")
+            compose.onNodeWithTag("change-pin-submit").performClick()
+            awaitError(if (attempt == 4) "Too many attempts. Try again in 30 seconds." else "Incorrect current PIN. Try again.")
+            assertChangeFieldsEmpty()
+        }
+        assertEquals(previous["admin_pin_hash"], preferences.getString("admin_pin_hash", null))
+        assertEquals(previous["admin_pin_salt"], preferences.getString("admin_pin_salt", null))
+        assertEquals(AdminPinStore.Result.LOCKED, AdminPinStore(preferences).verify("4826"))
+        fillChangePin("4826", "0000", "0000")
+        compose.onNodeWithTag("change-pin-submit").performClick()
+        awaitError("Too many attempts. Try again in 30 seconds.")
+        compose.onNodeWithTag("change-pin-dialog").assertIsDisplayed()
+    }
+
+    @Test fun cancelAndBackDiscardChangePinFieldsWithoutChangingCredentials() {
+        val model = MathViewModel(application)
+        compose.setContent { MathTheme { SettingsScreen(model) } }
+        compose.openAdminSettings()
+        val previous = preferences.all.toMap()
+        openChangePin()
+        fillChangePin("4826", "0000", "0000")
+        compose.onNodeWithText("Cancel").performClick()
+        awaitTag("admin-dialog")
+        compose.onNodeWithTag("change-pin-dialog").assertDoesNotExist()
+        assertEquals(previous, preferences.all)
+        openChangePin()
+        assertChangeFieldsEmpty()
+        fillChangePin("4826", "0000", "0000")
+        compose.runOnIdle {
+            (ShadowDialog.getLatestDialog() as ComponentDialog).onBackPressedDispatcher.onBackPressed()
+        }
+        awaitTag("admin-dialog")
+        compose.onNodeWithTag("change-pin-dialog").assertDoesNotExist()
+        assertEquals(previous, preferences.all)
+        openChangePin()
+        assertChangeFieldsEmpty()
+        assertEquals(AdminPinStore.Result.UNLOCKED, AdminPinStore(preferences).verify("4826"))
+    }
+
+    @Test fun restorationWhileChangingPinRelocksAndDiscardsAllPinText() {
+        val model = MathViewModel(application)
+        val restoration = StateRestorationTester(compose)
+        restoration.setContent { MathTheme { SettingsScreen(model) } }
+        compose.openAdminSettings()
+        val previous = preferences.all.toMap()
+        openChangePin()
+        fillChangePin("4826", "0000", "0000")
+        restoration.emulateSavedInstanceStateRestore()
+        compose.onNodeWithTag("change-pin-dialog").assertDoesNotExist()
+        compose.onNodeWithTag("admin-dialog").assertDoesNotExist()
+        compose.onNodeWithTag("change-pin").assertDoesNotExist()
+        assertEquals(previous, preferences.all)
+        compose.onNodeWithTag("admin-menu").performScrollTo().performClick()
+        compose.onNodeWithTag("admin-pin").assert(SemanticsMatcher.expectValue(SemanticsProperties.EditableText, AnnotatedString("")))
+        compose.onNodeWithTag("admin-pin-submit").assertIsNotEnabled()
+        submit("4826")
+        awaitTag("admin-dialog")
+        openChangePin()
+        assertChangeFieldsEmpty()
+    }
+
+    @Test
+    @Config(qualifiers = "w320dp-h480dp")
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun changePinFieldsAndActionsRemainReachableAtDoubleTextSize() {
+        val model = MathViewModel(application)
+        compose.setContent { MathTheme(textSizePercent = 200) { SettingsScreen(model) } }
+        compose.openAdminSettings()
+        openChangePin()
+        listOf("Current PIN", "New PIN", "Confirm new PIN").forEach {
+            compose.onNodeWithText(it).performScrollTo().assertIsDisplayed()
+        }
+        fillChangePin("4826", "0000", "0000")
+        compose.onNodeWithTag("change-pin-submit").assertIsDisplayed().assertIsEnabled()
+        compose.onNodeWithText("Cancel").assertIsDisplayed()
+        compose.onNodeWithTag("change-pin-submit").performClick()
+        awaitChangeClosed()
+        compose.onNodeWithTag("admin-dialog").assertDoesNotExist()
+        assertEquals(AdminPinStore.Result.UNLOCKED, AdminPinStore(preferences).verify("0000"))
+    }
+
     @Test
     @GraphicsMode(GraphicsMode.Mode.NATIVE)
     fun subsectionsGetProgressivelyDarkerInLightDarkAndWaveThemes() {
@@ -176,5 +310,32 @@ class AdminMenuTest {
     private fun awaitTag(tag: String) {
         compose.waitUntil(10_000) { compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag(tag).assertIsDisplayed()
+    }
+
+    private fun openChangePin() {
+        compose.onNodeWithTag("change-pin").performScrollTo().performClick()
+        awaitTag("change-pin-dialog")
+    }
+
+    private fun fillChangePin(current: String, new: String, confirmation: String) {
+        compose.onNodeWithTag("change-pin-current").performScrollTo().assertIsDisplayed().performTextReplacement(current)
+        compose.onNodeWithTag("change-pin-new").performScrollTo().assertIsDisplayed().performTextReplacement(new)
+        compose.onNodeWithTag("change-pin-confirm").performScrollTo().assertIsDisplayed().performTextReplacement(confirmation)
+    }
+
+    private fun assertChangeFieldsEmpty() {
+        listOf("current", "new", "confirm").forEach {
+            compose.onNodeWithTag("change-pin-$it").assertTextEquals("")
+        }
+        compose.onNodeWithTag("change-pin-submit").assertIsNotEnabled()
+    }
+
+    private fun awaitError(message: String) {
+        compose.waitUntil(10_000) { compose.onAllNodesWithText(message).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText(message).performScrollTo().assertIsDisplayed()
+    }
+
+    private fun awaitChangeClosed() {
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("change-pin-dialog").fetchSemanticsNodes().isEmpty() }
     }
 }

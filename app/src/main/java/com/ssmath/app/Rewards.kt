@@ -60,10 +60,18 @@ data class RewardBalance(val whole: Int = 0, val fragments: Int = 0) {
     }
 
     val totalFragments: Int get() = whole * 3 + fragments
+    val canAddWhole: Boolean get() = whole < (Int.MAX_VALUE - 2) / 3
+    val canAddFragment: Boolean get() = canAddWhole || fragments < 2
 
     fun addFragment(): RewardBalance {
+        require(canAddFragment) { "The reward balance limit has been reached." }
         val total = Math.addExact(totalFragments, 1)
         return RewardBalance(total / 3, total % 3)
+    }
+
+    fun addWhole(): RewardBalance {
+        require(canAddWhole) { "The reward balance limit has been reached." }
+        return copy(whole = whole + 1)
     }
 
     fun removeFragments(count: Int): RewardBalance {

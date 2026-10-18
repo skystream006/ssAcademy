@@ -10,6 +10,7 @@ import kotlin.coroutines.CoroutineContext
 import kotlin.random.Random
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.serialization.json.Json
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -902,6 +903,188 @@ class RewardsModelTest {
         model.useReward(RewardType.LOLLIPOP)
         assertNull(model.rewardUseError)
         assertEquals(RewardBalance(1, 2), model.rewardBalances[RewardType.LOLLIPOP])
+    }
+
+    @Test fun adminAdditionsAllowEveryRewardWhenEarningIsDisabledAndPersistWithoutGameResults() {
+        val model = model()
+        Subject.entries.forEach { model.chooseSubjectRewardsEnabled(it, false) }
+        RewardType.entries.forEach { model.chooseRewardEnabled(it, false) }
+        model.openSettings()
+        RewardType.entries.forEach { type ->
+            model.addReward(type, fragment = true)
+            assertEquals(RewardBalance(0, 1), model.rewardBalances[type])
+            model.addReward(type, fragment = false)
+            assertEquals(RewardBalance(1, 1), model.rewardBalances[type])
+            repeat(2) { model.addReward(type, fragment = true) }
+            assertEquals(RewardBalance(2, 0), model.rewardBalances[type])
+            assertFalse(model.removingReward)
+            assertNull(model.rewardRemovalError)
+        }
+        val restored = model()
+        assertEquals(model.rewardBalances, restored.rewardBalances)
+        assertEquals(RewardType.entries.toSet(), restored.disabledRewards)
+        assertTrue(Subject.entries.none { restored.rewardsEnabled(it) })
+        assertEquals(PracticeSnapshot(rewards = model.rewardBalances), HistoryStore(file).loadSnapshot())
+    }
+
+    @Test fun adminAdditionRequiresSettingsButNotAnExistingInventoryEntry() {
+        val model = model()
+        listOf(true, false).forEach { model.addReward(RewardType.LOLLIPOP, it) }
+        model.openRewards()
+        listOf(true, false).forEach { model.addReward(RewardType.LOLLIPOP, it) }
+        assertTrue(model.rewardBalances.isEmpty())
+        assertFalse(file.exists())
+        assertFalse(model.removingReward)
+        assertNull(model.rewardRemovalError)
+        model.openSettings()
+        model.addReward(RewardType.LOLLIPOP, fragment = false)
+        assertEquals(RewardBalance(1, 0), model.rewardBalances[RewardType.LOLLIPOP])
+    }
+
+    @Test fun adminAdditionsPreserveCurrentAwardsAndAllPersistedHistoryMetadata() {
+        val model = model()
+        start(model)
+        finish(model)
+        model.dismissCelebration()
+        model.claimReward()
+        val current = requireNotNull(model.lastResult)
+        val before = HistoryStore(file).loadSnapshot()
+        val type = requireNotNull(current.prize).type
+        model.openSettings()
+        model.addReward(type, fragment = false)
+        model.addReward(type, fragment = true)
+        assertEquals(RewardBalance(1, 2), model.rewardBalances[type])
+        assertEquals(current, model.lastResult)
+        assertEquals(before.history, model.history)
+        assertEquals(before.pokemons, model.pokemons)
+        assertEquals(before.copy(rewards = model.rewardBalances), HistoryStore(file).loadSnapshot())
+    }
+
+    @Test fun adminAddAndRemoveShareOneBusyGateForBothUnitsAndEitherRequestOrder() {
+        listOf(true, false).forEach { addFirst ->
+            listOf(true, false).forEach { fragment ->
+                file.delete()
+                collectLollipops()
+                val dispatcher = QueuedDispatcher()
+                val model = model(dispatcher)
+                dispatcher.drain()
+                model.openSettings()
+                if (addFirst) model.addReward(RewardType.LOLLIPOP, fragment)
+                else model.removeReward(RewardType.LOLLIPOP, fragment)
+                repeat(3) {
+                    model.addReward(RewardType.LOLLIPOP, fragment)
+                    model.removeReward(RewardType.LOLLIPOP, fragment)
+                    model.addReward(RewardType.VIDEO_GAME, !fragment)
+                }
+                assertTrue(model.removingReward)
+                assertEquals(RewardBalance(2, 2), model.rewardBalances[RewardType.LOLLIPOP])
+                dispatcher.drain()
+                val total = 8 + (if (addFirst) 1 else -1) * (if (fragment) 1 else 3)
+                assertEquals(RewardBalance(total / 3, total % 3), model.rewardBalances[RewardType.LOLLIPOP])
+                assertNull(model.rewardBalances[RewardType.VIDEO_GAME])
+                assertFalse(model.removingReward)
+                assertNull(model.rewardRemovalError)
+                if (addFirst) model.removeReward(RewardType.LOLLIPOP, fragment)
+                else model.addReward(RewardType.LOLLIPOP, fragment)
+                dispatcher.drain()
+                val expected = if (addFirst && fragment) RewardBalance(3, 0) else RewardBalance(2, 2)
+                assertEquals(expected, model.rewardBalances[RewardType.LOLLIPOP])
+                assertEquals(model.rewardBalances, model().rewardBalances)
+            }
+        }
+    }
+
+    @Test fun adminAdditionsSerializeWithHistoryClearingAndKeepOnlyTheManualIncrement() {
+        listOf(true, false).forEach { addFirst ->
+            file.delete()
+            collectLollipops()
+            val dispatcher = QueuedDispatcher()
+            val model = model(dispatcher)
+            dispatcher.drain()
+            model.openSettings()
+            if (addFirst) model.addReward(RewardType.LOLLIPOP, fragment = true)
+            model.clearHistory()
+            if (!addFirst) model.addReward(RewardType.LOLLIPOP, fragment = true)
+            model.closeOverlay()
+            dispatcher.drain()
+            assertTrue(model.history.isEmpty())
+            assertEquals(RewardBalance(0, 1), model.rewardBalances[RewardType.LOLLIPOP])
+            assertNull(model.overlay)
+            assertFalse(model.removingReward)
+            assertEquals(model.rewardBalances, model().rewardBalances)
+        }
+    }
+
+    @Test fun adminAdditionSerializesWithRewardUseAfterNavigation() {
+        collectLollipops()
+        val dispatcher = QueuedDispatcher()
+        val model = model(dispatcher)
+        dispatcher.drain()
+        model.openSettings()
+        model.addReward(RewardType.LOLLIPOP, fragment = false)
+        model.openRewards()
+        model.useReward(RewardType.LOLLIPOP)
+        dispatcher.drain()
+        assertEquals(RewardBalance(2, 2), model.rewardBalances[RewardType.LOLLIPOP])
+        assertEquals(Overlay.REWARDS, model.overlay)
+        assertFalse(model.removingReward)
+        assertFalse(model.usingReward)
+        assertEquals(model.rewardBalances, model().rewardBalances)
+    }
+
+    @Test fun failedAdminAdditionsLeaveBalancesUnchangedAndClearErrorsOnEntryAndRetry() {
+        collectLollipops()
+        val model = model()
+        model.openSettings()
+        listOf(true, false).forEach { fragment ->
+            val before = file.readText()
+            val balance = model.rewardBalances
+            assertTrue(blockedWrite.mkdir())
+            repeat(2) {
+                model.addReward(RewardType.LOLLIPOP, fragment)
+                assertFalse(model.removingReward)
+                assertTrue(requireNotNull(model.rewardRemovalError).startsWith("Unable to add"))
+                assertEquals(balance, model.rewardBalances)
+                assertEquals(before, file.readText())
+            }
+            model.closeOverlay()
+            model.openSettings()
+            assertNull(model.rewardRemovalError)
+            model.addReward(RewardType.LOLLIPOP, fragment)
+            assertNotNull(model.rewardRemovalError)
+            assertTrue(blockedWrite.delete())
+            model.addReward(RewardType.LOLLIPOP, fragment)
+            assertNull(model.rewardRemovalError)
+        }
+        assertEquals(RewardBalance(4, 0), model.rewardBalances[RewardType.LOLLIPOP])
+        assertEquals(model.rewardBalances, model().rewardBalances)
+    }
+
+    @Test fun adminAdditionOverflowReportsAnErrorWithoutSavingAndCanRetryAfterRemoval() {
+        collectLollipops()
+        val maximumWhole = (Int.MAX_VALUE - 2) / 3
+        val original = HistoryStore(file).loadSnapshot().copy(rewards = mapOf(
+            RewardType.LOLLIPOP to RewardBalance(maximumWhole, 2)
+        ))
+        file.writeText(Json.encodeToString(PracticeSnapshot.serializer(), original))
+        val model = model()
+        model.openSettings()
+        listOf(true, false).forEach { fragment ->
+            val before = file.readText()
+            model.addReward(RewardType.LOLLIPOP, fragment)
+            assertFalse(model.removingReward)
+            assertTrue(requireNotNull(model.rewardRemovalError).startsWith("Unable to add"))
+            assertEquals(original.rewards, model.rewardBalances)
+            assertEquals(before, file.readText())
+            assertEquals(original, HistoryStore(file).loadSnapshot())
+        }
+        model.removeReward(RewardType.LOLLIPOP, fragment = false)
+        assertNull(model.rewardRemovalError)
+        assertTrue(model.rewardBalances.getValue(RewardType.LOLLIPOP).canAddWhole)
+        model.addReward(RewardType.LOLLIPOP, fragment = false)
+        assertNull(model.rewardRemovalError)
+        assertEquals(original.rewards, model.rewardBalances)
+        assertEquals(original, HistoryStore(file).loadSnapshot())
     }
 
     @Test fun adminRemovalWorksWithRewardsDisabledAndPreservesHistoryAcrossReloads() {
