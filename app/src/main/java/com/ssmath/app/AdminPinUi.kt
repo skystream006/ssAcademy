@@ -3,12 +3,7 @@ package com.ssmath.app
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -41,11 +36,11 @@ internal fun AdminPinDialog(onUnlocked: () -> Unit, onDismiss: () -> Unit) {
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
-    AlertDialog(
+    SettingsDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (creating) "Create Admin PIN" else "Enter Admin PIN") },
         text = {
-            Column(Modifier.verticalScroll(rememberScrollState()),
+            Column(
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(if (creating) "Create a 4–8 digit PIN to protect the Admin Menu. You will need it each time you open this menu."
                     else "Enter your PIN to open the Admin Menu.")
@@ -107,7 +102,7 @@ internal fun AdminPinDialog(onUnlocked: () -> Unit, onDismiss: () -> Unit) {
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
         properties = DialogProperties(usePlatformDefaultWidth = false, securePolicy = SecureFlagPolicy.SecureOn),
-        modifier = Modifier.widthIn(max = 440.dp).fillMaxWidth().padding(16.dp).testTag("admin-pin-dialog")
+        modifier = Modifier.testTag("admin-pin-dialog")
     )
 }
 
@@ -140,11 +135,11 @@ internal fun ChangeAdminPinDialog(onChanged: () -> Unit, onDismiss: () -> Unit) 
             clearPins()
         }
     }
-    AlertDialog(
+    SettingsDialog(
         onDismissRequest = dismiss,
         title = { Text("Change PIN") },
         text = {
-            Column(Modifier.verticalScroll(rememberScrollState()),
+            Column(
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Enter your current PIN and choose a new 4–8 digit PIN.")
                 ChangePinField("Current PIN", "change-pin-current", currentPin, !busy) {
@@ -218,7 +213,7 @@ internal fun ChangeAdminPinDialog(onChanged: () -> Unit, onDismiss: () -> Unit) 
             dismissOnBackPress = !busy,
             dismissOnClickOutside = !busy
         ),
-        modifier = Modifier.widthIn(max = 440.dp).fillMaxWidth().padding(16.dp).testTag("change-pin-dialog")
+        modifier = Modifier.testTag("change-pin-dialog")
     )
 }
 

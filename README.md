@@ -136,6 +136,9 @@ yellow chest chevrons, and red head horns.
 The semi-transparent (50% opacity) settings button in the bottom-right corner opens
 **Settings**:
 
+Settings dialogs and game setup fill the screen, with scrollable content and fixed
+titles and closing actions. Keyboard and system-bar space is kept clear.
+
 **Rewards**, **Result Histories**, and each subject's settings are collapsed by default; tap a heading to
 expand or collapse it without changing your choices. **Rewards** contains
 **My Rewards** and **My Pokémons**. **Result Histories** contains all four subjects'
@@ -593,8 +596,9 @@ duplicating ones already collected or changing history and rewards. This debug a
 unlocks every animation; earning Mega Pokémons through gameplay still requires the math matrix game.
 
 In **Settings > Admin Menu**, expand **My Rewards**, then press **Add/Remove Rewards** to
-view balances by tier. Choose **Add 1 fragment**, **Add 1 whole reward**, **Remove 1 fragment**,
-or **Remove 1 whole reward**, then confirm **Add** or **Remove**; **Cancel** leaves the balance
+view balances by tier in rows of four rewards. Each reward has separate **Whole** and
+**Fragments** controls, with its amount and picture between an **up arrow** (add one)
+and **down arrow** (remove one). Confirm **Add** or **Remove**; **Cancel** leaves the balance
 unchanged. Additions work even with reward earning disabled or an empty inventory.
 Every 3 matching fragments become 1 whole reward; adding a whole reward keeps existing
 fragments. Removing a fragment never breaks a whole reward, and unavailable units cannot
