@@ -112,6 +112,12 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    questions as the total. Press **View results** to dismiss it.
    Press **Done** to return to the Math games.
 
+Mega artwork is drawn locally rather than downloaded during play. The requested
+Bulbapedia pages were unavailable during development; alternative
+[official-art references](https://github.com/PokeAPI/sprites/tree/d379dda349f02e965950c341f2dcff6d21bd1cfc/sprites/pokemon/other/official-artwork)
+and [Pokémon type data](https://github.com/PokeAPI/pokeapi/tree/b369a1c44ab9343fb41ed18e076453235e1f3884/data/v2/csv)
+were used instead. The drawings are simplified original renditions, not copies of the source images.
+
 The semi-transparent (50% opacity) settings button in the bottom-right corner opens
 **Settings**:
 
