@@ -65,11 +65,12 @@ class AdminMenuTest {
         assertFalse(AdminPinStore(preferences).hasPin)
         submit("4826", "4826")
         awaitTag("admin-dialog")
-        listOf("Game Settings", "My Rewards", "Available Rewards").forEach {
+        listOf("Game Settings", "Add/Remove Rewards", "Available Rewards").forEach {
             compose.onNodeWithText(it).performScrollTo().assertIsDisplayed()
         }
         compose.onNodeWithText("Reading activities").assertDoesNotExist()
         compose.onNodeWithText("My Pokémons").assertDoesNotExist()
+        compose.onNodeWithText("My Rewards").assertDoesNotExist()
         compose.onNodeWithText("Close").performClick()
         compose.onNodeWithTag("admin-menu").performScrollTo().performClick()
         compose.onNodeWithText("Enter Admin PIN").assertIsDisplayed()

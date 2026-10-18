@@ -77,16 +77,17 @@ class RewardsSettingsTest {
         compose.openAdminSettings()
         val collapsed = SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Collapsed")
         val expanded = SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Expanded")
-        listOf("My Rewards", "Available Rewards", "Game Settings")
+        listOf("Available Rewards", "Game Settings")
             .forEach { compose.onNodeWithText(it).performScrollTo().assertHasClickAction().assert(collapsed) }
         compose.onNodeWithText("Add all animations").assertDoesNotExist()
-        compose.onNodeWithText("Add/Remove Rewards").assertDoesNotExist()
+        compose.onNodeWithText("My Rewards").assertDoesNotExist()
+        compose.onNodeWithText("Add/Remove Rewards").performScrollTo().assertIsDisplayed().assertHasClickAction()
         compose.onNodeWithTag("reading-database-open").assertDoesNotExist()
         RewardType.entries.forEach {
             compose.onNodeWithContentDescription("${it.label} reward").assertDoesNotExist()
         }
         compose.onNodeWithText("Math Settings").assertDoesNotExist()
-        compose.onNodeWithText("Game Settings").performClick().assert(expanded)
+        compose.onNodeWithText("Game Settings").performScrollTo().performClick().assert(expanded)
         listOf("Math Settings", "Reading Settings", "Science Settings", "Advanced Subject Settings")
             .forEach { compose.onNodeWithText(it).performScrollTo().assertHasClickAction().assert(collapsed) }
         Subject.entries.forEach {
@@ -560,7 +561,7 @@ class RewardsSettingsTest {
         compose.setContent { MathAppContent(model) }
         compose.onNodeWithText("Add/Remove Rewards").assertDoesNotExist()
         compose.openAdminSettings()
-        compose.onNodeWithText("My Rewards").performScrollTo().performClick()
+        compose.onNodeWithText("My Rewards").assertDoesNotExist()
         compose.onNodeWithText("Add/Remove Rewards").performScrollTo().performClick()
         RewardTier.entries.forEach { tier ->
             compose.onNodeWithText(tier.label).performScrollTo().assertIsDisplayed()
@@ -650,7 +651,7 @@ class RewardsSettingsTest {
         model.openSettings()
         compose.setContent { MathAppContent(model) }
         compose.openAdminSettings()
-        compose.onNodeWithText("My Rewards").performScrollTo().performClick()
+        compose.onNodeWithText("My Rewards").assertDoesNotExist()
         compose.onNodeWithText("Add/Remove Rewards").performScrollTo().performClick()
         RewardType.entries.forEach { type ->
             compose.onNodeWithContentDescription("Add 1 whole ${type.label} reward").performScrollTo().performClick()
