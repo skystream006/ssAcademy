@@ -156,6 +156,8 @@ class MathViewModel(
 
     var showTimer by mutableStateOf(settings.getBoolean("show_timer", false))
         private set
+    var pauseInBackground by mutableStateOf(settings.getBoolean("math_pause_in_background", true))
+        private set
     private var subjectRewards by mutableStateOf(Subject.entries.associateWith {
         settings.getBoolean(it.rewardsPreference, true)
     })
@@ -531,7 +533,7 @@ class MathViewModel(
         collectCelebrations(listOf(presented), pending)
     }
 
-    fun collectAllCelebrations() { collectCelebrations(Celebration.standardCelebrations) }
+    fun collectAllCelebrations() { collectCelebrations(Celebration.entries) }
 
     private fun collectCelebrations(celebrations: Collection<Celebration>, pending: PendingResult? = null) {
         viewModelScope.launch {
@@ -539,7 +541,7 @@ class MathViewModel(
                 storeLock.withLock {
                     if (pending != null && !pending.saved) persistResult(pending)
                     val snapshot = withContext(ioDispatcher) {
-                        if (pending == null) store.collectPokemons(celebrations)
+                        if (pending == null) store.collectPokemons(celebrations, includeMegaPokemons = true)
                         else store.collectPokemon(pending.result.id, celebrations.single())
                     }
                     applySnapshot(snapshot)
@@ -569,7 +571,7 @@ class MathViewModel(
     fun checkTimeLimit(): Boolean {
         val limit = activeTimeLimitMs ?: return false
         val current = game ?: return false
-        if (screen != Screen.PLAYING || overlay != null || !foreground || elapsedMs() < limit) return false
+        if (!timerShouldRun || elapsedMs() < limit) return false
         finish(current, timedOut = true)
         return true
     }
@@ -581,9 +583,12 @@ class MathViewModel(
         timeoutJob = null
     }
 
-    /** The timer only runs while a game is visible: it pauses in settings, history, or the background. */
+    private val timerShouldRun: Boolean
+        get() = screen == Screen.PLAYING && overlay == null && (foreground || !pauseInBackground)
+
+    /** Overlays always pause the timer; background time follows the Math setting. */
     private fun updateTimer() {
-        val shouldRun = screen == Screen.PLAYING && overlay == null && foreground
+        val shouldRun = timerShouldRun
         val since = runningSince
         if (shouldRun && since == null) runningSince = clock()
         else if (!shouldRun && since != null) {
@@ -593,9 +598,11 @@ class MathViewModel(
         if (!shouldRun) {
             timeoutJob?.cancel()
             timeoutJob = null
+        } else if (checkTimeLimit()) {
+            return
         } else if (activeTimeLimitMs != null && timeoutJob == null) {
             timeoutJob = viewModelScope.launch {
-                while (screen == Screen.PLAYING && overlay == null && foreground) {
+                while (timerShouldRun) {
                     if (checkTimeLimit()) break
                     delay(200)
                 }
@@ -1056,6 +1063,12 @@ class MathViewModel(
     fun chooseShowTimer(value: Boolean) {
         showTimer = value
         settings.edit().putBoolean("show_timer", value).apply()
+    }
+
+    fun choosePauseInBackground(value: Boolean) {
+        pauseInBackground = value
+        settings.edit().putBoolean("math_pause_in_background", value).apply()
+        updateTimer()
     }
 
     fun chooseRewardsEnabled(value: Boolean) {

@@ -225,7 +225,10 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   Disabled reward types are excluded from new prizes. Existing gifts remain claimable.
   Reading checkpoint points have been removed; checkpoints still track activity progress.
 - **Show timer** – off by default. Show or hide the timer while practicing. The timer pauses while
-  Settings, any subject's Practice History, My Rewards, or My Pokémons is open, or the app is in the background.
+  Settings, any subject's Practice History, My Rewards, or My Pokémons is open.
+  **Pause in background**, beside the Math time-limit dropdown, is on by default.
+  Turn it off to keep counting Math game time when the app is in the background, including time limits.
+  This choice is remembered; Reading timers still pause in the background.
   When both Math Rewards System and Show timer are enabled, **Time limit per 5 questions** offers
   **None**, **30 seconds**, **1, 2, 3, or 4 minutes**, or **5, 10, or 15 minutes**.
   Older saved selections above 15 minutes use 15 minutes for new games.
@@ -560,9 +563,9 @@ Tap the description beginning **Off by default** below **Enable debug logging**
 seven times to open the **Admin** dialog. Opening or closing it does not add animations.
 All sections start collapsed: **Game Settings** (with separate collapsed subject settings),
 **My Pokémons**, **My Rewards**, **Reading activities**, and **Available rewards**.
-Expand **My Pokémons**, then press **Add all animations** to add all standard celebrations to **My Pokémons**, without
+Expand **My Pokémons**, then press **Add all animations** to add all celebrations, including **Mega Pokémons**, to **My Pokémons**, without
 duplicating ones already collected or changing history and rewards. This admin action
-does not unlock Mega Pokémons: they can only be earned in the math matrix game.
+unlocks every animation; earning Mega Pokémons through gameplay still requires the math matrix game.
 
 Expand **My Rewards**, then press **Remove rewards** to view available balances by tier. Choose **Remove 1 fragment**
 or **Remove 1 whole reward** for a reward, then confirm **Remove**; **Cancel** leaves it

@@ -30,6 +30,8 @@ import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.CardGiftcard
 import androidx.compose.material.icons.rounded.Collections
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -336,13 +338,12 @@ private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit) {
                 Column(Modifier.verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     CollapsibleSettingsSection("My Pokémons", defaultExpanded = false) {
-                        Text("Add all standard celebrations without changing practice history or rewards. " +
-                            "Mega Pokémons can only be earned in the Multiplication Matrix Rewards Game.")
+                        Text("Add all celebrations, including Mega Pokémons, without changing practice history or rewards.")
                         Button(onClick = model::collectAllCelebrations,
-                            enabled = !model.pokemons.containsAll(Celebration.standardCelebrations)) {
+                            enabled = !model.pokemons.containsAll(Celebration.entries)) {
                             Text("Add all animations", Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
                         }
-                        Text("${model.pokemons.count { it in Celebration.standardCelebrations }}/${Celebration.standardCelebrations.size} animations collected")
+                        Text("${model.pokemons.size}/${Celebration.entries.size} animations collected")
                     }
                     HorizontalDivider()
                     CollapsibleSettingsSection("My Rewards", defaultExpanded = false) {
@@ -411,7 +412,8 @@ private fun GameSettings(
                 modifier = Modifier.semantics { contentDescription = "Show timer" })
         }
         if (model.rewardsEnabled && model.showTimer) {
-            TimeLimitSetting(model.timeLimitSeconds, model::chooseTimeLimitSeconds)
+            TimeLimitSetting(model.timeLimitSeconds, model::chooseTimeLimitSeconds,
+                model.pauseInBackground, model::choosePauseInBackground)
         }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -562,7 +564,12 @@ internal fun RemoveRewardsDialog(
 }
 
 @Composable
-private fun TimeLimitSetting(seconds: Int, onChange: (Int) -> Unit) {
+private fun TimeLimitSetting(
+    seconds: Int,
+    onChange: (Int) -> Unit,
+    pauseInBackground: Boolean,
+    onPauseInBackgroundChange: (Boolean) -> Unit
+) {
     var expanded by remember { mutableStateOf(false) }
     fun label(value: Int) = when (value) {
         0 -> "None"
@@ -572,22 +579,34 @@ private fun TimeLimitSetting(seconds: Int, onChange: (Int) -> Unit) {
     }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text("Time limit per 5 questions", style = MaterialTheme.typography.titleSmall)
-        Box {
-            OutlinedButton(onClick = { expanded = true }, modifier = Modifier.testTag("time-limit")) {
-                Text(label(seconds))
-                Icon(Icons.Rounded.ExpandMore, null)
-            }
-            DropdownMenu(expanded, onDismissRequest = { expanded = false }) {
-                timeLimitOptionsSeconds.forEach { option ->
-                    DropdownMenuItem(
-                        text = { Text(label(option)) },
-                        onClick = { onChange(option); expanded = false },
-                        modifier = Modifier.semantics { selected = seconds == option })
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box {
+                OutlinedButton(onClick = { expanded = true }, modifier = Modifier.testTag("time-limit")) {
+                    Text(label(seconds))
+                    Icon(Icons.Rounded.ExpandMore, null)
+                }
+                DropdownMenu(expanded, onDismissRequest = { expanded = false }) {
+                    timeLimitOptionsSeconds.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(label(option)) },
+                            onClick = { onChange(option); expanded = false },
+                            modifier = Modifier.semantics { selected = seconds == option })
+                    }
                 }
             }
+            OutlinedIconToggleButton(checked = pauseInBackground, onCheckedChange = onPauseInBackgroundChange,
+                modifier = Modifier.semantics {
+                    contentDescription = "Pause in background"
+                    stateDescription = if (pauseInBackground) "On" else "Off"
+                }) {
+                Icon(if (pauseInBackground) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null)
+            }
         }
+        Text(if (pauseInBackground) "Pause in background: On. Math time pauses when you leave the app."
+            else "Pause in background: Off. Math time keeps running when you leave the app.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text("Rewards Game only, not Practice Game. 1 minute per 5 questions gives 5 minutes for 25 questions. " +
-            "Time pauses in settings and in the background.",
+            "Time always pauses in settings.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

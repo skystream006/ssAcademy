@@ -337,11 +337,11 @@ class PokemonSettingsTest {
         repeat(7) { description.performClick() }
         compose.onNodeWithText("My Pokémons").performScrollTo().performClick()
         compose.onNodeWithText("Add all animations").performClick()
-        val expected = before.copy(pokemons = Celebration.standardCelebrations.toSet())
+        val expected = before.copy(pokemons = Celebration.entries.toSet())
         assertEquals(expected.pokemons, model.pokemons)
         assertEquals(expected, store.loadSnapshot())
         compose.onNodeWithText("Add all animations").assertIsNotEnabled()
-        compose.onNodeWithText("162/162 animations collected").assertIsDisplayed()
+        compose.onNodeWithText("${Celebration.entries.size}/${Celebration.entries.size} animations collected").assertIsDisplayed()
         compose.onNodeWithText("Close").performClick()
         repeat(7) { description.performClick() }
         compose.onNodeWithText("My Pokémons").performScrollTo().performClick()
@@ -354,6 +354,24 @@ class PokemonSettingsTest {
         compose.onNodeWithTag("my-pokemons").performScrollTo().performClick()
         assertSectionCount(CelebrationCategory.POKEMONS, "157/157")
         assertSectionCount(CelebrationCategory.OTHER, "5/5")
+        assertSectionCount(CelebrationCategory.MEGA_POKEMONS, "95/95")
+    }
+
+    @Test fun addAllAnimationsStaysEnabledWhenOnlyMegaPokemonsAreMissing() {
+        val store = HistoryStore(file)
+        store.collectPokemons(Celebration.standardCelebrations)
+        val before = store.loadSnapshot()
+        val model = model()
+        model.openSettings()
+        compose.setContent { MathAppContent(model) }
+        compose.onNodeWithText("Debug logging").performScrollTo().performClick()
+        val description = compose.onNodeWithTag("debug-logging-description").performScrollTo()
+        repeat(7) { description.performClick() }
+        compose.onNodeWithText("My Pokémons").performScrollTo().performClick()
+        compose.onNodeWithText("162/${Celebration.entries.size} animations collected").assertIsDisplayed()
+        compose.onNodeWithText("Add all animations").assertIsEnabled().performClick().assertIsNotEnabled()
+        assertEquals(before.copy(pokemons = Celebration.entries.toSet()), store.loadSnapshot())
+        assertEquals(Celebration.entries.toSet(), model().pokemons)
     }
 
     @Test
