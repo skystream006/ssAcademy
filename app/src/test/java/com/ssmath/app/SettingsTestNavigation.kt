@@ -9,7 +9,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 
-internal fun ComposeContentTestRule.openAdminSettings() {
+internal fun ComposeContentTestRule.openAdminSettings(expectedDialog: String = "admin-dialog") {
     onNodeWithTag("admin-menu").performScrollTo().performClick()
     onNodeWithTag("admin-pin").performScrollTo().performTextInput("4826")
     if (onAllNodesWithTag("admin-pin-confirm").fetchSemanticsNodes().isNotEmpty()) {
@@ -17,9 +17,9 @@ internal fun ComposeContentTestRule.openAdminSettings() {
     }
     onNodeWithTag("admin-pin-submit").performClick()
     waitUntil(10_000) {
-        onAllNodesWithTag("admin-dialog").fetchSemanticsNodes().isNotEmpty()
+        onAllNodesWithTag(expectedDialog).fetchSemanticsNodes().isNotEmpty()
     }
-    onNodeWithTag("admin-dialog").assertIsDisplayed()
+    onNodeWithTag(expectedDialog).assertIsDisplayed()
 }
 
 internal fun ComposeContentTestRule.openDebugSettings() {

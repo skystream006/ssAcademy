@@ -251,8 +251,7 @@ class RewardsSettingsTest {
         restoration.emulateSavedInstanceStateRestore()
         compose.onNodeWithTag("active-reading-games-dialog").assertDoesNotExist()
         compose.onNodeWithTag("admin-dialog").assertDoesNotExist()
-        compose.openGameSettings(Subject.READING)
-        compose.onNodeWithTag("active-reading-games").performScrollTo().performClick()
+        compose.openAdminSettings(expectedDialog = "active-reading-games-dialog")
         compose.onNodeWithTag("active-reading-games-dialog").assertIsDisplayed()
         compose.onNodeWithContentDescription(ReadingGame.STUDIO.title).performScrollTo().assertIsOff()
         compose.runOnIdle {
