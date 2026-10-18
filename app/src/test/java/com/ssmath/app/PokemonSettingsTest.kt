@@ -328,7 +328,7 @@ class PokemonSettingsTest {
         compose.onNodeWithText("Debug Menu").assertDoesNotExist()
         description.performClick()
         compose.onNodeWithText("Debug Menu").assertIsDisplayed()
-        listOf("Game Settings", "My Rewards", "Available Rewards").forEach {
+        listOf("Game Settings", "My Rewards", "Add/Remove Rewards", "Available Rewards").forEach {
             compose.onNodeWithText(it).assertDoesNotExist()
         }
         compose.onNodeWithTag("admin-pin-dialog").assertDoesNotExist()

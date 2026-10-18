@@ -399,10 +399,8 @@ private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit) {
                     Button(onClick = { changingPin = true }, modifier = Modifier.fillMaxWidth().testTag("change-pin")) {
                         Text("Change PIN", textAlign = TextAlign.Center)
                     }
-                    CollapsibleSettingsSection("My Rewards", defaultExpanded = false) {
-                        Button(onClick = { showingAdjustments = true }) {
-                            Text("Add/Remove Rewards", Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
-                        }
+                    Button(onClick = { showingAdjustments = true }, modifier = Modifier.fillMaxWidth()) {
+                        Text("Add/Remove Rewards", textAlign = TextAlign.Center)
                     }
                     HorizontalDivider()
                     CollapsibleSettingsSection("Available Rewards", defaultExpanded = false) {
