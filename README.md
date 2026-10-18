@@ -237,7 +237,7 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   Turn it off to keep counting Math game time when the app is in the background, including time limits.
   This choice is remembered; Reading timers still pause in the background.
   When both Math Rewards System and Show timer are enabled, **Time limit per 5 questions** offers
-  **None**, **30 seconds**, **1, 2, 3, or 4 minutes**, or **5, 10, or 15 minutes**.
+  **None**, **15, 30, or 45 seconds**, **1, 2, 3, or 4 minutes**, or **5, 10, or 15 minutes**.
   Older saved selections above 15 minutes use 15 minutes for new games.
   **30 seconds per 5 questions** gives **1 minute 30 seconds for 15**,
   **2 minutes 30 seconds for 25**, and **5 minutes for 50 questions**.

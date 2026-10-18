@@ -609,7 +609,7 @@ private fun TimeLimitSetting(
     var expanded by remember { mutableStateOf(false) }
     fun label(value: Int) = when (value) {
         0 -> "None"
-        30 -> "30 seconds"
+        in 1..59 -> "$value seconds"
         60 -> "1 minute"
         else -> "${value / 60} minutes"
     }
