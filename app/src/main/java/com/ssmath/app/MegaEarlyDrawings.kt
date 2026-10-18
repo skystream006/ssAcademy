@@ -2,6 +2,7 @@ package com.ssmath.app
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -89,107 +90,172 @@ private fun DrawScope.megaEarlyMeganium(m: Float) {
         }
         for (toe in 0..2) kantoOval(0xFFFFF7DF, x - 9f + toe * 7f + step, 55f, 5f, 6f)
     }
-    // Four overlapping corollas conceal the elongated neck, not a single standard collar.
-    val petals = listOf(0xFFFFF0E0, 0xFFF6ACBC, 0xFFE76A94, 0xFFCC426D)
-    for (tier in 0..3) {
-        val y = 8f - tier * 16f
-        val spread = 34f - tier * 3f
-        val sway = m * (tier + 1)
-        megaEarlyShape(petals[tier]) {
-            moveTo(-33f, y - 14f)
-            cubicTo(-33f - spread + sway, y - 28f, -40f - spread, y + 5f, -31f, y + 8f)
-            cubicTo(-28f, y + 29f, 2f, y + 23f, 0f + sway, y + 5f)
-            cubicTo(30f + sway, y + 10f, 27f, y - 18f, -4f, y - 16f)
-            quadraticTo(-16f, y - 26f, -33f, y - 14f)
-        }
-        megaEarlyCurve(0xFFFFD8D1, 2f) {
-            moveTo(-44f, y - 5f); quadraticTo(-31f, y, -22f, y + 10f)
-            moveTo(-13f, y + 7f); quadraticTo(0f, y - 3f, 11f, y - 5f)
-        }
+    // The corollas face forward around the head, forming a long, layered flower mane.
+    megaEarlyShape(0xFFFFFAF0) {
+        moveTo(-50f, -48f); lineTo(-65f, -32f); lineTo(-59f, -18f)
+        lineTo(-68f, -6f); lineTo(-58f, 3f); lineTo(-63f, 16f)
+        quadraticTo(-52f, 23f, -45f, 19f); lineTo(-36f, 34f)
+        lineTo(-24f, 26f); lineTo(-9f, 32f); lineTo(-6f, 20f)
+        lineTo(9f, 22f); lineTo(8f, 7f); lineTo(18f, -2f)
+        lineTo(10f, -14f); lineTo(14f, -30f); lineTo(2f, -42f)
+        quadraticTo(-20f, -62f, -50f, -48f)
     }
-    megaEarlyShape(0xFFA4D777) {
-        moveTo(-37f, -62f); cubicTo(-23f, -74f, -3f, -61f, -7f, -46f)
-        quadraticTo(-14f, -30f, -36f, -38f); cubicTo(-56f, -39f, -56f, -57f, -37f, -62f)
+    megaEarlyShape(0xFFF3ACC7) {
+        moveTo(-49f, -54f); lineTo(-59f, -39f); lineTo(-54f, -27f)
+        lineTo(-61f, -16f); lineTo(-50f, -7f); lineTo(-53f, 6f)
+        lineTo(-40f, 9f); lineTo(-31f, 22f); lineTo(-21f, 11f)
+        lineTo(-7f, 16f); lineTo(-3f, 3f); lineTo(11f, -3f)
+        lineTo(5f, -16f); lineTo(12f, -30f); lineTo(1f, -37f)
+        lineTo(7f, -49f); quadraticTo(-13f, -63f, -49f, -54f)
     }
-    megaEarlyCurve(0xFFDEB856, 4f) {
-        moveTo(-28f, -61f); cubicTo(-45f, -77f, -55f, -72f + m, -43f, -66f)
-        moveTo(-14f, -61f); cubicTo(-9f, -76f, 10f, -73f - m, 3f, -64f)
+    megaEarlyShape(0xFFE26998) {
+        moveTo(-45f, -59f); quadraticTo(-61f, -52f, -53f, -40f)
+        quadraticTo(-66f, -32f, -51f, -23f); quadraticTo(-61f, -7f, -43f, -8f)
+        quadraticTo(-43f, 9f, -29f, 0f); quadraticTo(-15f, 14f, -10f, -3f)
+        quadraticTo(8f, 0f, 2f, -18f); quadraticTo(17f, -28f, 1f, -38f)
+        quadraticTo(9f, -58f, -11f, -55f); lineTo(-26f, -63f)
     }
-    kantoEyes(-31f, -51f, 13f, 3f)
-    kantoSmile(-37f, -42f, 11f)
+    megaEarlyShape(0xFFE9535C) {
+        moveTo(-44f, -60f); lineTo(-52f, -51f); lineTo(-49f, -40f)
+        lineTo(-55f, -29f); lineTo(-46f, -25f); lineTo(-48f, -13f)
+        lineTo(-37f, -14f); quadraticTo(-34f, -2f, -25f, -12f)
+        quadraticTo(-13f, -6f, -10f, -21f); lineTo(0f, -25f)
+        lineTo(-5f, -38f); lineTo(1f, -49f); lineTo(-10f, -53f)
+        lineTo(-13f, -64f); lineTo(-26f, -59f); lineTo(-36f, -66f)
+    }
+    kantoPolygon(0xFFFFD0D3, -42f, -31f, -49f, -38f, -37f, -35f)
+    kantoPolygon(0xFFFFD0D3, -18f, -32f, -7f, -28f, -17f, -39f)
+    megaEarlyShape(0xFFC4DF78) {
+        moveTo(-42f, -55f); cubicTo(-29f, -65f, -17f, -53f, -20f, -37f)
+        quadraticTo(-21f, -23f, -37f, -24f); quadraticTo(-51f, -28f, -49f, -43f)
+    }
+    megaEarlyShade(0xFFE5ED9A) {
+        moveTo(-43f, -54f); quadraticTo(-53f, -31f, -39f, -27f)
+        lineTo(-32f, -29f); quadraticTo(-43f, -38f, -36f, -56f)
+    }
+    megaEarlyCurve(0xFFC4AA39, 2f) {
+        moveTo(-43f, -55f); quadraticTo(-53f, -65f, -43f + m * 2f, -72f)
+        moveTo(-29f, -58f); quadraticTo(-26f, -70f, -12f - m * 2f, -72f)
+    }
+    kantoOval(0xFFF4DB64, -48f + m * 2f, -76f, 7f, 13f)
+    kantoOval(0xFFF4DB64, -20f - m * 2f, -76f, 13f, 6f)
+    kantoOval(0xFFFCF8DF, -36f, -47f, 10f, 18f)
+    kantoOval(0xFFAD653F, -32f, -43f, 5f, 12f)
+    kantoLine(KANTO_INK, 2f, -30f, -41f, -30f, -34f)
+    kantoLine(KANTO_INK, 1.5f, -46f, -30f, -38f, -29f)
 }
 
 private fun DrawScope.megaEarlyEmboar(m: Float) {
-    val swing = m * 5f
-    megaEarlyShape(0xFFEF683B) {
-        moveTo(-44f, -15f); cubicTo(-69f, -26f, -49f, -48f, -63f, -61f + swing)
-        quadraticTo(-34f, -58f, -31f, -68f); lineTo(-19f, -58f)
-        quadraticTo(-3f, -79f, 8f, -62f); lineTo(25f, -73f)
-        quadraticTo(30f, -55f, 51f, -63f - swing)
-        cubicTo(44f, -37f, 76f, -24f, 48f, 8f); lineTo(-40f, 14f)
+    val swing = m * 3f
+    for (side in listOf(-1f, 1f)) {
+        val lift = side * m * 2f
+        kantoPolygon(0xFF37383A, side * 12f, 36f, side * 32f, 35f,
+            side * 39f, 56f + lift, side * 21f, 61f + lift, side * 9f, 52f)
+        kantoPolygon(0xFFF2D476, side * 24f, 54f + lift, side * 28f, 61f + lift,
+            side * 33f, 55f + lift, side * 38f, 61f + lift, side * 36f, 50f + lift)
+        megaEarlyShape(0xFFF06335) {
+            moveTo(side * 18f, -18f); quadraticTo(side * 55f, -16f, side * 45f, -49f)
+            quadraticTo(side * 36f, -59f, side * 48f, -66f + swing)
+            quadraticTo(side * 39f, -45f, side * 56f, -39f)
+            quadraticTo(side * 66f, -15f, side * 40f, 15f); lineTo(side * 14f, 4f)
+        }
+        megaEarlyShade(0xFFFFD745) {
+            moveTo(side * 23f, -13f); quadraticTo(side * 44f, -24f, side * 43f, -47f)
+            quadraticTo(side * 56f, -32f, side * 48f, -15f)
+            lineTo(side * 42f, -20f); lineTo(side * 36f, 9f); lineTo(side * 16f, 10f)
+        }
     }
-    megaEarlyShade(0xFFFFCD62) {
-        moveTo(-39f, -7f); quadraticTo(-53f, -34f, -39f, -47f)
-        lineTo(-33f, -37f); lineTo(-14f, -61f); lineTo(-9f, -46f)
-        lineTo(17f, -62f); lineTo(18f, -43f)
-        quadraticTo(53f, -51f, 48f, -13f); lineTo(27f, 14f)
+    megaEarlyShape(0xFF343536) {
+        moveTo(-22f, -18f); cubicTo(-47f, -7f, -46f, 39f, -24f, 48f)
+        quadraticTo(0f, 57f, 27f, 45f); cubicTo(48f, 22f, 38f, -16f, 18f, -20f)
+    }
+    megaEarlyShape(0xFFF0C52E) {
+        moveTo(-30f, 0f); quadraticTo(-9f, -9f, 0f, 9f)
+        quadraticTo(13f, -13f, 31f, 0f); quadraticTo(43f, 17f, 26f, 31f)
+        lineTo(17f, 39f); lineTo(7f, 31f); lineTo(0f, 40f)
+        lineTo(-10f, 32f); lineTo(-22f, 39f); quadraticTo(-44f, 21f, -30f, 0f)
     }
     for (side in listOf(-1f, 1f)) {
-        val lift = side * m * 3f
-        megaEarlyShape(0xFF454148) {
-            moveTo(side * 12f, 30f); lineTo(side * 36f, 30f)
-            lineTo(side * 40f, 56f + lift); quadraticTo(side * 26f, 65f + lift, side * 10f, 56f + lift)
+        megaEarlyCurve(0xFF49412C, 2f) {
+            moveTo(side * 24f, 2f); cubicTo(side * 9f, -5f, side * 7f, 17f, side * 23f, 14f)
+            cubicTo(side * 35f, 10f, side * 36f, 31f, side * 17f, 29f)
+            quadraticTo(side * 8f, 26f, side * 11f, 21f)
         }
-        kantoLine(0xFFDC7543, 4f, side * 15f, 47f + lift, side * 34f, 47f + lift)
-        megaEarlyShape(0xFFDD744B) {
-            moveTo(side * 27f, -12f); quadraticTo(side * 64f, -25f + side * swing, side * 69f, 11f + side * swing)
-            lineTo(side * 50f, 24f + side * swing); quadraticTo(side * 34f, 12f, side * 27f, -12f)
-        }
-        kantoPolygon(0xFF393C45, side * 53f, 1f + side * swing, side * 73f, 7f + side * swing,
-            side * 76f, 25f + side * swing, side * 62f, 33f + side * swing, side * 49f, 23f + side * swing)
-        kantoLine(0xFFF3B753, 4f, side * 52f, 8f + side * swing, side * 72f, 14f + side * swing)
-        kantoLine(KANTO_INK, 2f, side * 62f, 23f + side * swing, side * 67f, 29f + side * swing)
     }
-    megaEarlyShape(0xFF454148) {
-        moveTo(-28f, -19f); cubicTo(-52f, -5f, -45f, 38f, -22f, 45f)
-        cubicTo(6f, 54f, 41f, 38f, 41f, 13f); quadraticTo(42f, -22f, 15f, -20f)
+    kantoPolygon(0xFFCF4938, -37f, 30f, -27f, 42f, -16f, 36f, -7f, 48f,
+        3f, 41f, 17f, 47f, 30f, 35f, 38f, 31f, 32f, 55f, 21f, 51f,
+        13f, 61f, 1f, 52f, -9f, 59f, -18f, 50f, -32f, 55f)
+    megaEarlyShape(0xFFF66A32) {
+        moveTo(-25f, -28f); lineTo(-37f, -43f); lineTo(-32f, -17f)
+        lineTo(-44f, -26f); lineTo(-29f, -1f); lineTo(-20f, -7f)
+        lineTo(0f, 18f); lineTo(19f, -7f); lineTo(31f, -4f)
+        lineTo(44f, -28f); lineTo(30f, -20f); lineTo(32f, -43f); lineTo(22f, -29f)
     }
-    kantoPolygon(0xFFD98C43, -36f, 16f, 37f, 16f, 35f, 29f, -35f, 29f)
-    megaEarlyCurve(0xFFFFCE61, 3f) {
-        moveTo(-23f, 26f); lineTo(-23f, 19f); lineTo(-10f, 19f); lineTo(-10f, 25f)
-        moveTo(4f, 26f); lineTo(4f, 19f); lineTo(20f, 19f); lineTo(20f, 26f)
+    kantoPolygon(0xFFFFCD40, -22f, -22f, -15f, -6f, 0f, 8f, 15f, -7f,
+        24f, -24f, 14f, -19f, 0f, -4f, -13f, -18f)
+    kantoPolygon(0xFF303436, -20f, -38f, -25f, -53f, -12f, -48f,
+        -10f, -62f, -15f, -73f, -2f, -68f, 3f, -59f, 11f, -70f,
+        19f, -73f, 14f, -60f, 14f, -46f, 24f, -51f, 20f, -34f, 0f, -24f)
+    kantoOval(0xFF493D35, -19f, -46f, 40f, 23f)
+    kantoPolygon(0xFFF0D782, -21f, -36f, -19f, -25f, -11f, -28f,
+        0f, -19f, 12f, -28f, 20f, -25f, 23f, -37f, 14f, -32f, -12f, -32f)
+    kantoOval(0xFFD66942, -12f, -36f, 24f, 12f)
+    kantoEyes(0f, -40f, 11f, 2.6f)
+    kantoOval(KANTO_INK, -8f, -33f, 4f, 4f)
+    kantoOval(KANTO_INK, 4f, -33f, 4f, 4f)
+    megaEarlyShape(0xFF323536) {
+        moveTo(-37f, -6f); lineTo(-52f, -15f); lineTo(-49f, 0f)
+        lineTo(-59f, -5f); lineTo(-52f, 18f + swing); lineTo(-56f, 35f + swing)
+        lineTo(-41f, 40f + swing); lineTo(-31f, 23f)
     }
-    kantoPolygon(0xFFE78F58, -25f, -31f, -33f, -53f, -12f, -44f, 8f, -44f,
-        28f, -54f, 24f, -28f, 18f, -10f, -14f, -10f)
-    kantoOval(0xFFEEAD75, -18f, -29f, 37f, 22f)
-    kantoEyes(0f, -34f, 14f, 3.6f)
-    kantoOval(0xFF8D4946, -9f, -23f, 7f, 6f)
-    kantoOval(0xFF8D4946, 5f, -23f, 7f, 6f)
-    kantoPolygon(0xFFFFF0CC, -18f, -12f, -27f, -28f, -25f, -7f, -12f, -2f)
-    kantoPolygon(0xFFFFF0CC, 18f, -12f, 27f, -28f, 25f, -7f, 12f, -2f)
-    kantoPolygon(0xFFFFCB59, -19f, -5f, -10f, 11f, -2f, 5f, 8f, 13f, 21f, -5f, 2f, 0f)
+    kantoLine(0xFFD64F3B, 6f, -52f, 26f + swing, -35f, 31f + swing)
+    kantoLine(0xFFEBCB62, 3f, -53f, 33f + swing, -39f, 37f + swing)
+    kantoPolygon(0xFFCE4F3E, -48f, 40f + swing, -61f, 37f, -57f, 47f,
+        -66f, 48f, -54f, 55f, -47f, 47f, -41f, 54f, -37f, 44f)
+    kantoPolygon(0xFF353636, 35f, -8f, 48f, -12f, 57f, -3f,
+        67f, -5f - swing, 72f, 11f - swing, 57f, 21f - swing, 40f, 14f)
+    kantoLine(0xFFDF9F31, 4f, 46f, -8f, 45f, 14f)
+    // A continuous flame staff is held by the raised hand.
+    megaEarlyShape(0xFFEF6434) {
+        moveTo(66f, 62f); lineTo(61f, 42f); lineTo(68f, 23f); lineTo(61f, 6f)
+        lineTo(72f + swing, -13f); lineTo(64f, -28f); lineTo(71f, -45f)
+        quadraticTo(70f, -70f, 60f, -63f); quadraticTo(63f, -81f, 76f, -69f)
+        quadraticTo(87f, -82f, 94f, -64f); quadraticTo(82f, -72f, 79f, -45f)
+        lineTo(73f, -29f); lineTo(81f + swing, -13f); lineTo(69f, 7f)
+        lineTo(77f, 23f); lineTo(67f, 44f)
+    }
+    megaEarlyCurve(0xFFFFDE48, 3f) {
+        moveTo(66f, 52f); lineTo(72f, 24f); lineTo(65f, 7f)
+        lineTo(77f + swing, -13f); lineTo(69f, -29f); lineTo(75f, -45f)
+        quadraticTo(77f, -68f, 87f, -69f)
+        moveTo(74f, -49f); quadraticTo(68f, -72f, 63f, -66f)
+    }
+    kantoOval(0xFF4D4941, 61f, -2f - swing, 12f, 15f)
 }
 
 private fun DrawScope.megaEarlyFeraligatr(m: Float) {
-    val jaw = m * 4f
+    val crest = m * 3f
     megaEarlyShape(0xFF407DAB) {
         moveTo(29f, 21f); cubicTo(63f, 37f, 82f, 30f, 91f, 10f + m * 4f)
         quadraticTo(99f, 43f, 59f, 51f); lineTo(25f, 40f)
     }
     kantoPolygon(0xFFDD5356, 60f, 26f, 60f, 6f + m * 3f, 70f, 19f, 80f, 0f + m * 3f, 83f, 27f)
-    // The dorsal fin folds into a second enormous crocodilian jaw.
-    megaEarlyShape(0xFF436D9E) {
-        moveTo(-22f, -17f); lineTo(-51f, -43f - jaw); lineTo(-58f, -65f - jaw)
-        quadraticTo(-5f, -77f, 51f, -54f - jaw); lineTo(63f, -30f); lineTo(42f, 9f)
+    megaEarlyShape(0xFFCA3852) {
+        moveTo(-20f, -13f); lineTo(-32f, -35f); lineTo(-27f, -43f)
+        lineTo(-36f, -52f); lineTo(-17f, -53f); lineTo(-21f, -66f)
+        lineTo(-2f, -60f); lineTo(13f, -75f + crest * 0.3f); lineTo(19f, -61f)
+        lineTo(38f, -70f + crest); lineTo(34f, -54f); lineTo(55f, -59f + crest)
+        lineTo(45f, -42f); lineTo(58f, -43f); lineTo(48f, -28f)
+        lineTo(52f, -20f); lineTo(37f, -11f); lineTo(36f, 7f); lineTo(13f, 1f)
     }
-    megaEarlyShape(0xFFCD505E) {
-        moveTo(-47f, -47f - jaw); quadraticTo(-2f, -63f - jaw, 49f, -41f - jaw)
-        lineTo(33f, -12f); quadraticTo(-3f, -20f, -47f, -47f - jaw)
+    megaEarlyShade(0xFF971F3A) {
+        moveTo(-16f, -18f); cubicTo(-23f, -40f, 4f, -62f, 26f, -59f)
+        cubicTo(47f, -57f, 35f, -27f, 9f, -13f); lineTo(29f, -10f)
+        lineTo(35f, 2f); lineTo(8f, -1f)
     }
-    for (i in 0..5) {
-        val x = -40f + i * 15f
-        val y = -48f + (i - 2f) * (i - 2f) * 0.9f - jaw
-        kantoPolygon(0xFFFFF1CA, x, y, x + 9f, y + 1f, x + 5f, y + 12f)
+    megaEarlyShade(0xFFEB5366) {
+        moveTo(-14f, -20f); quadraticTo(-10f, -41f, 15f, -44f)
+        lineTo(13f, -36f); lineTo(30f, -38f); quadraticTo(20f, -19f, -14f, -20f)
     }
     megaEarlyShape(0xFF65ADCA) {
         moveTo(-27f, -18f); cubicTo(-50f, 2f, -35f, 47f, -7f, 48f)
@@ -210,19 +276,31 @@ private fun DrawScope.megaEarlyFeraligatr(m: Float) {
             lineTo(side * 52f, 20f + step); lineTo(side * 40f, 13f + step)
             quadraticTo(side * 38f, 4f, side * 23f, 6f)
         }
+        kantoPolygon(0xFFD64152, side * 35f, -7f, side * 34f, -20f,
+            side * 43f, -12f, side * 44f, -24f, side * 52f, -11f,
+            side * 58f, -14f, side * 58f, 4f + step, side * 46f, 7f + step)
         for (finger in 0..2) kantoPolygon(0xFFFFF3DB, side * (46f + finger * 5f), 13f + step,
             side * (49f + finger * 5f), 26f + step, side * (51f + finger * 5f), 14f + step)
     }
-    megaEarlyShape(0xFF80C6D7) {
-        moveTo(-24f, -39f); lineTo(-5f, -42f); lineTo(17f, -32f)
-        lineTo(24f, -12f); quadraticTo(0f, 3f, -33f, -9f)
-        quadraticTo(-44f, -19f, -37f, -29f); lineTo(-26f, -28f)
+    megaEarlyShape(0xFF75BDCF) {
+        moveTo(-26f, -34f); quadraticTo(-14f, -44f, -5f, -28f)
+        lineTo(14f, -20f); lineTo(20f, -1f); lineTo(2f, 13f)
+        lineTo(-28f, 11f); lineTo(-43f, -2f); lineTo(-33f, -10f)
+        lineTo(-49f, -13f); lineTo(-46f, -23f); lineTo(-29f, -24f)
     }
-    kantoPolygon(0xFFDE565B, -10f, -39f, -3f, -53f, 6f, -37f, 17f, -45f, 18f, -30f)
-    kantoEyes(-9f, -27f, 15f, 3.5f)
-    kantoLine(KANTO_INK, 2f, -34f, -15f, -18f, -10f, 17f, -14f)
-    kantoPolygon(0xFFFFF4D7, -25f, -12f, -20f, -4f, -15f, -11f)
-    kantoPolygon(0xFFFFF4D7, 5f, -12f, 10f, -5f, 14f, -13f)
+    megaEarlyShape(0xFF633649) {
+        moveTo(-43f, -12f); lineTo(-27f, -9f); lineTo(-12f, -17f)
+        quadraticTo(-12f, 6f + m * 2f, -28f, 7f + m * 2f)
+        quadraticTo(-39f, 4f, -43f, -12f)
+    }
+    kantoPolygon(0xFFF5D887, -10f, -19f, 0f, -8f, -2f, 6f, -21f, 14f,
+        -32f, 10f, -17f, 3f)
+    kantoOval(0xFFFAE3A6, -27f, -29f, 8f, 13f)
+    kantoOval(KANTO_INK, -23f, -26f, 3f, 8f)
+    kantoOval(KANTO_INK, -44f, -21f, 3f, 3f)
+    kantoPolygon(0xFFFFF6D8, -38f, -10f, -34f, -2f, -30f, -9f)
+    kantoPolygon(0xFFFFF6D8, -23f, -12f, -20f, -5f, -16f, -16f)
+    kantoPolygon(0xFFFFF6D8, -29f, 7f, -26f, 0f, -22f, 6f)
 }
 
 private fun DrawScope.megaEarlyBeedrill(m: Float) {

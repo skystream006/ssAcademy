@@ -247,56 +247,68 @@ private fun DrawScope.middleAbsol(m: Float) {
 }
 
 private fun DrawScope.middleAbsolZ(m: Float) {
-    val sweep = m * 5f
-    middleShape(0xFF252D43) {
-        moveTo(-40f, 15f)
-        cubicTo(-91f, 16f, -97f, -23f + sweep, -85f, -57f + sweep)
-        quadraticTo(-80f, -24f + sweep, -62f, -19f + sweep)
-        lineTo(-72f, -46f + sweep)
-        quadraticTo(-44f, -19f, -40f, 15f)
+    val sweep = m * 4f
+    for (i in 0..3) {
+        val rise = i * 15f
+        middleShape(if (i % 2 == 0) 0xFFC82F62 else 0xFFE64A79) {
+            moveTo(-17f, -4f)
+            cubicTo(-32f, -23f - rise, -61f, -40f - rise * .65f + sweep,
+                -87f + i * 7f, -29f - rise + sweep)
+            quadraticTo(-58f, -34f - rise * .5f + sweep, -52f, -8f - rise * .35f)
+            quadraticTo(-43f, 8f, -17f, -4f)
+        }
+        middleCurve(0xFF8E234C, 1.5f) {
+            moveTo(-22f, -5f)
+            quadraticTo(-39f, -29f - rise * .55f, -68f, -27f - rise * .65f + sweep)
+        }
     }
     for (s in listOf(-1f, 1f)) {
-        val step = m * s * 5f
-        kantoPolygon(0xFF2D344C, s * 19f, 17f, s * 36f, 24f, s * 44f, 51f + step,
-            s * 59f, 55f + step, s * 34f, 59f + step, s * 18f, 34f)
-        middleClaws(s * 38f, 56f + step, s)
+        val step = m * s * 3f
+        kantoPolygon(0xFF092B3F, s * 24f, 12f, s * 41f, 18f, s * 53f, 44f + step,
+            s * 70f, 51f + step, s * 44f, 54f + step, s * 29f, 30f)
+        for (i in 0..2) kantoPolygon(0xFF78929D, s * (47f + i * 7f), 49f + step,
+            s * (52f + i * 7f), 55f + step, s * (53f + i * 7f), 49f + step)
     }
-    middleShape(0xFFE7EDF6) {
-        moveTo(-48f, -1f)
-        cubicTo(-37f, -34f, 14f, -24f, 40f, -7f)
-        lineTo(32f, 23f)
-        quadraticTo(-14f, 42f, -48f, -1f)
+    middleShape(0xFF062435) {
+        moveTo(-43f, 3f)
+        cubicTo(-41f, -27f, 7f, -26f, 37f, -10f)
+        quadraticTo(54f, 7f, 24f, 27f)
+        quadraticTo(-22f, 33f, -43f, 3f)
     }
-    middleShape(0xFFFFFFFF) {
-        moveTo(33f, -30f)
-        cubicTo(8f, -49f, -31f, -39f - sweep, -73f, -43f - sweep)
-        lineTo(-56f, -31f - sweep)
-        lineTo(-88f, -26f - sweep)
-        lineTo(-58f, -17f - sweep)
-        lineTo(-77f, -3f - sweep)
-        quadraticTo(-33f, -13f, -8f, 3f)
-        lineTo(-16f, 24f)
-        lineTo(9f, 17f)
-        lineTo(13f, 35f)
-        quadraticTo(38f, 11f, 33f, -30f)
+    kantoPolygon(0xFF082335, -38f, 2f, -63f, 3f, -48f, -11f, -66f, -16f,
+        -44f, -21f, -53f, -35f, -31f, -29f, -34f, -49f, -16f, -38f,
+        -9f, -56f, 6f, -28f, 28f, -15f, 16f, 19f, -14f, 20f)
+    kantoPolygon(0xFF164255, -33f, -9f, -49f, -13f, -29f, -17f, -37f, -31f,
+        -17f, -22f, -18f, -37f, -3f, -25f, 7f, 1f)
+    for (s in listOf(-1f, 1f)) {
+        val step = m * s * 4f
+        kantoPolygon(0xFF0B3045, s * 15f, 15f, s * 28f, 18f, s * 25f, 45f + step,
+            s * 39f, 59f + step, s * 12f, 61f + step, s * 5f, 45f + step)
+        for (i in 0..2) kantoPolygon(0xFF7F9EAA, s * (14f + i * 7f), 57f + step,
+            s * (18f + i * 7f), 63f + step, s * (20f + i * 7f), 57f + step)
     }
-    middleCurve(0xFFB8C9DB, 2f) {
-        moveTo(-56f, -24f - sweep)
-        cubicTo(-20f, -30f, 12f, -7f, 13f, 17f)
+    middleShape(0xFF072737) {
+        moveTo(5f, -31f)
+        quadraticTo(28f, -56f, 53f, -33f)
+        lineTo(66f, -8f)
+        lineTo(51f, -5f)
+        lineTo(51f, 18f)
+        lineTo(40f, 8f)
+        lineTo(35f, 30f)
+        lineTo(25f, 16f)
+        lineTo(15f, 31f)
+        lineTo(14f, 9f)
+        lineTo(2f, 14f)
     }
-    kantoOval(0xFF29354E, 27f, -34f, 35f, 31f)
-    middleShape(0xFF20283C) {
-        moveTo(47f, -31f)
-        cubicTo(50f, -58f, 73f, -73f, 94f, -66f)
-        quadraticTo(64f, -59f, 65f, -41f)
-        lineTo(81f, -47f)
-        lineTo(64f, -21f)
-    }
-    kantoPolygon(0xFFF7FAFF, 19f, -29f, 38f, -48f, 53f, -42f, 38f, -15f, 39f, -30f)
-    kantoPolygon(0xFFD65370, 47f, -23f, 58f, -24f, 50f, -18f)
-    kantoOval(KANTO_INK, 60f, -15f, 7f, 5f)
-    kantoPolygon(0xFF29354E, 34f, 9f, 71f, 20f + sweep, 51f, 22f + sweep, 60f, 36f + sweep, 30f, 23f)
-    kantoLine(0xFF77899E, 2f, -84f, -42f + sweep, -78f, -18f + sweep, -59f, -1f)
+    kantoPolygon(0xFF0C2234, 40f, -34f, 59f, -53f, 57f, -27f, 47f, -13f)
+    kantoPolygon(0xFF345269, 22f, -32f, 31f, -54f, 24f, -75f, 45f, -57f,
+        38f, -43f, 49f, -22f, 35f, -27f, 31f, -15f)
+    kantoPolygon(0xFF204459, 37f, -29f, 50f, -21f, 57f, -8f, 47f, -6f,
+        35f, -14f, 29f, -26f)
+    kantoPolygon(0xFFE05476, 40f, -19f, 47f, -16f, 43f, -12f)
+    kantoPolygon(0xFFE05476, 33f, -32f, 37f, -27f, 35f, -23f, 31f, -28f)
+    kantoOval(0xFF061B2A, 56f, -10f, 8f, 5f)
+    kantoLine(0xFF42647A, 1.5f, 42f, -3f, 50f, 0f)
 }
 
 private fun DrawScope.middleLucario(m: Float) {
@@ -346,62 +358,117 @@ private fun DrawScope.middleLucario(m: Float) {
 }
 
 private fun DrawScope.middleLucarioZ(m: Float) {
-    val flow = m * 5f
-    middleShape(0xFFFBF7E7) {
-        moveTo(-5f, 13f)
-        cubicTo(36f, 17f, 50f, 38f + flow, 86f, 23f + flow)
-        lineTo(74f, 40f + flow)
-        lineTo(89f, 42f + flow)
-        quadraticTo(50f, 55f, 17f, 28f)
+    val flow = m * 4f
+    middleShape(0xFF313E48) {
+        moveTo(-8f, 11f)
+        quadraticTo(-30f, 28f, -71f, 22f + flow)
+        lineTo(-52f, 36f + flow)
+        lineTo(-47f, 54f + flow)
+        quadraticTo(-32f, 32f, 2f, 28f)
+    }
+    middleShape(0xFF5494A0) {
+        moveTo(2f, -42f)
+        cubicTo(41f, -51f, 71f, -30f + flow, 84f, -4f + flow)
+        quadraticTo(94f, 10f + flow, 78f, 10f + flow)
+        quadraticTo(54f, -13f + flow, 21f, -23f)
+    }
+    middleCurve(0xFF234F5B, 3f) {
+        moveTo(79f, 7f + flow)
+        quadraticTo(78f, 19f + flow, 90f, 15f + flow)
+        quadraticTo(84f, 24f + flow, 97f, 19f + flow)
+    }
+    for (i in 0..3) kantoLine(0xFF8DB7BC, 1.5f, 32f + i * 12f, -33f + i * 7f + flow,
+        27f + i * 13f, -20f + i * 6f + flow)
+    middleCurve(0xFF2E6470, 4f) {
+        moveTo(-7f, -45f)
+        cubicTo(27f, -66f, 54f, -49f + flow, 82f, -39f + flow)
+        lineTo(79f, -32f + flow)
+        lineTo(88f, -34f + flow)
+        lineTo(86f, -28f + flow)
+        lineTo(94f, -30f + flow)
+    }
+    kantoLine(KANTO_INK, 14f, 9f, 16f, 34f, 20f - flow, 24f, 37f - flow)
+    kantoLine(0xFF344952, 10f, 9f, 16f, 34f, 20f - flow, 24f, 37f - flow)
+    kantoPolygon(0xFF4B919F, 22f, 31f - flow, 36f, 34f - flow, 40f, 47f - flow,
+        29f, 53f - flow, 21f, 45f - flow)
+    kantoOval(0xFFBAC3C5, 28f, 34f - flow, 5f, 10f)
+    kantoLine(KANTO_INK, 15f, -6f, 16f, -12f, 35f + flow, -6f, 53f + flow)
+    kantoLine(0xFF3B5059, 11f, -6f, 16f, -12f, 35f + flow, -6f, 53f + flow)
+    kantoOval(0xFFBAC3C5, -16f, 32f + flow, 7f, 11f)
+    kantoOval(0xFFBAC3C5, -10f, 45f + flow, 7f, 10f)
+    kantoOval(0xFF5398A4, -13f, 53f + flow, 26f, 9f)
+    kantoLine(0xFF2B6673, 1.5f, -3f, 55f + flow, -3f, 60f + flow)
+    kantoLine(0xFF2B6673, 1.5f, 4f, 55f + flow, 4f, 60f + flow)
+    kantoPolygon(0xFF3E5962, -14f, -24f, 12f, -23f, 20f, 9f, 10f, 22f, -16f, 20f, -23f, 0f)
+    middleShape(0xFFD8D99D) {
+        moveTo(-17f, -22f)
+        lineTo(8f, -21f)
+        lineTo(3f, -10f)
+        lineTo(15f, -10f)
+        lineTo(5f, 1f)
+        lineTo(12f, 6f)
+        lineTo(-4f, 13f)
+        lineTo(-14f, 8f)
+        lineTo(-20f, 12f)
+        lineTo(-17f, -2f)
+        lineTo(-27f, -1f)
+    }
+    middleShape(0xFFCDCE8E) {
+        moveTo(-12f, 6f)
+        quadraticTo(6f, 0f, 13f, 15f)
+        lineTo(3f, 15f)
+        lineTo(9f, 23f)
+        lineTo(-3f, 22f)
+        quadraticTo(-2f, 36f, -21f, 37f)
+        lineTo(-16f, 29f)
+        lineTo(-31f, 32f)
+        lineTo(-23f, 20f)
+        lineTo(-31f, 23f)
+        quadraticTo(-30f, 10f, -12f, 6f)
     }
     for (s in listOf(-1f, 1f)) {
-        val step = m * s * 5f
-        kantoPolygon(0xFF323B50, s * 6f, 16f, s * 22f, 19f, s * 31f, 47f + step,
-            s * 43f, 56f + step, s * 18f, 60f + step, s * 8f, 34f)
-        kantoLine(0xFFBAC3CB, 4f, s * 12f, 32f + step, s * 25f, 31f + step)
-        kantoPolygon(0xFFDAB66C, s * 22f, 45f + step, s * 33f, 52f + step,
-            s * 26f, 58f + step, s * 18f, 52f + step)
-    }
-    middleShape(0xFFEBF0EC) {
-        moveTo(-14f, -21f)
-        lineTo(18f, -20f)
-        quadraticTo(12f, 1f, 25f, 15f)
-        lineTo(44f, 26f + flow)
-        lineTo(24f, 28f + flow)
-        lineTo(32f, 40f + flow)
-        quadraticTo(-4f, 27f, -20f, 14f)
-        lineTo(-11f, 3f)
-        lineTo(-26f, 6f)
-    }
-    middleCurve(0xFFADC2D1, 2f) {
-        moveTo(5f, -9f)
-        quadraticTo(-3f, 16f, 27f, 29f + flow)
-    }
-    for (s in listOf(-1f, 1f)) {
-        val strike = m * s * 7f
-        kantoLine(KANTO_INK, 13f, s * 15f, -13f, s * 33f, 3f + strike, s * 53f, -12f + strike)
-        kantoLine(0xFF558CA7, 9f, s * 15f, -13f, s * 33f, 3f + strike, s * 53f, -12f + strike)
-        kantoPolygon(0xFFEEF2EC, s * 42f, -15f + strike, s * 56f, -23f + strike,
-            s * 64f, -4f + strike, s * 48f, 3f + strike)
-        kantoPolygon(0xFFE0C386, s * 51f, -21f + strike, s * 62f, -34f + strike, s * 59f, -12f + strike)
-        middleShape(0xFFDAE7E9) {
-            moveTo(s * 15f, -39f)
-            quadraticTo(s * 34f, -42f, s * 65f, -54f + s * flow)
-            lineTo(s * 52f, -36f + s * flow)
-            lineTo(s * 68f, -32f + s * flow)
-            quadraticTo(s * 36f, -23f, s * 17f, -28f)
+        val strike = m * s * 5f
+        val handY = if (s < 0f) 1f + strike else -30f + strike
+        kantoLine(KANTO_INK, 11f, s * 14f, -17f, s * 33f, -10f + strike, s * 46f, handY)
+        kantoLine(0xFF408392, 7f, s * 14f, -17f, s * 33f, -10f + strike, s * 46f, handY)
+        middleShape(0xFF559EAB) {
+            moveTo(s * 39f, handY - 6f)
+            lineTo(s * 46f, handY - 13f)
+            lineTo(s * 60f, handY - 11f)
+            lineTo(s * 65f, handY + 2f)
+            lineTo(s * 58f, handY + 13f)
+            lineTo(s * 43f, handY + 10f)
         }
+        kantoLine(0xFF326B78, 1.5f, s * 44f, handY - 4f, s * 54f, handY - 2f,
+            s * 58f, handY + 9f)
+        kantoLine(0xFF9BC6C8, 2f, s * 48f, handY - 9f, s * 58f, handY - 7f)
     }
-    kantoPolygon(0xFF548BA8, -20f, -39f, -24f, -73f, -7f, -53f,
-        8f, -54f, 22f, -73f, 19f, -36f)
-    kantoOval(0xFF6599B2, -21f, -51f, 43f, 35f)
-    kantoPolygon(0xFF26394C, -22f, -40f, -5f, -37f, 1f, -31f, 8f, -40f,
-        22f, -40f, 18f, -26f, -15f, -25f)
-    kantoLine(0xFFE3B55D, 3f, -17f, -36f, -9f, -33f)
-    kantoLine(0xFFE3B55D, 3f, 10f, -34f, 18f, -37f)
-    kantoPolygon(0xFFECF3EF, -11f, -26f, 0f, -31f, 12f, -26f, 2f, -17f)
-    kantoPolygon(0xFFDBC17C, -5f, -12f, 1f, -25f, 7f, -10f)
-    kantoLine(0xFFBCC9D2, 3f, -15f, 16f, 6f, 23f, 20f, 24f)
+    kantoPolygon(0xFF35434A, -27f, -42f, -34f, -73f, -17f, -57f,
+        -12f, -76f, 1f, -52f, 7f, -39f)
+    kantoPolygon(0xFF829298, -29f, -65f, -22f, -53f, -24f, -46f)
+    kantoOval(0xFF647A83, -32f, -53f, 39f, 32f)
+    kantoPolygon(0xFF34464F, -32f, -41f, -19f, -41f, -15f, -34f, -6f, -44f,
+        6f, -45f, 2f, -31f, -13f, -25f, -30f, -29f)
+    kantoPolygon(0xFFF2F1CF, -29f, -38f, -21f, -35f, -26f, -31f)
+    kantoPolygon(0xFFF2F1CF, -10f, -36f, 0f, -41f, -2f, -34f)
+    kantoLine(0xFF39414A, 2f, -25f, -36f, -25f, -33f)
+    kantoLine(0xFF39414A, 2f, -5f, -38f, -5f, -34f)
+    kantoPolygon(0xFF566F79, -24f, -29f, -11f, -33f, -5f, -25f, -20f, -22f)
+    kantoOval(0xFF263A44, -25f, -29f, 7f, 5f)
+    middleCurve(0xFF457F8D, 6f) {
+        moveTo(-28f, -47f)
+        cubicTo(-48f, -48f, -51f, -16f, -25f, -18f)
+    }
+    middleCurve(0xFFB9D5CF, 2f) {
+        moveTo(-30f, -47f)
+        cubicTo(-45f, -46f, -46f, -22f, -29f, -21f)
+    }
+    middleCurve(0xFFE3DEA0, 4f) {
+        moveTo(-21f, -24f)
+        cubicTo(-9f, -12f, 13f, -7f + flow, 35f, -10f + flow)
+        lineTo(32f, -3f + flow)
+        lineTo(42f, -6f + flow)
+    }
 }
 
 private fun DrawScope.middleSlowbro(m: Float) {
@@ -510,132 +577,169 @@ private fun DrawScope.middleSharpedo(m: Float) {
 }
 
 private fun DrawScope.middleEelektross(m: Float) {
-    val coil = m * 5f
-    middleShape(0xFF275665) {
-        moveTo(-14f, -30f)
-        cubicTo(-56f, -19f, -51f, 32f, -12f, 48f)
-        cubicTo(26f, 67f, 66f, 54f + coil, 70f, 27f + coil)
-        quadraticTo(90f, 49f + coil, 60f, 59f)
-        cubicTo(23f, 74f, -53f, 55f, -52f, 12f)
-        quadraticTo(-58f, -22f, -28f, -38f)
+    val coil = m * 4f
+    middleShape(0xFFE6F4E9) {
+        moveTo(-26f, -8f)
+        quadraticTo(-53f, 4f, -72f, -10f + coil)
+        quadraticTo(-91f, -28f + coil, -66f, -32f + coil)
+        cubicTo(-55f, -52f + coil, -28f, -38f, -15f, -55f)
+        quadraticTo(-8f, -65f, 1f, -58f)
+        quadraticTo(-4f, -46f, -17f, -48f)
+        quadraticTo(-29f, -35f, -38f, -24f)
+        quadraticTo(-27f, -25f, -26f, -8f)
     }
-    middleCurve(0xFFF2D698, 9f) {
-        moveTo(-23f, -6f)
-        cubicTo(-38f, 20f, -11f, 48f, 25f, 48f)
-        quadraticTo(47f, 49f, 61f, 43f + coil)
+    middleCurve(0xFFB5E5D9, 2f) {
+        moveTo(-75f, -23f + coil)
+        quadraticTo(-48f, -31f, -32f, -42f)
     }
-    kantoPolygon(0xFF668C73, -47f, 0f, -69f, 8f, -57f, 24f,
-        -70f, 30f, -42f, 35f, -43f, 15f)
-    kantoPolygon(0xFF658D73, 52f, 48f, 86f, 16f + coil, 98f, 20f + coil,
-        87f, 31f + coil, 98f, 35f + coil, 72f, 54f)
+    middleShape(0xFF263E4D) {
+        moveTo(-58f, 14f)
+        cubicTo(-48f, -12f, -18f, -30f, 8f, -21f)
+        cubicTo(32f, -12f, 43f, -7f + coil, 69f, -21f + coil)
+        lineTo(84f, -36f + coil)
+        quadraticTo(80f, -16f + coil, 55f, 0f + coil)
+        quadraticTo(28f, 12f + coil, 3f, -3f)
+        quadraticTo(-24f, -10f, -41f, 24f)
+    }
+    middleShape(0xFFEBE4AB) {
+        moveTo(-41f, -2f)
+        quadraticTo(-24f, -35f, 20f, -50f + coil)
+        quadraticTo(7f, -25f + coil, -10f, -27f)
+        quadraticTo(-23f, -20f, -29f, -7f)
+    }
+    middleCurve(0xFF566673, 3f) {
+        moveTo(-40f, -3f)
+        quadraticTo(-19f, -34f, 20f, -50f + coil)
+    }
+    middleCurve(0xFFEBCE64, 4f) {
+        moveTo(-47f, 13f)
+        quadraticTo(-24f, -14f, -2f, -12f)
+        quadraticTo(27f, 3f, 51f, -4f + coil)
+    }
+    for (i in 0..6) kantoOval(0xFFE8D471, -31f + i * 11f, -11f + i * 1.5f,
+        4f, 6f)
+    kantoOval(0xFF344B59, -65f, 6f, 29f, 25f)
+    kantoOval(0xFFC34D4C, -65f, 11f, 23f, 22f)
+    kantoOval(0xFF2D3441, -61f, 14f, 16f, 17f)
+    kantoPolygon(0xFFFAF4DF, -59f, 14f, -54f, 15f, -54f, 20f)
+    kantoPolygon(0xFFFAF4DF, -53f, 30f, -48f, 28f, -51f, 23f)
+    kantoOval(0xFFF8E29B, -46f, 3f, 8f, 8f)
+    kantoOval(0xFF202D39, -43f, 4f, 3f, 6f)
+    middleShape(0xFFF0F7ED) {
+        moveTo(6f, -5f)
+        quadraticTo(35f, -2f, 37f, 20f + coil)
+        quadraticTo(44f, 44f + coil, 64f, 26f + coil)
+        quadraticTo(74f, 7f + coil, 65f, 2f + coil)
+        cubicTo(83f, -9f, 87f, -26f, 94f, -30f)
+        quadraticTo(103f, -51f, 95f, -54f)
+        quadraticTo(94f, -31f, 80f, -35f)
+        quadraticTo(76f, -16f, 63f, -18f)
+        quadraticTo(63f, -34f, 68f, -40f)
+        quadraticTo(57f, -37f, 55f, -23f)
+        quadraticTo(32f, -20f, 28f, -13f)
+    }
+    middleCurve(0xFFAFDDD2, 3f) {
+        moveTo(61f, 17f + coil)
+        cubicTo(57f, -5f, 79f, -8f, 87f, -29f)
+    }
+    middleCurve(0xFFDBB860, 2f) {
+        moveTo(35f, 2f)
+        lineTo(44f, -17f)
+        lineTo(42f, -5f)
+        lineTo(52f, -18f)
+    }
     for (s in listOf(-1f, 1f)) {
-        val bend = m * s * 6f
-        middleShape(0xFF356A70) {
-            moveTo(s * 16f, -23f)
-            cubicTo(s * 40f, -11f, s * 43f, -47f + bend, s * 66f, -42f + bend)
-            lineTo(s * 71f, -20f + bend)
-            quadraticTo(s * 42f, 15f, s * 17f, -2f)
-        }
-        kantoPolygon(0xFF83AD83, s * 38f, -14f, s * 50f, -38f + bend,
-            s * 61f, -21f + bend, s * 53f, -7f + bend)
-        middleShape(0xFF88C7A0) {
-            moveTo(s * 63f, -46f + bend)
-            quadraticTo(s * 78f, -61f + bend, s * 93f, -43f + bend)
-            quadraticTo(s * 99f, -26f + bend, s * 79f, -21f + bend)
-            lineTo(s * 69f, -10f + bend)
-            lineTo(s * 67f, -26f + bend)
-            quadraticTo(s * 57f, -30f + bend, s * 63f, -46f + bend)
-        }
-        kantoOval(0xFFE48068, s * 79f - 9f, -43f + bend, 18f, 17f)
-        kantoOval(0xFF3B4C5C, s * 79f - 5f, -39f + bend, 10f, 10f)
-        drawCircle(Color(0xFFFFD67B), 3f, Offset(s * 67f, -43f + bend))
-        drawCircle(Color(0xFFFFD67B), 4f, Offset(s * 41f, -13f))
+        val x = if (s < 0f) -73f else 46f
+        val y = if (s < 0f) -15f + coil else 25f + coil
+        kantoOval(0xFFED9485, x - 10f, y - 12f, 20f, 25f)
+        kantoOval(0xFFF8FAE5, x - 7f, y - 9f, 14f, 19f)
+        kantoLine(0xFFE3CF6B, 3f, x - 6f, y - 3f, x + 6f, y + 3f)
+        kantoLine(0xFFE3CF6B, 3f, x - 2f, y - 9f, x + 1f, y + 9f)
     }
-    middleShape(0xFF376C77) {
-        moveTo(-25f, -40f)
-        quadraticTo(-9f, -64f, 17f, -44f)
-        quadraticTo(37f, -28f, 18f, -10f)
-        quadraticTo(-7f, 5f, -25f, -16f)
-        quadraticTo(-37f, -29f, -25f, -40f)
-    }
-    kantoPolygon(0xFF759D7F, -19f, -46f, -21f, -72f, -9f, -59f, 3f, -74f, 7f, -48f)
-    kantoOval(0xFFEC866E, -22f, -33f, 43f, 30f)
-    kantoOval(0xFF32374D, -14f, -28f, 27f, 21f)
-    kantoPolygon(0xFFFFF2C7, -4f, -30f, 4f, -30f, 0f, -20f)
-    kantoPolygon(0xFFFFF2C7, -6f, -6f, 2f, -6f, -2f, -15f)
-    kantoPolygon(0xFFFFF2C7, -16f, -24f, -16f, -16f, -8f, -20f)
-    kantoPolygon(0xFFFFF2C7, 15f, -24f, 15f, -16f, 7f, -20f)
-    kantoOval(0xFFF2D783, -25f, -45f, 13f, 10f)
-    kantoOval(0xFFF2D783, 12f, -46f, 13f, 10f)
-    kantoEyes(0f, -40f, 18f, 2.5f)
 }
 
 private fun DrawScope.middleDragonite(m: Float) {
-    for (s in listOf(-1f, 1f)) {
-        val flap = m * s * 6f
-        middleShape(0xFFF0F1FC) {
-            moveTo(s * 21f, -10f)
-            cubicTo(s * 42f, -45f, s * 77f, -61f + flap, s * 96f, -54f + flap)
-            lineTo(s * 80f, -39f + flap)
-            lineTo(s * 99f, -39f + flap)
-            lineTo(s * 77f, -21f + flap)
-            lineTo(s * 94f, -23f + flap)
-            lineTo(s * 66f, -2f + flap)
-            lineTo(s * 80f, -5f + flap)
-            quadraticTo(s * 46f, 23f, s * 22f, 10f)
-        }
-        middleCurve(0xFFC0CEE5, 2f) {
-            moveTo(s * 28f, 0f)
-            quadraticTo(s * 54f, -21f, s * 79f, -40f + flap)
-        }
+    val wag = m * 3f
+    middleShape(0xFFD9A553) {
+        moveTo(21f, 27f)
+        cubicTo(3f, 44f, -40f, 62f, -66f, 43f + wag)
+        quadraticTo(-84f, 31f + wag, -81f, 49f + wag)
+        cubicTo(-70f, 73f, -20f, 56f, 36f, 43f)
     }
-    middleShape(0xFFE6AB69) {
-        moveTo(19f, 29f)
-        cubicTo(56f, 44f, 65f, 13f + m * 6f, 77f, 16f + m * 6f)
-        quadraticTo(82f, 50f, 37f, 54f)
-        lineTo(12f, 46f)
+    kantoOval(0xFF70AB73, -82f, 38f + wag, 22f, 23f)
+    kantoOval(0xFFD8DEA0, -79f, 40f + wag, 9f, 11f)
+    drawCircle(Color(0xFFF6F0C1), 3f, Offset(-74f, 43f + wag))
+    middleShape(0xFF378F86) {
+        moveTo(20f, -16f)
+        quadraticTo(39f, -31f, 58f, -20f - wag)
+        quadraticTo(44f, -20f - wag, 46f, -7f)
+        quadraticTo(34f, -13f, 28f, 0f)
     }
-    kantoOval(0xFF7EB6DC, 64f, 14f + m * 6f, 13f, 13f)
-    kantoOval(0xFFBBDCEE, 66f, 10f + m * 6f, 9f, 8f)
-    middleShape(0xFFF1BD7C) {
-        moveTo(-20f, -26f)
-        cubicTo(-43f, -7f, -45f, 33f, -23f, 46f)
-        quadraticTo(1f, 60f, 27f, 42f)
-        cubicTo(44f, 26f, 33f, -8f, 18f, -27f)
+    middleCurve(0xFFF0D69D, 3f) {
+        moveTo(20f, -16f)
+        quadraticTo(40f, -30f, 58f, -20f - wag)
     }
-    kantoOval(0xFFFFE7B4, -22f, -8f, 44f, 55f)
+    middleShape(0xFFE6B465) {
+        moveTo(-14f, -25f)
+        quadraticTo(11f, -29f, 22f, -8f)
+        cubicTo(33f, 3f, 58f, 16f, 49f, 40f)
+        quadraticTo(39f, 58f, 8f, 51f)
+        cubicTo(-22f, 48f, -30f, 11f, -14f, -25f)
+    }
+    middleShape(0xFFF4E5B6) {
+        moveTo(-14f, -19f)
+        quadraticTo(-22f, 7f, -6f, 33f)
+        quadraticTo(6f, 51f, 26f, 49f)
+        quadraticTo(30f, 36f, 12f, 17f)
+        quadraticTo(-1f, -1f, -4f, -21f)
+    }
     for (i in 0..3) {
-        val y = 7f + i * 9f
-        middleCurve(0xFFD9B77E, 1.5f) {
-            moveTo(-18f, y)
-            quadraticTo(0f, y + 6f, 18f, y)
-        }
+        val y = 4f + i * 11f
+        kantoLine(0xFFC7B987, 1.5f, -14f + i * 4f, y, 1f + i * 6f, y + 3f)
     }
     for (s in listOf(-1f, 1f)) {
-        val step = m * s * 4f
-        kantoOval(0xFFF0B778, s * 27f - 15f, 40f + step, 30f, 18f)
-        middleClaws(s * 26f - 6f, 56f + step)
-        kantoLine(KANTO_INK, 15f, s * 22f, -5f, s * 39f, 9f + step, s * 45f, 24f + step)
-        kantoLine(0xFFEFB678, 11f, s * 22f, -5f, s * 39f, 9f + step, s * 45f, 24f + step)
-        middleClaws(s * 45f - 6f, 26f + step)
-        middleShape(0xFFFCFCFF) {
-            moveTo(s * 18f, -40f)
-            quadraticTo(s * 36f, -66f - step, s * 58f, -67f - step)
-            lineTo(s * 45f, -51f - step)
-            lineTo(s * 57f, -53f - step)
-            lineTo(s * 40f, -38f - step)
-            lineTo(s * 48f, -39f - step)
-            lineTo(s * 23f, -29f)
+        val step = m * s * 3f
+        val x = if (s < 0f) -8f else 37f
+        kantoOval(0xFFDEAC60, x - 11f, 37f + step, 24f, 20f)
+        kantoPolygon(0xFFE5B56A, x - 8f, 48f + step, x + 9f, 48f + step,
+            x + 14f, 59f + step, x - 7f, 60f + step)
+        middleClaws(x - 5f, 59f + step)
+        val handX = if (s < 0f) -36f else 39f
+        val handY = if (s < 0f) -1f + step else 0f + step
+        kantoLine(KANTO_INK, 14f, s * 16f, -10f, handX, handY + 10f, handX + 2f, handY)
+        kantoLine(0xFFEAB970, 10f, s * 16f, -10f, handX, handY + 10f, handX + 2f, handY)
+        middleClaws(handX - 4f, handY)
+    }
+    kantoOval(0xFFE9BA70, -29f, -45f, 37f, 34f)
+    kantoOval(0xFFF0C681, -37f, -28f, 34f, 18f)
+    kantoOval(0xFF397768, -20f, -37f, 8f, 12f)
+    kantoLine(0xFFFFF6D1, 2f, -18f, -35f, -18f, -30f)
+    kantoLine(0xFF835F3B, 1.5f, -29f, -15f, -17f, -13f, -7f, -17f)
+    for (s in listOf(-1f, 1f)) {
+        val flap = m * s * 3f
+        val root = -10f
+        middleShape(0xFFF2E6C2) {
+            moveTo(root + s * 5f, -37f)
+            cubicTo(root + s * 23f, -46f, root + s * 9f, -65f + flap,
+                root + s * 20f, -69f + flap)
+            cubicTo(root + s * 42f, -75f + flap, root + s * 78f, -64f + flap,
+                root + s * 82f, -47f + flap)
+            quadraticTo(root + s * 92f, -29f + flap, root + s * 82f, -15f + flap)
+            quadraticTo(root + s * 75f, -14f + flap, root + s * 73f, -36f + flap)
+            quadraticTo(root + s * 76f, -11f + flap, root + s * 66f, -17f + flap)
+            lineTo(root + s * 54f, -40f + flap)
+            quadraticTo(root + s * 60f, -16f + flap, root + s * 49f, -23f + flap)
+            lineTo(root + s * 38f, -41f + flap)
+            quadraticTo(root + s * 38f, -26f + flap, root + s * 26f, -33f + flap)
+            quadraticTo(root + s * 5f, -24f, root + s * 5f, -37f)
+        }
+        middleCurve(0xFFBCAF8C, 1.7f) {
+            moveTo(root + s * 8f, -38f)
+            cubicTo(root + s * 34f, -42f, root + s * 12f, -68f + flap,
+                root + s * 30f, -65f + flap)
+            quadraticTo(root + s * 58f, -60f + flap, root + s * 74f, -43f + flap)
         }
     }
-    kantoOval(0xFFF4C78A, -24f, -56f, 48f, 41f)
-    kantoOval(0xFFFFD598, -21f, -34f, 45f, 22f)
-    kantoEyes(0f, -40f, 11f, 4f)
-    kantoSmile(2f, -23f, 18f)
-    kantoLine(0xFFAC7D51, 2f, -5f, -29f, -5f, -28f)
-    kantoLine(0xFFAC7D51, 2f, 9f, -29f, 9f, -28f)
-    kantoOval(0xFF7DB9E1, -7f, -58f, 14f, 12f)
-    drawCircle(Color(0xFFD1F1FF), 2.5f, Offset(-2f, -55f))
 }
 
 private fun DrawScope.middleVenusaur(m: Float) {
