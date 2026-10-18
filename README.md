@@ -229,7 +229,7 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   choose **Save minimum questions**. Both must be whole numbers from **1 to 1,000**, and Tier 2
   must be higher than Tier 1. Defaults are **25** and **50**. These saved thresholds apply to
   both Math and Reading when a game finishes: Tier 2 at or above its minimum, Tier 1 from its
-  minimum up to Tier 2's minimum, and no prize below Tier 1's minimum. Matrix games use their
+  minimum to below Tier 2's minimum, and no prize below Tier 1's minimum. Matrix games use their
   separately selected tier instead. Changing these settings never changes saved prizes or claims.
   Only enabled rewards from the qualifying tier are selected; if none are enabled in
   that tier, no prize is awarded. Existing prizes and fragments remain available.

@@ -445,18 +445,20 @@ private fun RewardMinimumSettings(model: MathViewModel) {
     val valid = tier1 != null && tier2 != null && tier1 < tier2
     Text("Minimum questions for Math and Reading rewards. Tier 2 must be higher than Tier 1. " +
         "Changes apply when a game finishes; saved prizes keep their original rules.")
+    Text("Tier 1 minimum questions", style = MaterialTheme.typography.bodyMedium)
     OutlinedTextField(tier1Text, { tier1Text = it.take(6) },
-        label = { Text("Tier 1 minimum questions") },
         supportingText = { Text("Whole number from 1 to $MAX_QUESTION_COUNT") },
         isError = tier1 == null, singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-        modifier = Modifier.fillMaxWidth().testTag("reward-tier-1-minimum"))
+        modifier = Modifier.fillMaxWidth().testTag("reward-tier-1-minimum")
+            .semantics { contentDescription = "Tier 1 minimum questions" })
+    Text("Tier 2 minimum questions", style = MaterialTheme.typography.bodyMedium)
     OutlinedTextField(tier2Text, { tier2Text = it.take(6) },
-        label = { Text("Tier 2 minimum questions") },
         supportingText = { Text("Whole number from 1 to $MAX_QUESTION_COUNT, higher than Tier 1") },
         isError = !valid, singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-        modifier = Modifier.fillMaxWidth().testTag("reward-tier-2-minimum"))
+        modifier = Modifier.fillMaxWidth().testTag("reward-tier-2-minimum")
+            .semantics { contentDescription = "Tier 2 minimum questions" })
     Button(onClick = {
         if (tier1 != null && tier2 != null && tier1 < tier2) model.chooseRewardThresholds(tier1, tier2)
     }, enabled = valid && (tier1 != model.rewardThresholds.tier1Minimum ||

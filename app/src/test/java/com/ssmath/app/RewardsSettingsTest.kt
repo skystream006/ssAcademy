@@ -135,7 +135,7 @@ class RewardsSettingsTest {
 
     @Test fun rewardMinimumQuestionsSaveTogetherAndUpdateTierDescriptions() {
         val model = MathViewModel(application)
-        compose.setContent { MathTheme { SettingsScreen(model) } }
+        compose.setContent { MathTheme(textSizePercent = 200) { SettingsScreen(model) } }
         compose.onNodeWithTag("reward-tier-1-minimum").assertDoesNotExist()
         compose.openAdminSettings()
         compose.onNodeWithTag("reward-tier-1-minimum").assertDoesNotExist()
