@@ -426,7 +426,9 @@ private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit) {
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
-        modifier = Modifier.testTag("admin-dialog")
+        // Keep text-field remeasurement from alternating between platform dialog widths.
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+        modifier = Modifier.widthIn(max = 440.dp).fillMaxWidth().padding(16.dp).testTag("admin-dialog")
     )
 }
 
