@@ -514,15 +514,40 @@ class ReadingStoreTest {
         }
         val storage = RecordingStorage(initial)
         val model = ReadingViewModel(application, storage)
-        await { model.data != null }
-        model.act { ReadingEngine.selectProfile(it, "reader-b") }
-        model.act { ReadingEngine.field(it, "answer", "1") }
+        await { model.data != null && !model.saving }
+        val profileGate = CountDownLatch(1)
+        storage.writeGate = profileGate
+        storage.writeStarted = CountDownLatch(1)
+        try {
+            model.act { ReadingEngine.selectProfile(it, "reader-b") }
+            await { storage.writeStarted?.count == 0L }
+            model.act { ReadingEngine.field(it, "answer", "1") }
+        } finally {
+            storage.writeGate = null
+            profileGate.countDown()
+        }
         await { model.data?.selectedProfileId == "reader-b" && !model.saving }
         assertTrue(requireNotNull(model.data?.active).fields.isEmpty())
-        model.act { ReadingEngine.start(it, ReadingGame.MISSING, ReadingLevel.SPROUT, true, "new-attempt") }
-        model.act { ReadingEngine.hint(it) }
+        assertEquals(model.data, storage.saved)
+        model.act { ReadingEngine.field(it, "answer", "2") }
+        await { model.data?.active?.fields?.get("answer") == "2" && !model.saving }
+        val attemptGate = CountDownLatch(1)
+        storage.writeGate = attemptGate
+        storage.writeStarted = CountDownLatch(1)
+        try {
+            model.act { ReadingEngine.start(it, ReadingGame.MISSING, ReadingLevel.SPROUT, true, "new-attempt") }
+            await { storage.writeStarted?.count == 0L }
+            model.act { ReadingEngine.hint(it) }
+        } finally {
+            storage.writeGate = null
+            attemptGate.countDown()
+        }
         await { model.data?.active?.id == "new-attempt" && !model.saving }
         assertEquals(0, model.data?.active?.hints)
+        assertEquals(model.data, storage.saved)
+        model.act { ReadingEngine.hint(it) }
+        await { model.data?.active?.hints == 1 && !model.saving }
+        assertEquals(model.data, storage.saved)
     }
 
     @Test fun delayedStorySaveRejectsEditsAndSubmissionsForTheCompletedCheckpoint() {
