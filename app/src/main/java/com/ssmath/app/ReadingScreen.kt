@@ -441,8 +441,8 @@ private fun ReadingMenu(data: ReadingData, model: ReadingViewModel, onExit: () -
                 enabled = !model.saving && !model.importing)
             model.message?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
             if (model.packStatus?.counts?.values?.sum() == 0)
-                Text("Import reading activities in Settings > Admin > Game Settings > Reading Settings to begin. Saved drafts can still be resumed.")
-            if (games.isEmpty()) Text("No reading games are active. Enable games in Settings > Admin > Game Settings > Reading Settings > Active Reading Games.")
+                Text("Import reading activities in Settings > Admin Menu > Game Settings > Reading Settings to begin. Saved drafts can still be resumed.")
+            if (games.isEmpty()) Text("No reading games are active. Enable games in Settings > Admin Menu > Game Settings > Reading Settings > Active Reading Games.")
             if (profile == null) Text("Enter your name at the welcome screen to save your progress.")
             else {
                 data.active?.takeIf { it.game !in disabledGames && !it.abandoned &&

@@ -76,7 +76,9 @@ internal fun ScreenScaffold(title: String, onBack: () -> Unit, actions: @Composa
 
 @Composable
 fun SettingsScreen(model: MathViewModel) {
-    var showingAdmin by rememberSaveable { mutableStateOf(false) }
+    var showingDebug by rememberSaveable { mutableStateOf(false) }
+    var showingAdmin by remember { mutableStateOf(false) }
+    var adminUnlocked by remember { mutableStateOf(false) }
     var showingName by rememberSaveable { mutableStateOf(false) }
     ScreenScaffold("Settings", model::closeOverlay) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp),
@@ -110,6 +112,15 @@ fun SettingsScreen(model: MathViewModel) {
             CollapsibleSettingsSection("Result Histories", defaultExpanded = false) {
                 Subject.entries.forEach { subject -> SubjectHistorySetting(model, subject) }
             }
+            HorizontalDivider()
+            ListItem(headlineContent = { Text("Admin Menu") },
+                supportingContent = { Text("PIN-protected game settings and reward controls") },
+                trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null) },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                modifier = Modifier.clickable {
+                    adminUnlocked = false
+                    showingAdmin = true
+                }.testTag("admin-menu"))
             HorizontalDivider()
             CollapsibleSettingsSection("Appearance", defaultExpanded = false) {
                 Column {
@@ -149,13 +160,21 @@ fun SettingsScreen(model: MathViewModel) {
                 SkinSetting(model.skinsEnabled, model.skin, model::chooseSkin, model::chooseSkins)
             }
             HorizontalDivider()
-            DebugLogSettings(onOpenAdmin = { showingAdmin = true })
+            DebugLogSettings(onOpenDebug = { showingDebug = true })
             Text("ssAcademy ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.labelSmall,
                 modifier = Modifier.padding(bottom = 20.dp))
         }
     }
+    if (showingDebug) {
+        DebugDialog(model, onDismiss = { showingDebug = false })
+    }
     if (showingAdmin) {
-        AdminDialog(model, onDismiss = { showingAdmin = false })
+        val dismiss = { showingAdmin = false; adminUnlocked = false }
+        if (adminUnlocked) {
+            AdminDialog(model, onDismiss = dismiss)
+        } else {
+            AdminPinDialog(onUnlocked = { adminUnlocked = true }, onDismiss = dismiss)
+        }
     }
     if (showingName) {
         ChangeNameDialog(rememberReadingViewModel(), onDismiss = { showingName = false })
@@ -305,16 +324,49 @@ fun SubjectHistoryScreen(model: MathViewModel) {
 }
 
 @Composable
+private fun DebugDialog(model: MathViewModel, onDismiss: () -> Unit) {
+    var browsingReading by rememberSaveable { mutableStateOf(false) }
+    val sectionState = rememberSaveableStateHolder()
+    if (browsingReading) {
+        ReadingDatabaseBrowser(onDismiss = { browsingReading = false }, backLabel = "Back to Debug Menu")
+        return
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Debug Menu", Modifier.fillMaxWidth()) },
+        text = {
+            sectionState.SaveableStateProvider("debug-sections") {
+                Column(Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    CollapsibleSettingsSection("My Pokémons", defaultExpanded = false) {
+                        Text("Add all celebrations, including Mega Pokémons, without changing practice history or rewards.")
+                        Button(onClick = model::collectAllCelebrations,
+                            enabled = !model.pokemons.containsAll(Celebration.entries)) {
+                            Text("Add all animations", Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+                        }
+                        Text("${model.pokemons.size}/${Celebration.entries.size} animations collected")
+                    }
+                    HorizontalDivider()
+                    CollapsibleSettingsSection("Reading activities", defaultExpanded = false) {
+                        Button(onClick = { browsingReading = true },
+                            modifier = Modifier.fillMaxWidth().testTag("reading-database-open")) {
+                            Text("View reading activities database", Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        modifier = Modifier.testTag("debug-dialog")
+    )
+}
+
+@Composable
 private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit) {
     var showingRemoval by rememberSaveable { mutableStateOf(false) }
-    var browsingReading by rememberSaveable { mutableStateOf(false) }
     var showingReadingGames by rememberSaveable { mutableStateOf(false) }
     var showingReadingLevel by rememberSaveable { mutableStateOf(false) }
     val sectionState = rememberSaveableStateHolder()
-    if (browsingReading) {
-        ReadingDatabaseBrowser(onDismiss = { browsingReading = false }, backLabel = "Back to admin")
-        return
-    }
     if (showingRemoval) {
         RemoveRewardsDialog(
             model.rewardBalances, model.removingReward, model.rewardRemovalError,
@@ -332,34 +384,18 @@ private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit) {
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Admin", Modifier.fillMaxWidth()) },
+        title = { Text("Admin Menu", Modifier.fillMaxWidth()) },
         text = {
             sectionState.SaveableStateProvider("admin-sections") {
                 Column(Modifier.verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    CollapsibleSettingsSection("My Pokémons", defaultExpanded = false) {
-                        Text("Add all celebrations, including Mega Pokémons, without changing practice history or rewards.")
-                        Button(onClick = model::collectAllCelebrations,
-                            enabled = !model.pokemons.containsAll(Celebration.entries)) {
-                            Text("Add all animations", Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
-                        }
-                        Text("${model.pokemons.size}/${Celebration.entries.size} animations collected")
-                    }
-                    HorizontalDivider()
                     CollapsibleSettingsSection("My Rewards", defaultExpanded = false) {
                         Button(onClick = { showingRemoval = true }) {
                             Text("Remove rewards", Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
                         }
                     }
                     HorizontalDivider()
-                    CollapsibleSettingsSection("Reading activities", defaultExpanded = false) {
-                        Button(onClick = { browsingReading = true },
-                            modifier = Modifier.fillMaxWidth().testTag("reading-database-open")) {
-                            Text("View reading activities database", Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
-                        }
-                    }
-                    HorizontalDivider()
-                    CollapsibleSettingsSection("Available rewards", defaultExpanded = false) {
+                    CollapsibleSettingsSection("Available Rewards", defaultExpanded = false) {
                         Text("Choose which rewards can be awarded when a Rewards Game finishes. Existing prizes and fragments stay available.")
                         RewardTier.entries.forEach { tier ->
                             Text("${tier.label} · ${tier.questionCountLabel}", Modifier.fillMaxWidth(),
@@ -552,7 +588,7 @@ internal fun RemoveRewardsDialog(
                     }
                 ) { Text("Remove") }
             } else {
-                TextButton(onClick = onDismiss) { Text("Back to admin") }
+                TextButton(onClick = onDismiss) { Text("Back to Admin Menu") }
             }
         },
         dismissButton = {
@@ -860,7 +896,8 @@ internal fun CollapsibleSettingsSection(
 ) {
     var manualExpansion by rememberSaveable { mutableStateOf<Boolean?>(null) }
     val expanded = manualExpansion ?: defaultExpanded
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.16f), MaterialTheme.shapes.medium)
+        .padding(8.dp).testTag("settings-section-$title"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
             Modifier.fillMaxWidth().heightIn(min = 48.dp)
                 .semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" }

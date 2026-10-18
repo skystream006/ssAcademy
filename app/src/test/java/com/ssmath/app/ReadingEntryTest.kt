@@ -88,7 +88,7 @@ class ReadingEntryTest {
         await { reading.packStatus != null && !reading.saving }
         compose.onNodeWithTag("subject-Reading").performClick()
         compose.onNodeWithText("Import reading activities first").assertIsDisplayed()
-        compose.onNodeWithText("Before playing reading games, go to Settings > Admin > Game Settings > Reading Settings", substring = true)
+        compose.onNodeWithText("Before playing reading games, go to Settings > Admin Menu > Game Settings > Reading Settings", substring = true)
             .assertIsDisplayed()
         compose.onNodeWithTag("reading-menu").assertDoesNotExist()
         assertNull(app.overlay)

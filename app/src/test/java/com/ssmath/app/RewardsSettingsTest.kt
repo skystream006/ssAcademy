@@ -76,7 +76,7 @@ class RewardsSettingsTest {
         compose.openAdminSettings()
         val collapsed = SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Collapsed")
         val expanded = SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Expanded")
-        listOf("My Pokémons", "My Rewards", "Reading activities", "Available rewards", "Game Settings")
+        listOf("My Rewards", "Available Rewards", "Game Settings")
             .forEach { compose.onNodeWithText(it).performScrollTo().assertHasClickAction().assert(collapsed) }
         compose.onNodeWithText("Add all animations").assertDoesNotExist()
         compose.onNodeWithText("Remove rewards").assertDoesNotExist()
@@ -240,7 +240,7 @@ class RewardsSettingsTest {
         assertTrue(restored.disabledRewards.isEmpty())
     }
 
-    @Test fun activeReadingGamesDialogSurvivesStateRestorationAndBackKeepsChangesAtLargeTextSize() {
+    @Test fun activeReadingGamesRelockOnRestorationAndBackKeepsChangesAtLargeTextSize() {
         val model = MathViewModel(application)
         val restoration = StateRestorationTester(compose)
         restoration.setContent { MathTheme(textSizePercent = 200) { SettingsScreen(model) } }
@@ -249,6 +249,9 @@ class RewardsSettingsTest {
         compose.onNodeWithContentDescription(ReadingGame.STUDIO.title).performScrollTo()
             .assertIsDisplayed().performClick().assertIsOff()
         restoration.emulateSavedInstanceStateRestore()
+        compose.onNodeWithTag("active-reading-games-dialog").assertDoesNotExist()
+        compose.onNodeWithTag("admin-dialog").assertDoesNotExist()
+        compose.openAdminSettings(expectedDialog = "active-reading-games-dialog")
         compose.onNodeWithTag("active-reading-games-dialog").assertIsDisplayed()
         compose.onNodeWithContentDescription(ReadingGame.STUDIO.title).performScrollTo().assertIsOff()
         compose.runOnIdle {
@@ -427,11 +430,9 @@ class RewardsSettingsTest {
         model.chooseRewardsEnabled(false)
         model.openSettings()
         compose.setContent { MathAppContent(model) }
-        compose.onNodeWithText("Debug logging").performScrollTo().performClick()
-        val description = compose.onNodeWithTag("debug-logging-description").performScrollTo()
-        repeat(7) { description.performClick() }
-        compose.onNodeWithText("Admin").assertIsDisplayed()
-        compose.onNodeWithText("Available rewards").performScrollTo().performClick()
+        compose.openAdminSettings()
+        compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
+        compose.onNodeWithText("Available Rewards").performScrollTo().performClick()
         RewardTier.entries.forEach { tier ->
             compose.onNodeWithText("${tier.label} · ${tier.questionCountLabel}").performScrollTo().assertIsDisplayed()
             RewardType.entries.filter { it.tier == tier }.forEach { type ->
@@ -442,8 +443,8 @@ class RewardsSettingsTest {
         assertEquals(RewardType.entries.toSet(), model.disabledRewards)
         assertEquals(model.disabledRewards, MathViewModel(application).disabledRewards)
         compose.onNodeWithText("Close").performClick()
-        repeat(7) { description.performClick() }
-        compose.onNodeWithText("Available rewards").performScrollTo().performClick()
+        compose.openAdminSettings()
+        compose.onNodeWithText("Available Rewards").performScrollTo().performClick()
         RewardType.entries.forEach { type ->
             compose.onNodeWithContentDescription("${type.label} reward")
                 .performScrollTo().assertIsOff().performClick().assertIsOn()
@@ -489,9 +490,7 @@ class RewardsSettingsTest {
         model.openSettings()
         compose.setContent { MathAppContent(model) }
         compose.onNodeWithText("Remove rewards").assertDoesNotExist()
-        compose.onNodeWithText("Debug logging").performScrollTo().performClick()
-        val description = compose.onNodeWithTag("debug-logging-description").performScrollTo()
-        repeat(7) { description.performClick() }
+        compose.openAdminSettings()
         compose.onNodeWithText("My Rewards").performScrollTo().performClick()
         compose.onNodeWithText("Remove rewards").performScrollTo().performClick()
         RewardTier.entries.forEach { tier ->
@@ -518,8 +517,8 @@ class RewardsSettingsTest {
             }
         }
         assertEquals(before.copy(rewards = model.rewardBalances), HistoryStore(file).loadSnapshot())
-        compose.onNodeWithText("Back to admin").performClick()
-        compose.onNodeWithText("Admin").assertIsDisplayed()
+        compose.onNodeWithText("Back to Admin Menu").performClick()
+        compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
         compose.onNodeWithText("Close").performClick()
         assertEquals(Overlay.SETTINGS, model.overlay)
         assertFalse(DebugLog.enabled.value)

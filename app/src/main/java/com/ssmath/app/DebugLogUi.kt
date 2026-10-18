@@ -38,7 +38,7 @@ import kotlinx.coroutines.withContext
 
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
-fun DebugLogSettings(onOpenAdmin: () -> Unit) {
+fun DebugLogSettings(onOpenDebug: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val enabled by DebugLog.enabled.collectAsState()
@@ -88,7 +88,7 @@ fun DebugLogSettings(onOpenAdmin: () -> Unit) {
                 descriptionTaps++
                 if (descriptionTaps == 7) {
                     descriptionTaps = 0
-                    onOpenAdmin()
+                    onOpenDebug()
                 }
             })
         Text("Full rotates bounded log files. Reactive keeps the latest 100 complete events.")

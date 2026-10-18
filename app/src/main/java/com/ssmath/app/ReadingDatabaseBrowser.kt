@@ -151,7 +151,7 @@ internal fun ReadingDatabaseBrowser(
                             loaded == null -> DatabaseLoading()
                             loaded.entries.isEmpty() -> {
                                 Text(if (game == null && level == null)
-                                    "No reading activities installed. Import reading activities in Admin > Game Settings > Reading Settings first."
+                                    "No reading activities installed. Import reading activities in Settings > Admin Menu > Game Settings > Reading Settings first."
                                 else "No activities match these filters.",
                                     Modifier.testTag("reading-database-empty"))
                             }

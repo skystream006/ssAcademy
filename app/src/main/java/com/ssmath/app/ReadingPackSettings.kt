@@ -27,7 +27,7 @@ internal fun ReadingImportRequiredDialog(model: ReadingViewModel, onDismiss: () 
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 Text(model.storageError ?: if (loading) "Please wait while your installed activities are checked."
-                    else "Before playing reading games, go to Settings > Admin > Game Settings > Reading Settings and tap " +
+                    else "Before playing reading games, go to Settings > Admin Menu > Game Settings > Reading Settings and tap " +
                         "Import / Update Reading Activities. An internet connection is needed to import; " +
                         "afterward, the activities work offline. Your saved drafts and progress are kept.")
             }

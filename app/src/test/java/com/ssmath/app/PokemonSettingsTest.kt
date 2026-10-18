@@ -312,7 +312,7 @@ class PokemonSettingsTest {
         }
     }
 
-    @Test fun sevenDescriptionTapsOpenAdminAndOnlyTheButtonAddsAnimations() {
+    @Test fun sevenDescriptionTapsOpenDebugMenuAndOnlyTheButtonAddsAnimations() {
         val store = HistoryStore(file)
         store.collectPokemon(Celebration.SQUIRTLE)
         val before = store.loadSnapshot()
@@ -325,9 +325,13 @@ class PokemonSettingsTest {
         repeat(6) { description.performClick() }
         assertEquals(before.pokemons, model.pokemons)
         assertEquals(before, store.loadSnapshot())
-        compose.onNodeWithText("Admin").assertDoesNotExist()
+        compose.onNodeWithText("Debug Menu").assertDoesNotExist()
         description.performClick()
-        compose.onNodeWithText("Admin").assertIsDisplayed()
+        compose.onNodeWithText("Debug Menu").assertIsDisplayed()
+        listOf("Game Settings", "My Rewards", "Available Rewards").forEach {
+            compose.onNodeWithText(it).assertDoesNotExist()
+        }
+        compose.onNodeWithTag("admin-pin-dialog").assertDoesNotExist()
         compose.onNodeWithText("Add all animations").assertDoesNotExist()
         compose.onNodeWithText("My Pokémons").performScrollTo().performClick()
         compose.onNodeWithText("Add all animations").assertIsDisplayed()
@@ -385,11 +389,13 @@ class PokemonSettingsTest {
         compose.onNodeWithText("Debug logging").performScrollTo().performClick()
         val description = compose.onNodeWithTag("debug-logging-description").performScrollTo()
         repeat(7) { description.performClick() }
-        assertTextFits("Admin")
+        assertTextFits("Debug Menu")
         compose.onNodeWithText("My Pokémons").performScrollTo().performClick()
         compose.onNodeWithText("Add all animations").performScrollTo()
         assertTextFits("Add all animations")
-        compose.onNodeWithText("Available rewards").performScrollTo().performClick()
+        compose.onNodeWithText("Close").performClick()
+        compose.openAdminSettings()
+        compose.onNodeWithText("Available Rewards").performScrollTo().performClick()
         RewardTier.entries.forEach { tier ->
             val heading = "${tier.label} · ${tier.questionCountLabel}"
             compose.onNodeWithText(heading).performScrollTo()
@@ -401,7 +407,7 @@ class PokemonSettingsTest {
             }
         }
         compose.onNodeWithText("Close").assertIsDisplayed().performClick()
-        compose.onNodeWithText("Admin").assertDoesNotExist()
+        compose.onNodeWithTag("admin-dialog").assertDoesNotExist()
         assertTrue(model.pokemons.isEmpty())
     }
 
