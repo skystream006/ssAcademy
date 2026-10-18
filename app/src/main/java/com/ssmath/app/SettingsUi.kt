@@ -403,12 +403,13 @@ private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit) {
             Column(Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("My Pokémons", style = MaterialTheme.typography.titleMedium)
-                Text("Add every celebration to your collection without changing practice history or rewards.")
+                Text("Add all standard celebrations without changing practice history or rewards. " +
+                    "Mega Pokémons can only be earned in the Multiplication Matrix Rewards Game.")
                 Button(onClick = model::collectAllCelebrations,
-                    enabled = model.pokemons.size < Celebration.entries.size) {
+                    enabled = !model.pokemons.containsAll(Celebration.standardCelebrations)) {
                     Text("Add all animations", Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
                 }
-                Text("${model.pokemons.size}/${Celebration.entries.size} animations collected")
+                Text("${model.pokemons.count { it in Celebration.standardCelebrations }}/${Celebration.standardCelebrations.size} animations collected")
                 HorizontalDivider()
                 Text("My Rewards", style = MaterialTheme.typography.titleMedium)
                 Button(onClick = { showingRemoval = true }) {
@@ -604,18 +605,26 @@ fun PokemonsScreen(model: MathViewModel) {
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             CelebrationCategory.entries.forEach { category ->
-                val categoryCelebrations = collected.filter { it.category == category }.sortedBy { it.ndex }
+                val categoryCelebrations = collected.filter { it.category == category }
+                    .sortedWith(compareBy<Celebration> { it.ndex }.thenBy { it.ndexSuffix })
                 val categoryTotal = Celebration.entries.count { it.category == category }
                 item(key = "category-${category.name}", span = { GridItemSpan(maxLineSpan) }) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        Text(category.label, Modifier.weight(1f, fill = false).width(IntrinsicSize.Max),
-                            style = MaterialTheme.typography.titleMedium)
-                        Text("${categoryCelebrations.size}/$categoryTotal",
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.width(IntrinsicSize.Max).testTag("pokemon-count-${category.name}").semantics {
-                                contentDescription = "${categoryCelebrations.size} of $categoryTotal collected in ${category.label}"
-                            })
+                    Column {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Text(category.label, Modifier.weight(1f, fill = false).width(IntrinsicSize.Max),
+                                style = MaterialTheme.typography.titleMedium)
+                            Text("${categoryCelebrations.size}/$categoryTotal",
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.width(IntrinsicSize.Max).testTag("pokemon-count-${category.name}").semantics {
+                                    contentDescription = "${categoryCelebrations.size} of $categoryTotal collected in ${category.label}"
+                                })
+                        }
+                        if (category == CelebrationCategory.MEGA_POKEMONS) {
+                            Text("Only obtainable in the Multiplication Matrix Rewards Game.",
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(top = 4.dp))
+                        }
                     }
                 }
                 items(categoryCelebrations, key = { it.name }) { pokemon ->
@@ -636,12 +645,17 @@ fun PokemonsScreen(model: MathViewModel) {
                         }
                         Text(pokemon.collectionLabel, Modifier.fillMaxWidth(), textAlign = TextAlign.Center,
                             style = MaterialTheme.typography.labelLarge)
+                        if (pokemon.category == CelebrationCategory.MEGA_POKEMONS) {
+                            Text("Mega Pokémon", style = MaterialTheme.typography.labelSmall,
+                                textAlign = TextAlign.Center)
+                        }
                     }
                 }
             }
             if (collected.isEmpty()) {
                 item(key = "empty-collection", span = { GridItemSpan(maxLineSpan) }) {
-                    Text("Finish practices to collect Other celebrations. Pokémon can appear in Rewards Game after 15 or more questions.",
+                    Text("Finish practices to collect Other celebrations. Pokémon can appear in Rewards Game after 15 or more questions. " +
+                        "Mega Pokémons are exclusive to the Multiplication Matrix Rewards Game.",
                         Modifier.padding(8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }

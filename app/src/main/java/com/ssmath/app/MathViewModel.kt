@@ -467,7 +467,8 @@ class MathViewModel(
                 storeLock.withLock {
                     if (pendingResult === pending) {
                         celebration = if (selectingCelebration && collectionLoaded)
-                            Celebration.select(state.questionCount, celebrationRandom, pokemons, result.gameMode) else null
+                            Celebration.select(state.questionCount, celebrationRandom, pokemons, result.gameMode,
+                                isMultiplicationMatrix = result.isMultiplicationMatrix) else null
                         selectingCelebration = false
                     }
                     persistResult(pending)
@@ -511,11 +512,12 @@ class MathViewModel(
     fun collectPresentedCelebration(presented: Celebration) {
         val pending = pendingResult ?: return
         if (celebration != presented || overlay != null || pending.result.pokemonReward != null) return
-        if (pending.result.gameMode == GameMode.PRACTICE && presented.category != CelebrationCategory.OTHER) return
+        if (!presented.isEligibleFor(pending.result.questionCount, pending.result.gameMode,
+                pending.result.isMultiplicationMatrix)) return
         collectCelebrations(listOf(presented), pending)
     }
 
-    fun collectAllCelebrations() { collectCelebrations(Celebration.entries) }
+    fun collectAllCelebrations() { collectCelebrations(Celebration.standardCelebrations) }
 
     private fun collectCelebrations(celebrations: Collection<Celebration>, pending: PendingResult? = null) {
         viewModelScope.launch {

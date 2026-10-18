@@ -168,7 +168,7 @@ class KantoCatalogTest {
     @Test fun catalogHasNoDuplicateNamesOrNumbersAndKeepsUnrequestedNumbersAbsent() {
         assertEquals(157, Celebration.pokemons.size)
         assertEquals(Celebration.pokemons.size, Celebration.pokemons.map { it.ndex }.toSet().size)
-        assertEquals(Celebration.entries.size, Celebration.entries.map { it.label }.toSet().size)
+        assertEquals(Celebration.entries.size, Celebration.entries.map { it.collectionLabel }.toSet().size)
         assertEquals((1..151).toSet() - setOf(74, 75),
             Celebration.pokemons.mapNotNull { it.ndex }.filter { it <= 151 }.toSet())
     }

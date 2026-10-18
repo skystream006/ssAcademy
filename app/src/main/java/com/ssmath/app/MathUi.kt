@@ -604,6 +604,7 @@ private fun ReadyDialog(model: MathViewModel) {
             Text("Answer each row in order: 1 × 1 to 1 × 11, then 2 × 1 to 2 × 11, up to 11 × 11.")
             Text("The same Rewards Game rules apply: finish all 121 questions with more than 90% correct " +
                 "before the time limit, if enabled. The game ends at 13 wrong answers.")
+            Text("Exclusive celebration tier: Mega Pokémons. Complete the matrix for a chance to collect a Mega Pokémon.")
             if (model.rewardsEnabled) Text("Eligible for enabled Tier 2 prize fragments.")
             else Text("Prize fragments are unavailable while Math Rewards System is OFF.")
         }

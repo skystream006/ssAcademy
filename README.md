@@ -44,7 +44,9 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    The same rewards rules apply: finish all questions with **more than 90% correct** for an
    enabled **Tier 2** prize fragment, with Math Rewards System enabled at start and finish.
    The configured time limit per 5 questions scales to all 121 questions, and the game stops
-   at **13 wrong answers** or when time runs out.
+   at **13 wrong answers** or when time runs out. Completing the matrix also unlocks the
+   **Mega Pokémons** celebration pool, exclusive to this game; ordinary multiplication
+   games (even with 121 questions), Practice Game, and reading cannot award this tier.
 2. **Press Start when Ready** – press **Start** to begin. The timer starts now.
 3. **Play** – except for the ordered matrix game, addition, subtraction and multiplication use two random numbers
    between the minimum and maximum, inclusive. Subtraction never goes below zero.
@@ -85,11 +87,20 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    **Pokémons** category and can only appear after completing **15 or more questions**.
    The remaining five scenes belong to **Other** and can appear at any game length;
    below 15 questions, only **Other** scenes appear. Only scenes not yet in **My Pokémons**
-   are selected until all 162 animations have been collected; after that, repeats are allowed.
+   are selected until all 162 standard animations have been collected; after that, repeats are allowed
+   in ordinary Rewards Games, without requiring any Mega Pokémons.
    If all five **Other** scenes are collected but the full collection is incomplete,
    Rewards Games below 15 questions go straight to results without an animation.
    Practice Game uses only the five Other scenes, regardless of question count,
    without awarding prizes or Pokémon.
+   Matrix completions can additionally select from **95 Mega Pokémon forms**, including
+   the separate X/Y/Z variants and three Tatsugiri entries. Each shows **Mega Pokémon**,
+   its name and its supplied Ndex (including suffixes) and appears in the separate
+   **Mega Pokémons** collection section, with an offline preview and replay.
+   Matrix games prefer uncollected scenes across all three categories, allowing repeats
+   once that complete pool has been collected. Mega celebrations, like other animations,
+   are collected on live presentation, never by replay, and do not require prize fragments
+   to be enabled. Early exits and timeouts do not award celebrations.
    Each animation shows its name alongside the scene, which says **Hurray!!**. These animations
    are drawn in the app and work offline. Press **View results** to
    skip the animation, or wait for it to finish.
@@ -531,8 +542,9 @@ the device and can be viewed, shared or cleared from Settings.
 
 Tap the description beginning **Off by default** below **Enable debug logging**
 seven times to open the **Admin** dialog. Opening or closing it does not add animations.
-Press **Add all animations** to add every celebration to **My Pokémons**, without
-duplicating ones already collected or changing history and rewards.
+Press **Add all animations** to add all standard celebrations to **My Pokémons**, without
+duplicating ones already collected or changing history and rewards. This admin action
+does not unlock Mega Pokémons: they can only be earned in the math matrix game.
 
 Press **Remove rewards** to view available balances by tier. Choose **Remove 1 fragment**
 or **Remove 1 whole reward** for a reward, then confirm **Remove**; **Cancel** leaves it

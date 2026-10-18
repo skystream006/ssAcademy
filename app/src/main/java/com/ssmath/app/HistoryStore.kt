@@ -201,7 +201,7 @@ class HistoryStore(private val file: File) {
         val saved = result.copy(
             prizeType = result.prizeType?.takeIf { eligible && it.tier == rewardTierForQuestionCount(result.questionCount) },
             celebration = result.celebration?.takeIf {
-                result.completed && (it.category == CelebrationCategory.OTHER || result.questionCount >= 15)
+                result.completed && it.isEligibleFor(result.questionCount)
             }
         )
         return save(snapshot.copy(
@@ -231,7 +231,8 @@ class HistoryStore(private val file: File) {
     fun collectReadingCelebration(sessionId: String, celebration: Celebration): PracticeSnapshot {
         val snapshot = loadSnapshot()
         val result = snapshot.readingResults.find { it.sessionId == sessionId } ?: return snapshot
-        if (!result.completed || result.pokemonReward != null || result.celebration != celebration) return snapshot
+        if (!result.completed || result.pokemonReward != null || result.celebration != celebration ||
+            !celebration.isEligibleFor(result.questionCount)) return snapshot
         return save(snapshot.copy(
             readingResults = snapshot.readingResults.map {
                 if (it.sessionId == sessionId) it.copy(pokemonReward = celebration) else it
@@ -264,6 +265,9 @@ class HistoryStore(private val file: File) {
         val result = snapshot.history.find { it.id == id } ?: return snapshot
         if (result.pokemonReward != null) return snapshot
         if (result.gameMode == GameMode.PRACTICE && celebration.category != CelebrationCategory.OTHER) return snapshot
+        if (celebration.category == CelebrationCategory.MEGA_POKEMONS &&
+            (!celebration.isEligibleFor(result.questionCount, result.gameMode, result.isMultiplicationMatrix) ||
+                result.timedOut || result.attempts.size != result.questionCount)) return snapshot
         return save(snapshot.copy(
             history = snapshot.history.map { if (it.id == id) it.copy(pokemonReward = celebration) else it },
             pokemons = snapshot.pokemons + celebration
@@ -272,7 +276,7 @@ class HistoryStore(private val file: File) {
 
     fun collectPokemons(celebrations: Collection<Celebration>): PracticeSnapshot {
         val snapshot = loadSnapshot()
-        val collected = snapshot.pokemons + celebrations
+        val collected = snapshot.pokemons + celebrations.filter { it.category != CelebrationCategory.MEGA_POKEMONS }
         if (collected == snapshot.pokemons) return snapshot
         return save(snapshot.copy(pokemons = collected))
     }

@@ -862,7 +862,7 @@ class GameModesTest {
         repeat(50) { answer(model) }
         assertEquals(CelebrationCategory.OTHER, model.celebration!!.category)
         assertNull(model.lastResult!!.prizeType)
-        assertEquals(Celebration.entries.toSet(), model.pokemons)
+        assertEquals(Celebration.standardCelebrations.toSet(), model.pokemons)
     }
 
     @Test fun rewardsRetainPokemonAnimationsPrizeTiersAndExistingInventory() {

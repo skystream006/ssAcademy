@@ -48,7 +48,7 @@ class PokemonCollectionTest {
         chosen: Celebration = Celebration.PIKACHU,
         dispatcher: CoroutineDispatcher = Dispatchers.Unconfined
     ): MathViewModel {
-        val seed = (0..10_000).first { Celebration.entries.random(Random(it)) == chosen }
+        val seed = (0..10_000).first { Celebration.standardCelebrations.random(Random(it)) == chosen }
         return MathViewModel(application, clock = { now }, ioDispatcher = dispatcher,
             celebrationRandom = Random(seed)).also {
             models += ViewModelStore().apply { put("model", it) }
@@ -75,7 +75,7 @@ class PokemonCollectionTest {
         assertEquals(listOf("Pikachu", "Squirtle", "Bulbasaur", "Charmander", "Jigglypuff",
             "Palafin", "Finizen", "Wailmer", "Wailord", "Bouffalant", "Veluza", "Mantyke", "Mantine"),
             Celebration.pokemons.take(13).map { it.label })
-        assertEquals(162, Celebration.entries.size)
+        assertEquals(162, Celebration.standardCelebrations.size)
         assertEquals("Other", CelebrationCategory.OTHER.label)
         assertEquals(setOf(Celebration.DOLPHINS, Celebration.WHALES, Celebration.ANCHOVIES,
             Celebration.PARTY, Celebration.CANDY_SHOWER),
@@ -92,14 +92,14 @@ class PokemonCollectionTest {
             assertEquals(Celebration.entries.filter { it.category == CelebrationCategory.OTHER }.toSet(), selected)
         }
         listOf(15, 16, 25, 1000).forEach { count ->
-            assertEquals(Celebration.entries.toSet(),
+            assertEquals(Celebration.standardCelebrations.toSet(),
                 (0..10_000).map { Celebration.select(count, Random(it)) }.toSet())
         }
     }
 
     @Test fun selectionOnlyUsesUncollectedEligibleCelebrations() {
         val remaining = setOf(Celebration.PARTY, Celebration.PIKACHU, Celebration.MEW)
-        val collected = Celebration.entries.toSet() - remaining
+        val collected = Celebration.standardCelebrations.toSet() - remaining
         listOf(1, 14, 15, 25, 1000).forEach { count ->
             val selected = (0..200).map { Celebration.select(count, Random(it), collected) }.toSet()
             assertEquals(if (count < 15) setOf(Celebration.PARTY) else remaining, selected)
@@ -107,8 +107,8 @@ class PokemonCollectionTest {
     }
 
     @Test fun lastMissingCelebrationIsAlwaysSelectedBeforeAnyRepeat() {
-        Celebration.entries.forEach { missing ->
-            val collected = Celebration.entries.toSet() - missing
+        Celebration.standardCelebrations.forEach { missing ->
+            val collected = Celebration.standardCelebrations.toSet() - missing
             repeat(20) { seed ->
                 assertEquals(missing, Celebration.select(15, Random(seed), collected))
             }
@@ -116,14 +116,14 @@ class PokemonCollectionTest {
     }
 
     @Test fun shortPracticesDoNotRepeatOtherScenesWhilePokemonCollectionIsIncomplete() {
-        val collected = Celebration.entries.toSet() - Celebration.MEW
+        val collected = Celebration.standardCelebrations.toSet() - Celebration.MEW
         (1..14).forEach { count ->
             assertNull(Celebration.select(count, Random(0), collected))
         }
     }
 
     @Test fun completeCollectionAllowsEveryEligibleCelebrationAgain() {
-        val collected = Celebration.entries.toSet()
+        val collected = Celebration.standardCelebrations.toSet()
         listOf(1, 14, 15, 1000).forEach { count ->
             val expected = if (count < 15) collected.filter { it.category == CelebrationCategory.OTHER }.toSet()
                 else collected
@@ -170,13 +170,13 @@ class PokemonCollectionTest {
             val presented = model.celebration!!
             assertEquals(CelebrationCategory.OTHER, presented.category)
             model.collectPresentedCelebration(presented)
-            assertEquals(Celebration.entries.toSet(), model.pokemons)
+            assertEquals(Celebration.standardCelebrations.toSet(), model.pokemons)
             model.done()
         }
     }
 
     @Test fun eachPresentedCelebrationIsCollectedOnceEvenWithRewardsDisabled() {
-        repeat(Celebration.entries.size) { index ->
+        repeat(Celebration.standardCelebrations.size) { index ->
             val model = model()
             model.chooseRewardsEnabled(false)
             start(model)
@@ -194,12 +194,12 @@ class PokemonCollectionTest {
             assertEquals(model.pokemons, model().pokemons)
             assertTrue(model.rewardBalances.isEmpty())
         }
-        assertEquals(Celebration.entries.toSet(), HistoryStore(file).loadSnapshot().pokemons)
+        assertEquals(Celebration.standardCelebrations.toSet(), HistoryStore(file).loadSnapshot().pokemons)
     }
 
     @Test fun consecutivePracticesCollectEverySceneBeforeAllowingRepeats() {
         val model = model()
-        repeat(Celebration.entries.size) { index ->
+        repeat(Celebration.standardCelebrations.size) { index ->
             start(model)
             repeat(15) { answer(model) }
             val presented = requireNotNull(model.celebration)
@@ -208,13 +208,13 @@ class PokemonCollectionTest {
             assertEquals(index + 1, model.pokemons.size)
             model.done()
         }
-        assertEquals(Celebration.entries.toSet(), model.pokemons)
+        assertEquals(Celebration.standardCelebrations.toSet(), model.pokemons)
         start(model)
         repeat(15) { answer(model) }
         val repeated = requireNotNull(model.celebration)
         assertTrue(repeated in model.pokemons)
         model.collectPresentedCelebration(repeated)
-        assertEquals(Celebration.entries.toSet(), model.pokemons)
+        assertEquals(Celebration.standardCelebrations.toSet(), model.pokemons)
         assertEquals(repeated, model.lastResult!!.pokemonReward)
         assertEquals(repeated, HistoryStore(file).load().first().pokemonReward)
     }
@@ -246,7 +246,7 @@ class PokemonCollectionTest {
     }
 
     @Test fun restoredCollectionStillPreventsRepeatsAfterHistoryIsCleared() {
-        val collected = Celebration.entries.toSet() - Celebration.MEW
+        val collected = Celebration.standardCelebrations.toSet() - Celebration.MEW
         HistoryStore(file).collectPokemons(collected)
         val model = model()
         start(model, count = 1)
@@ -265,11 +265,11 @@ class PokemonCollectionTest {
         assertTrue(restored.rewardDialogVisible)
         restored.claimReward()
         assertEquals(1, restored.rewardBalances.values.sumOf { it.totalFragments })
-        assertEquals(Celebration.entries.toSet(), model().pokemons)
+        assertEquals(Celebration.standardCelebrations.toSet(), model().pokemons)
     }
 
     @Test fun selectionWaitsForThePersistedCollectionToLoad() {
-        val collected = Celebration.entries.toSet() - Celebration.MEW
+        val collected = Celebration.standardCelebrations.toSet() - Celebration.MEW
         HistoryStore(file).collectPokemons(collected)
         val dispatcher = QueuedDispatcher()
         val model = model(dispatcher = dispatcher)
@@ -286,7 +286,7 @@ class PokemonCollectionTest {
     }
 
     @Test fun pendingCollectionIsSavedBeforeTheNextCelebrationIsSelected() {
-        val collected = Celebration.entries.toSet() - setOf(Celebration.PARTY, Celebration.MEW)
+        val collected = Celebration.standardCelebrations.toSet() - setOf(Celebration.PARTY, Celebration.MEW)
         HistoryStore(file).collectPokemons(collected)
         val dispatcher = QueuedDispatcher()
         val model = model(dispatcher = dispatcher)
@@ -447,7 +447,7 @@ class PokemonCollectionTest {
         repeat(2) { model.collectAllCelebrations() }
         model.clearHistory()
         dispatcher.drain()
-        assertEquals(Celebration.entries.toSet() - Celebration.PIKACHU, model.pokemons)
+        assertEquals(Celebration.standardCelebrations.toSet() - Celebration.PIKACHU, model.pokemons)
         assertEquals(0, model.rewardBalances.values.sumOf { it.totalFragments })
         assertTrue(model.history.isEmpty())
         assertEquals(model.pokemons, model().pokemons)
@@ -510,7 +510,7 @@ class PokemonCollectionTest {
         assertEquals(before, file.readText())
         assertTrue(blockedWrite.delete())
         model.collectAllCelebrations()
-        assertEquals(Celebration.entries.toSet(), model().pokemons)
+        assertEquals(Celebration.standardCelebrations.toSet(), model().pokemons)
     }
 
     private class QueuedDispatcher : CoroutineDispatcher() {

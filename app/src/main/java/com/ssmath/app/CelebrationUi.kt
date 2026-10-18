@@ -52,7 +52,7 @@ import kotlin.random.Random
 import kotlinx.serialization.Serializable
 
 enum class CelebrationCategory(val label: String) {
-    POKEMONS("Pokémons"), OTHER("Other")
+    POKEMONS("Pokémons"), OTHER("Other"), MEGA_POKEMONS("Mega Pokémons")
 }
 
 @Serializable
@@ -60,7 +60,8 @@ enum class Celebration(
     val label: String,
     val description: String,
     val category: CelebrationCategory = CelebrationCategory.OTHER,
-    val ndex: Int? = null
+    val ndex: Int? = null,
+    val ndexSuffix: String = ""
 ) {
     DOLPHINS("Dolphins", "Dolphins jumping out of the water saying Hurray!!"),
     WHALES("Whales", "Whales jumping out of the water saying Hurray!!"),
@@ -223,31 +224,148 @@ enum class Celebration(
     DRAGONAIR("Dragonair", 148),
     DRAGONITE("Dragonite", 149),
     MEWTWO("Mewtwo", 150),
-    MEW("Mew", 151);
+    MEW("Mew", 151),
+    MEGA_MEGANIUM("Mega Meganium", 154, "", "ruffles its cascading flower collar in a sunlit garden"),
+    MEGA_EMBOAR("Mega Emboar", 500, "", "stomps and swings its fiery mane over volcanic stone"),
+    MEGA_FERALIGATR("Mega Feraligatr", 160, "", "opens its enormous dorsal jaw beside rushing water"),
+    MEGA_BEEDRILL("Mega Beedrill", 15, "", "beats four wings and sweeps its twin lance arms through a meadow"),
+    MEGA_PIDGEOT("Mega Pidgeot", 18, "", "fans its broad wings and streaming crimson crest in mountain winds"),
+    MEGA_AMPHAROS("Mega Ampharos", 181, "", "shakes its flowing white wool and glowing red orbs beneath storm clouds"),
+    MEGA_GYARADOS("Mega Gyarados", 130, "", "surges through ocean spray with immense red-edged fins"),
+    MEGA_BARBARACLE("Mega Barbaracle", 689, "", "raises its many rocky claw arms on a wave-washed reef"),
+    MEGA_STARMIE("Mega Starmie", 121, "", "strides on long star points while its central jewel pulses"),
+    MEGA_FLOETTE("Mega Floette", 670, "", "floats beside its gigantic eternal flower in a moonlit garden"),
+    MEGA_MEOWSTIC("Mega Meowstic", 678, "", "unfurls its luminous psychic ears beneath a starry sky"),
+    MEGA_PYROAR("Mega Pyroar", 668, "", "shakes its magnificent flame-colored mane on a warm savanna"),
+    MEGA_RAICHU_X("Mega Raichu X", 26, "x", "leaps with muscular electric fists and a star-tipped tail"),
+    MEGA_RAICHU_Y("Mega Raichu Y", 26, "y", "hovers on a floating lightning tail with streaming ears"),
+    MEGA_CLEFABLE("Mega Clefable", 36, "", "flutters its celestial wings above a moonlit clearing"),
+    MEGA_ALAKAZAM("Mega Alakazam", 65, "", "levitates cross-legged while five spoons orbit its long beard"),
+    MEGA_GENGAR("Mega Gengar", 94, "", "rises through a shadow pool with its third eye shining"),
+    MEGA_SCOLIPEDE("Mega Scolipede", 545, "", "undulates its armored segments and towering horns through a forest"),
+    MEGA_VICTREEBEL("Mega Victreebel", 71, "", "swings its oversized pitcher and trailing vines in a jungle"),
+    MEGA_MEDICHAM("Mega Medicham", 308, "", "balances on one foot and fans four spectral arms"),
+    MEGA_MANECTRIC("Mega Manectric", 310, "", "bounds under thunderclouds beneath its giant lightning-bolt mane"),
+    MEGA_GARDEVOIR("Mega Gardevoir", 282, "", "turns in a flowing white ball gown among drifting fairy lights"),
+    MEGA_GALLADE("Mega Gallade", 475, "", "sweeps its blade arms and white cape through a moonlit glade"),
+    MEGA_HOUNDOOM("Mega Houndoom", 229, "", "bares its curled horns and bone breastplate over glowing embers"),
+    MEGA_ALTARIA("Mega Altaria", 334, "", "flaps its blue wings beneath a huge billowing cloud of cotton"),
+    MEGA_AUDINO("Mega Audino", 531, "", "waves its white coat and curled feelers in a healing garden"),
+    MEGA_LOPUNNY("Mega Lopunny", 428, "", "kicks and swings its long segmented ears across a grassy arena"),
+    MEGA_BANETTE("Mega Banette", 354, "", "opens its zipper seams and reaches out with spectral pink claws"),
+    MEGA_CAMERUPT("Mega Camerupt", 323, "", "stamps beneath its erupting volcano hump on a lava plain"),
+    MEGA_EXCADRILL("Mega Excadrill", 530, "", "spins its enormous steel drills above glittering underground ore"),
+    MEGA_GARCHOMP("Mega Garchomp", 445, "", "sweeps two immense scythe arms above desert sand"),
+    MEGA_GARCHOMP_Z("Mega Garchomp Z", 445, "z", "darts on narrow wing blades through a high-altitude slipstream"),
+    MEGA_SABLEYE("Mega Sableye", 302, "", "peeks around its enormous ruby shield in a crystal cavern"),
+    MEGA_MAWILE("Mega Mawile", 303, "", "swings two huge black jaw ponytails beside a fairy-lit cave"),
+    MEGA_ABSOL("Mega Absol", 359, "", "bounds with wing-shaped white fur and a curved horn across a moonlit ridge"),
+    MEGA_ABSOL_Z("Mega Absol Z", 359, "z", "slashes the air with sweeping black blades and streaming white fur"),
+    MEGA_LUCARIO("Mega Lucario", 448, "", "strikes an aura stance with red paws and trailing black appendages"),
+    MEGA_LUCARIO_Z("Mega Lucario Z", 448, "z", "balances in a flowing white aura mantle with sharpened golden accents"),
+    MEGA_SLOWBRO("Mega Slowbro", 80, "", "wobbles upright inside its enormous spiral shell beside a quiet lagoon"),
+    MEGA_SHARPEDO("Mega Sharpedo", 319, "", "swims with its toothed saw snout and golden scars through a reef"),
+    MEGA_EELEKTROSS("Mega Eelektross", 604, "", "coils its long electric body and sweeps broad fins over a tidal pool"),
+    MEGA_DRAGONITE("Mega Dragonite", 149, "", "beats its head wings and spreads white feathered wings above the clouds"),
+    MEGA_VENUSAUR("Mega Venusaur", 3, "", "shakes its towering palm flower and forehead blossom in a jungle"),
+    MEGA_CHARIZARD_X("Mega Charizard X", 6, "", "flaps dark wings and breathes blue fire above volcanic cliffs"),
+    MEGA_CHARIZARD_Y("Mega Charizard Y", 6, "z", "spreads enormous orange wings and three horns in the sunlit sky"),
+    MEGA_BLASTOISE("Mega Blastoise", 9, "", "aims its giant central cannon and armored wrist cannons across a bay"),
+    MEGA_MALAMAR("Mega Malamar", 687, "", "twists its hypnotic mantle and tentacle crown beneath an aurora"),
+    MEGA_DRAGALGE("Mega Dragalge", 691, "", "sways its elaborate seaweed branches in a kelp forest"),
+    MEGA_GLALIE("Mega Glalie", 362, "", "opens its enormous frozen jaw beneath falling snow"),
+    MEGA_FROSLASS("Mega Froslass", 478, "", "fans its icy kimono sleeves across a frozen moonlit lake"),
+    MEGA_ABOMASNOW("Mega Abomasnow", 460, "", "swings its shaggy arms and icy back spires in a snowy forest"),
+    MEGA_SCIZOR("Mega Scizor", 212, "", "snaps its armored serrated pincers beside steel-bright stones"),
+    MEGA_PINSIR("Mega Pinsir", 127, "", "beats its translucent wings and raises thorned antlers above a forest"),
+    MEGA_HERACROSS("Mega Heracross", 214, "", "braces its enormous arms beneath a forked beetle horn"),
+    MEGA_HAWLUCHA("Mega Hawlucha", 701, "", "spreads a flamboyant feather cape and kicks above a rocky arena"),
+    MEGA_SCRAFTY("Mega Scrafty", 560, "", "swings its ragged skin jacket and tall crest in a desert arena"),
+    MEGA_CHANDELURE("Mega Chandelure", 609, "", "sways its elaborate candle arms and ghost flames in an old hall"),
+    MEGA_AERODACTYL("Mega Aerodactyl", 142, "", "beats stone-spiked wings and bares its rocky beard over cliffs"),
+    MEGA_STEELIX("Mega Steelix", 208, "", "coils diamond-studded steel segments through a crystal cavern"),
+    MEGA_AGGRON("Mega Aggron", 306, "", "stomps on armored legs beneath an immense steel head crest"),
+    MEGA_TYRANITAR("Mega Tyranitar", 248, "", "roars beneath towering jagged armor spikes in a sandstorm"),
+    MEGA_GRENINJA("Mega Greninja", 658, "", "spins a giant water shuriken and flicks its long tongue scarf"),
+    MEGA_FALINKS("Mega Falinks", 870, "", "marches as a linked armored formation beneath a towering helmet"),
+    MEGA_CHESNAUGHT("Mega Chesnaught", 652, "", "braces its enormous spiked shield shell in a wooded arena"),
+    MEGA_SKARMORY("Mega Skarmory", 227, "", "fans layered metal feathers and a bladed crest above a canyon"),
+    MEGA_DELPHOX("Mega Delphox", 655, "", "swirls its long sorcerer robes and blazing wand among floating sparks"),
+    MEGA_SALAMENCE("Mega Salamence", 373, "", "banks beneath a vast crimson crescent wing over mountains"),
+    MEGA_KANGASKHAN("Mega Kangaskhan", 115, "", "stomps alongside its grown joey in a sunlit grassland"),
+    MEGA_DRAMPA("Mega Drampa", 780, "", "winds its long cloudlike body and flowing mane above misty peaks"),
+    MEGA_METAGROSS("Mega Metagross", 376, "", "hovers with four giant claw arms and a golden face cross"),
+    MEGA_ZYGARDE("Mega Zygarde", 718, "", "unfurls its geometric dragon body and glowing green cells over ruins"),
+    MEGA_DIANCIE("Mega Diancie", 719, "", "turns beneath a vast pink diamond crown and crystal gown"),
+    MEGA_MEWTWO_X("Mega Mewtwo X", 150, "", "flexes its powerful limbs and curls its violet tail in a psychic arena"),
+    MEGA_MEWTWO_Y("Mega Mewtwo Y", 150, "z", "floats with a long head-tail and small delicate limbs among stars"),
+    MEGA_SCOVILLAIN("Mega Scovillain", 952, "", "bobs its two pepper heads and flickering flames in a hot garden"),
+    MEGA_GLIMMORA("Mega Glimmora", 970, "", "opens its layered crystalline petals above sparkling mineral blooms"),
+    MEGA_TATSUGIRI("Mega Tatsugiri", 978, "", "rides a curling orange dragon wave above the sea"),
+    MEGA_TATSUGIRI_C("Mega Tatsugiri", 978, "c", "swoops in a drooping pink dragon curl over a lagoon"),
+    MEGA_TATSUGIRI_D("Mega Tatsugiri", 978, "d", "stretches a golden dragon ribbon through foaming surf"),
+    MEGA_BAXCALIBUR("Mega Baxcalibur", 998, "", "swings its immense icy dorsal blade across a frozen valley"),
+    MEGA_SCEPTILE("Mega Sceptile", 254, "", "swings its enormous red-seeded evergreen tail through a forest"),
+    MEGA_BLAZIKEN("Mega Blaziken", 257, "", "kicks with black-feathered legs and streaming wrist flames"),
+    MEGA_SWAMPERT("Mega Swampert", 260, "", "pounds its gigantic forearms into a rain-soaked marsh"),
+    MEGA_CHIMECHO("Mega Chimecho", 358, "", "rings its floating bell and billowing prayer streamers in the breeze"),
+    MEGA_GOLISOPOD("Mega Golisopod", 768, "", "opens its layered armor and swings long claws on a rocky shore"),
+    MEGA_GOLURK("Mega Golurk", 623, "", "raises enormous stone fists as its ancient seal glows among ruins"),
+    MEGA_STARAPTOR("Mega Staraptor", 398, "", "sweeps its dark wings and flowing crest through a mountain gale"),
+    MEGA_CRABOMINABLE("Mega Crabominable", 740, "", "swings huge furry pincers and stamps across a snowy beach"),
+    MEGA_HEATRAN("Mega Heatran", 485, "", "crawls on metal claws with molten heat rising from its shell"),
+    MEGA_DARKRAI("Mega Darkrai", 491, "", "unfurls shadowy ribbons beneath its white plume in a moonlit dream"),
+    MEGA_LATIAS("Mega Latias", 380, "", "glides with swept violet wings and golden eyes through soft clouds"),
+    MEGA_LATIOS("Mega Latios", 381, "", "banks with angular violet wings and crimson eyes above a blue horizon"),
+    MEGA_RAYQUAZA("Mega Rayquaza", 384, "", "coils its emerald body and long golden streamers through the stratosphere"),
+    MEGA_MAGEARNA("Mega Magearna", 801, "", "turns its ornate mechanical skirt and opens delicate gear arms"),
+    MEGA_ZERAORA("Mega Zeraora", 807, "", "lunges with charged claws and a sweeping electric mane");
 
     constructor(label: String, ndex: Int) : this(
         label, "$label ${kantoSceneProfile(ndex).action}", CelebrationCategory.POKEMONS, ndex
     )
 
+    constructor(label: String, ndex: Int, ndexSuffix: String, megaAction: String) : this(
+        label, "Mega Pokémon — $label $megaAction",
+        CelebrationCategory.MEGA_POKEMONS, ndex, ndexSuffix
+    )
+
     val collectionLabel: String
-        get() = ndex?.let { "#${it.toString().padStart(4, '0')} $label" } ?: label
+        get() = ndex?.let { "#${it.toString().padStart(4, '0')}$ndexSuffix $label" } ?: label
 
     companion object {
         val pokemons: List<Celebration> = entries.filter { it.category == CelebrationCategory.POKEMONS }
+        val megaPokemons: List<Celebration> = entries.filter { it.category == CelebrationCategory.MEGA_POKEMONS }
+        val standardCelebrations: List<Celebration> = entries.filter { it.category != CelebrationCategory.MEGA_POKEMONS }
 
         fun select(
             questionCount: Int,
             random: Random = Random.Default,
             collected: Set<Celebration> = emptySet(),
-            gameMode: GameMode = GameMode.REWARDS
+            gameMode: GameMode = GameMode.REWARDS,
+            isMultiplicationMatrix: Boolean = false
         ): Celebration? {
-            val eligible = entries.filter {
-                it.category == CelebrationCategory.OTHER || (gameMode == GameMode.REWARDS && questionCount >= 15)
+            val pool = when {
+                gameMode == GameMode.PRACTICE -> entries.filter { it.category == CelebrationCategory.OTHER }
+                isMultiplicationMatrix && questionCount == MultiplicationMatrix.QUESTION_COUNT -> entries
+                else -> standardCelebrations
             }
-            val collectionComplete = collected.containsAll(if (gameMode == GameMode.PRACTICE) eligible else entries)
+            val eligible = pool.filter { it.isEligibleFor(questionCount, gameMode, isMultiplicationMatrix) }
+            val collectionComplete = collected.containsAll(pool)
             return eligible.filter { collectionComplete || it !in collected }.randomOrNull(random)
         }
     }
+}
+
+internal fun Celebration.isEligibleFor(
+    questionCount: Int,
+    gameMode: GameMode = GameMode.REWARDS,
+    isMultiplicationMatrix: Boolean = false
+): Boolean = when (category) {
+    CelebrationCategory.OTHER -> true
+    CelebrationCategory.POKEMONS -> gameMode == GameMode.REWARDS && questionCount >= 15
+    CelebrationCategory.MEGA_POKEMONS -> gameMode == GameMode.REWARDS && isMultiplicationMatrix &&
+        questionCount == MultiplicationMatrix.QUESTION_COUNT
 }
 
 internal const val CELEBRATION_DURATION_MS = 7_200
@@ -279,6 +397,12 @@ internal fun CelebrationDialog(
                 if (!replay) {
                     Text("You answered every question!", modifier = Modifier.padding(bottom = 16.dp))
                     Text(celebration.label, style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), textAlign = TextAlign.Center)
+                }
+                if (celebration.category == CelebrationCategory.MEGA_POKEMONS) {
+                    Text("Mega Pokémon", style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp), textAlign = TextAlign.Center)
+                    Text(celebration.collectionLabel, style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), textAlign = TextAlign.Center)
                 }
                 CelebrationScene(celebration, progress = { progress.value })
@@ -376,6 +500,7 @@ internal fun DrawScope.drawCelebrationArtwork(celebration: Celebration, progress
             Celebration.KABUTOPS, Celebration.AERODACTYL, Celebration.SNORLAX, Celebration.ARTICUNO,
             Celebration.ZAPDOS, Celebration.MOLTRES, Celebration.DRATINI, Celebration.DRAGONAIR,
             Celebration.DRAGONITE, Celebration.MEWTWO, Celebration.MEW -> drawKantoCelebration(celebration, progress)
+            else -> drawMegaCelebration(celebration, progress)
         }
     }
 }
