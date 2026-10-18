@@ -113,15 +113,6 @@ fun SettingsScreen(model: MathViewModel) {
                 Subject.entries.forEach { subject -> SubjectHistorySetting(model, subject) }
             }
             HorizontalDivider()
-            ListItem(headlineContent = { Text("Admin Menu") },
-                supportingContent = { Text("PIN-protected game settings and reward controls") },
-                trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null) },
-                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                modifier = Modifier.clickable {
-                    adminUnlocked = false
-                    showingAdmin = true
-                }.testTag("admin-menu"))
-            HorizontalDivider()
             CollapsibleSettingsSection("Appearance", defaultExpanded = false) {
                 Column {
                     Text("Text size: ${model.textSizePercent}%")
@@ -159,6 +150,15 @@ fun SettingsScreen(model: MathViewModel) {
                 }
                 SkinSetting(model.skinsEnabled, model.skin, model::chooseSkin, model::chooseSkins)
             }
+            HorizontalDivider()
+            ListItem(headlineContent = { Text("Admin Menu") },
+                supportingContent = { Text("PIN-protected game settings and reward controls") },
+                trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null) },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                modifier = Modifier.clickable {
+                    adminUnlocked = false
+                    showingAdmin = true
+                }.testTag("admin-menu"))
             HorizontalDivider()
             DebugLogSettings(onOpenDebug = { showingDebug = true })
             Text("ssAcademy ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.labelSmall,
