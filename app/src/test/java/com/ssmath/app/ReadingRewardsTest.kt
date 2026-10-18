@@ -209,6 +209,17 @@ class ReadingRewardsTest {
         assertFalse(requireNotNull(model.readingCelebration) in model.pokemons)
     }
 
+    @Test fun readingWith121QuestionsCannotUnlockMegaEvenAfterFinishingTheStandardCollection() {
+        HistoryStore(file).collectPokemons(Celebration.standardCelebrations)
+        val model = model()
+        open(model, finished(count = 121))
+        val selected = requireNotNull(model.readingCelebration)
+        assertNotEquals(CelebrationCategory.MEGA_POKEMONS, selected.category)
+        model.collectPresentedReadingCelebration(selected)
+        assertEquals(Celebration.standardCelebrations.toSet(), model.pokemons)
+        assertEquals(selected, model.readingRewardResults.single().pokemonReward)
+    }
+
     @Test fun partialTimedOutAbandonedAndUnfinishedSessionsNeverCelebrateOrGrantRewards() {
         val model = model()
         listOf(

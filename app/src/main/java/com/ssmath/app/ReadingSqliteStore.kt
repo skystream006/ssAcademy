@@ -163,7 +163,7 @@ class ReadingSqliteStore(
         if (id == null) {
             val available = rawQuery("SELECT 1 FROM reading_current WHERE game=? AND level=? LIMIT 1",
                 arrayOf(game.name, level.name)).use { it.moveToFirst() }
-            require(available) { "Import reading activities in Settings > Reading Settings." }
+            require(available) { "Import reading activities in Settings > Admin > Game Settings > Reading Settings." }
             check(cycle < Long.MAX_VALUE)
             cycle++
             id = requireNotNull(unseen())

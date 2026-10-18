@@ -88,7 +88,7 @@ class ReadingEntryTest {
         await { reading.packStatus != null && !reading.saving }
         compose.onNodeWithTag("subject-Reading").performClick()
         compose.onNodeWithText("Import reading activities first").assertIsDisplayed()
-        compose.onNodeWithText("Before playing reading games, go to Settings > Reading Settings", substring = true)
+        compose.onNodeWithText("Before playing reading games, go to Settings > Admin > Game Settings > Reading Settings", substring = true)
             .assertIsDisplayed()
         compose.onNodeWithTag("reading-menu").assertDoesNotExist()
         assertNull(app.overlay)
@@ -107,9 +107,10 @@ class ReadingEntryTest {
         compose.onNodeWithTag("subject-Reading").performClick()
         compose.onNodeWithTag("reading-import-open-settings").performClick()
         assertEquals(Overlay.SETTINGS, app.overlay)
-        compose.onNodeWithText("Reading Settings").performScrollTo().performClick()
+        compose.openGameSettings(Subject.READING)
         compose.onNodeWithTag("reading-pack-import").performScrollTo().performClick()
         await { reading.packStatus?.version == "test-1" && !reading.importing }
+        compose.onNodeWithText("Close").performClick()
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithTag("subject-Reading").performClick()
         compose.onNodeWithTag("reading-menu").assertIsDisplayed()

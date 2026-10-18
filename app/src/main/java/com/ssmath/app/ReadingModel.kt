@@ -225,7 +225,7 @@ object ReadingEngine {
         require(timeLimitMs == null || (rewardsEnabledAtStart && timeLimitMs > 0))
         val attempts = assigned ?: run {
             val choices = ReadingContent.forGame(game, level)
-            require(choices.isNotEmpty()) { "Import reading activities in Settings > Reading Settings." }
+            require(choices.isNotEmpty()) { "Import reading activities in Settings > Admin > Game Settings > Reading Settings." }
             val previous = data.attempts.count { it.ownerId == owner.id && it.game == game && it.level == level }
             List(count) { index ->
                 ReadingAttempt(UUID.randomUUID().toString(), owner.id, choices[(previous + index) % choices.size].id, now)
@@ -257,7 +257,7 @@ object ReadingEngine {
         val content = selected ?: run {
             val previous = data.attempts.count { it.ownerId == owner.id && it.game == game && it.level == level }
             val choices = ReadingContent.forGame(game, level)
-            require(choices.isNotEmpty()) { "Import reading activities in Settings > Reading Settings." }
+            require(choices.isNotEmpty()) { "Import reading activities in Settings > Admin > Game Settings > Reading Settings." }
             choices[previous % choices.size]
         }
         require(content.game == game && content.level == level)

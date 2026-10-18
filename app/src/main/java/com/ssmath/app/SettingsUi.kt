@@ -34,6 +34,7 @@ import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -75,8 +76,6 @@ internal fun ScreenScaffold(title: String, onBack: () -> Unit, actions: @Composa
 fun SettingsScreen(model: MathViewModel) {
     var showingAdmin by rememberSaveable { mutableStateOf(false) }
     var showingName by rememberSaveable { mutableStateOf(false) }
-    var showingReadingGames by rememberSaveable { mutableStateOf(false) }
-    var showingReadingLevel by rememberSaveable { mutableStateOf(false) }
     ScreenScaffold("Settings", model::closeOverlay) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -106,80 +105,8 @@ fun SettingsScreen(model: MathViewModel) {
                     modifier = Modifier.clickable(onClick = model::openPokemons).testTag("my-pokemons"))
             }
             HorizontalDivider()
-            CollapsibleSettingsSection("Math Settings", defaultExpanded = false) {
-                SubjectRewardsSetting(model, Subject.MATH,
-                    "Earn prize fragments in Rewards Game by completing 25 or more questions with over 90% correct")
-                SubjectHistorySetting(model, Subject.MATH)
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Show timer")
-                        Text("Display the elapsed time while practicing", style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Switch(model.showTimer, model::chooseShowTimer,
-                        modifier = Modifier.semantics { contentDescription = "Show timer" })
-                }
-                if (model.rewardsEnabled && model.showTimer) {
-                    TimeLimitSetting(model.timeLimitSeconds, model::chooseTimeLimitSeconds)
-                }
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Show correct answers")
-                        Text("Reveal correct answers after mistakes, including in results and history",
-                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Switch(model.showCorrectAnswers, model::chooseShowCorrectAnswers,
-                        modifier = Modifier.semantics { contentDescription = "Show correct answers" })
-                }
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Vertical equations")
-                        Text("Stack numbers with ones, tens, and hundreds aligned in practice, results, and history",
-                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Switch(model.verticalEquations, model::chooseVerticalEquations,
-                        modifier = Modifier.semantics { contentDescription = "Vertical equations" })
-                }
-                ListItem(headlineContent = { Text("Default Math Reward Game Settings") },
-                    supportingContent = { Text("Default number limits for each math type") },
-                    leadingContent = { Icon(Icons.Rounded.Settings, null) },
-                    trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null) },
-                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                    modifier = Modifier.clickable(onClick = model::openRewardsSetup).testTag("rewards-setup"))
-            }
-            HorizontalDivider()
-            CollapsibleSettingsSection("Reading Settings", defaultExpanded = false) {
-                ReadingPackSettings()
-                SubjectRewardsSetting(model, Subject.READING,
-                    "Earn prize fragments by completing 25 or more questions with over 90% correct.")
-                SubjectHistorySetting(model, Subject.READING)
-                ListItem(headlineContent = { Text("Reading Progress") },
-                    supportingContent = { Text("Private progress and saved stories") },
-                    leadingContent = { Icon(Icons.Rounded.History, null) },
-                    trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null) },
-                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                    modifier = Modifier.clickable(onClick = model::openReadingProgress).testTag("reading-progress"))
-                ListItem(headlineContent = { Text("Set Reading Level") },
-                    leadingContent = { Icon(Icons.Rounded.Settings, null) },
-                    trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null) },
-                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                    modifier = Modifier.clickable { showingReadingLevel = true }.testTag("set-reading-level"))
-                ListItem(headlineContent = { Text("Active Reading Games") },
-                    supportingContent = { Text("Choose which reading games are available") },
-                    leadingContent = { Icon(Icons.Rounded.Settings, null) },
-                    trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null) },
-                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                    modifier = Modifier.clickable { showingReadingGames = true }.testTag("active-reading-games"))
-            }
-            listOf(Subject.SCIENCE, Subject.ADVANCED).forEach { subject ->
-                HorizontalDivider()
-                val title = if (subject == Subject.ADVANCED) "Advanced Subject Settings" else "${subject.label} Settings"
-                CollapsibleSettingsSection(title, defaultExpanded = false) {
-                    SubjectRewardsSetting(model, subject,
-                        "Choose whether to earn rewards when ${subject.label.lowercase()} activities become available.")
-                    SubjectHistorySetting(model, subject)
-                    Text("More activities are coming soon.", style = MaterialTheme.typography.bodySmall)
-                }
+            CollapsibleSettingsSection("Result Histories", defaultExpanded = false) {
+                Subject.entries.forEach { subject -> SubjectHistorySetting(model, subject) }
             }
             HorizontalDivider()
             CollapsibleSettingsSection("Appearance", defaultExpanded = false) {
@@ -230,12 +157,6 @@ fun SettingsScreen(model: MathViewModel) {
     }
     if (showingName) {
         ChangeNameDialog(rememberReadingViewModel(), onDismiss = { showingName = false })
-    }
-    if (showingReadingGames) {
-        ActiveReadingGamesDialog(model, onDismiss = { showingReadingGames = false })
-    }
-    if (showingReadingLevel) {
-        ReadingLevelDialog(rememberReadingViewModel(), onDismiss = { showingReadingLevel = false })
     }
 }
 
@@ -385,6 +306,9 @@ fun SubjectHistoryScreen(model: MathViewModel) {
 private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit) {
     var showingRemoval by rememberSaveable { mutableStateOf(false) }
     var browsingReading by rememberSaveable { mutableStateOf(false) }
+    var showingReadingGames by rememberSaveable { mutableStateOf(false) }
+    var showingReadingLevel by rememberSaveable { mutableStateOf(false) }
+    val sectionState = rememberSaveableStateHolder()
     if (browsingReading) {
         ReadingDatabaseBrowser(onDismiss = { browsingReading = false }, backLabel = "Back to admin")
         return
@@ -396,50 +320,156 @@ private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit) {
         )
         return
     }
+    if (showingReadingGames) {
+        ActiveReadingGamesDialog(model, onDismiss = { showingReadingGames = false })
+        return
+    }
+    if (showingReadingLevel) {
+        ReadingLevelDialog(rememberReadingViewModel(), onDismiss = { showingReadingLevel = false })
+        return
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Admin", Modifier.fillMaxWidth()) },
         text = {
-            Column(Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("My Pokémons", style = MaterialTheme.typography.titleMedium)
-                Text("Add every celebration to your collection without changing practice history or rewards.")
-                Button(onClick = model::collectAllCelebrations,
-                    enabled = model.pokemons.size < Celebration.entries.size) {
-                    Text("Add all animations", Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
-                }
-                Text("${model.pokemons.size}/${Celebration.entries.size} animations collected")
-                HorizontalDivider()
-                Text("My Rewards", style = MaterialTheme.typography.titleMedium)
-                Button(onClick = { showingRemoval = true }) {
-                    Text("Remove rewards", Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
-                }
-                HorizontalDivider()
-                Text("Reading activities", style = MaterialTheme.typography.titleMedium)
-                Button(onClick = { browsingReading = true },
-                    modifier = Modifier.fillMaxWidth().testTag("reading-database-open")) {
-                    Text("View reading activities database", Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
-                }
-                HorizontalDivider()
-                Text("Available rewards", style = MaterialTheme.typography.titleMedium)
-                Text("Choose which rewards can be awarded when a Rewards Game finishes. Existing prizes and fragments stay available.")
-                RewardTier.entries.forEach { tier ->
-                    Text("${tier.label} · ${tier.questionCountLabel}", Modifier.fillMaxWidth(),
-                        style = MaterialTheme.typography.titleSmall)
-                    RewardType.entries.filter { it.tier == tier }.forEach { type ->
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Text(type.label, Modifier.weight(1f))
-                            Switch(type !in model.disabledRewards,
-                                onCheckedChange = { model.chooseRewardEnabled(type, it) },
-                                modifier = Modifier.semantics { contentDescription = "${type.label} reward" })
+            sectionState.SaveableStateProvider("admin-sections") {
+                Column(Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    CollapsibleSettingsSection("My Pokémons", defaultExpanded = false) {
+                        Text("Add all standard celebrations without changing practice history or rewards. " +
+                            "Mega Pokémons can only be earned in the Multiplication Matrix Rewards Game.")
+                        Button(onClick = model::collectAllCelebrations,
+                            enabled = !model.pokemons.containsAll(Celebration.standardCelebrations)) {
+                            Text("Add all animations", Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+                        }
+                        Text("${model.pokemons.count { it in Celebration.standardCelebrations }}/${Celebration.standardCelebrations.size} animations collected")
+                    }
+                    HorizontalDivider()
+                    CollapsibleSettingsSection("My Rewards", defaultExpanded = false) {
+                        Button(onClick = { showingRemoval = true }) {
+                            Text("Remove rewards", Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
                         }
                     }
+                    HorizontalDivider()
+                    CollapsibleSettingsSection("Reading activities", defaultExpanded = false) {
+                        Button(onClick = { browsingReading = true },
+                            modifier = Modifier.fillMaxWidth().testTag("reading-database-open")) {
+                            Text("View reading activities database", Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+                        }
+                    }
+                    HorizontalDivider()
+                    CollapsibleSettingsSection("Available rewards", defaultExpanded = false) {
+                        Text("Choose which rewards can be awarded when a Rewards Game finishes. Existing prizes and fragments stay available.")
+                        RewardTier.entries.forEach { tier ->
+                            Text("${tier.label} · ${tier.questionCountLabel}", Modifier.fillMaxWidth(),
+                                style = MaterialTheme.typography.titleSmall)
+                            RewardType.entries.filter { it.tier == tier }.forEach { type ->
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Text(type.label, Modifier.weight(1f))
+                                    Switch(type !in model.disabledRewards,
+                                        onCheckedChange = { model.chooseRewardEnabled(type, it) },
+                                        modifier = Modifier.semantics { contentDescription = "${type.label} reward" })
+                                }
+                            }
+                        }
+                        Text("If all rewards in a tier are disabled, Rewards Games in that tier give no prize.")
+                    }
+                    HorizontalDivider()
+                    CollapsibleSettingsSection("Game Settings", defaultExpanded = false) {
+                        GameSettings(model,
+                            onRewardsSetup = { onDismiss(); model.openRewardsSetup() },
+                            onReadingProgress = { onDismiss(); model.openReadingProgress() },
+                            onReadingLevel = { showingReadingLevel = true },
+                            onReadingGames = { showingReadingGames = true })
+                    }
                 }
-                Text("If all rewards in a tier are disabled, Rewards Games in that tier give no prize.")
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        modifier = Modifier.testTag("admin-dialog")
     )
+}
+
+@Composable
+private fun GameSettings(
+    model: MathViewModel,
+    onRewardsSetup: () -> Unit,
+    onReadingProgress: () -> Unit,
+    onReadingLevel: () -> Unit,
+    onReadingGames: () -> Unit
+) {
+    CollapsibleSettingsSection("Math Settings", defaultExpanded = false) {
+        SubjectRewardsSetting(model, Subject.MATH,
+            "Earn prize fragments in Rewards Game by completing 25 or more questions with over 90% correct")
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Show timer")
+                Text("Display the elapsed time while practicing", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Switch(model.showTimer, model::chooseShowTimer,
+                modifier = Modifier.semantics { contentDescription = "Show timer" })
+        }
+        if (model.rewardsEnabled && model.showTimer) {
+            TimeLimitSetting(model.timeLimitSeconds, model::chooseTimeLimitSeconds)
+        }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Show correct answers")
+                Text("Reveal correct answers after mistakes, including in results and history",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Switch(model.showCorrectAnswers, model::chooseShowCorrectAnswers,
+                modifier = Modifier.semantics { contentDescription = "Show correct answers" })
+        }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Vertical equations")
+                Text("Stack numbers with ones, tens, and hundreds aligned in practice, results, and history",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Switch(model.verticalEquations, model::chooseVerticalEquations,
+                modifier = Modifier.semantics { contentDescription = "Vertical equations" })
+        }
+        ListItem(headlineContent = { Text("Default Math Reward Game Settings") },
+            supportingContent = { Text("Default number limits for each math type") },
+            leadingContent = { Icon(Icons.Rounded.Settings, null) },
+            trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null) },
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            modifier = Modifier.clickable(onClick = onRewardsSetup).testTag("rewards-setup"))
+    }
+    HorizontalDivider()
+    CollapsibleSettingsSection("Reading Settings", defaultExpanded = false) {
+        ReadingPackSettings()
+        SubjectRewardsSetting(model, Subject.READING,
+            "Earn prize fragments by completing 25 or more questions with over 90% correct.")
+        ListItem(headlineContent = { Text("Reading Progress") },
+            supportingContent = { Text("Private progress and saved stories") },
+            leadingContent = { Icon(Icons.Rounded.History, null) },
+            trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null) },
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            modifier = Modifier.clickable(onClick = onReadingProgress).testTag("reading-progress"))
+        ListItem(headlineContent = { Text("Set Reading Level") },
+            leadingContent = { Icon(Icons.Rounded.Settings, null) },
+            trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null) },
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            modifier = Modifier.clickable(onClick = onReadingLevel).testTag("set-reading-level"))
+        ListItem(headlineContent = { Text("Active Reading Games") },
+            supportingContent = { Text("Choose which reading games are available") },
+            leadingContent = { Icon(Icons.Rounded.Settings, null) },
+            trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null) },
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            modifier = Modifier.clickable(onClick = onReadingGames).testTag("active-reading-games"))
+    }
+    listOf(Subject.SCIENCE, Subject.ADVANCED).forEach { subject ->
+        HorizontalDivider()
+        val title = if (subject == Subject.ADVANCED) "Advanced Subject Settings" else "${subject.label} Settings"
+        CollapsibleSettingsSection(title, defaultExpanded = false) {
+            SubjectRewardsSetting(model, subject,
+                "Choose whether to earn rewards when ${subject.label.lowercase()} activities become available.")
+            Text("More activities are coming soon.", style = MaterialTheme.typography.bodySmall)
+        }
+    }
 }
 
 @Composable
@@ -604,18 +634,26 @@ fun PokemonsScreen(model: MathViewModel) {
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             CelebrationCategory.entries.forEach { category ->
-                val categoryCelebrations = collected.filter { it.category == category }.sortedBy { it.ndex }
+                val categoryCelebrations = collected.filter { it.category == category }
+                    .sortedWith(compareBy<Celebration> { it.ndex }.thenBy { it.ndexSuffix })
                 val categoryTotal = Celebration.entries.count { it.category == category }
                 item(key = "category-${category.name}", span = { GridItemSpan(maxLineSpan) }) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        Text(category.label, Modifier.weight(1f, fill = false).width(IntrinsicSize.Max),
-                            style = MaterialTheme.typography.titleMedium)
-                        Text("${categoryCelebrations.size}/$categoryTotal",
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.width(IntrinsicSize.Max).testTag("pokemon-count-${category.name}").semantics {
-                                contentDescription = "${categoryCelebrations.size} of $categoryTotal collected in ${category.label}"
-                            })
+                    Column {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Text(category.label, Modifier.weight(1f, fill = false).width(IntrinsicSize.Max),
+                                style = MaterialTheme.typography.titleMedium)
+                            Text("${categoryCelebrations.size}/$categoryTotal",
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.width(IntrinsicSize.Max).testTag("pokemon-count-${category.name}").semantics {
+                                    contentDescription = "${categoryCelebrations.size} of $categoryTotal collected in ${category.label}"
+                                })
+                        }
+                        if (category == CelebrationCategory.MEGA_POKEMONS) {
+                            Text("Only obtainable in the Multiplication Matrix Rewards Game.",
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(top = 4.dp))
+                        }
                     }
                 }
                 items(categoryCelebrations, key = { it.name }) { pokemon ->
@@ -636,12 +674,17 @@ fun PokemonsScreen(model: MathViewModel) {
                         }
                         Text(pokemon.collectionLabel, Modifier.fillMaxWidth(), textAlign = TextAlign.Center,
                             style = MaterialTheme.typography.labelLarge)
+                        if (pokemon.category == CelebrationCategory.MEGA_POKEMONS) {
+                            Text("Mega Pokémon", style = MaterialTheme.typography.labelSmall,
+                                textAlign = TextAlign.Center)
+                        }
                     }
                 }
             }
             if (collected.isEmpty()) {
                 item(key = "empty-collection", span = { GridItemSpan(maxLineSpan) }) {
-                    Text("Finish practices to collect Other celebrations. Pokémon can appear in Rewards Game after 15 or more questions.",
+                    Text("Finish practices to collect Other celebrations. Pokémon can appear in Rewards Game after 15 or more questions. " +
+                        "Mega Pokémons are exclusive to the Multiplication Matrix Rewards Game.",
                         Modifier.padding(8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
@@ -691,7 +734,7 @@ fun HistoryScreen(model: MathViewModel) {
                                 Column {
                                     Text("${formatFinishedAt(result.finishedAt)}\n${result.correct} right · ${result.wrong} wrong · ${formatDuration(result.durationMs)}")
                                     result.prize?.let { Text("Prize: ${it.type.fragmentLabel}") }
-                                    result.pokemonReward?.let { Text("My Pokémons: ${it.collectionLabel}") }
+                                    result.pokemonRewards.forEach { Text("My Pokémons: ${it.collectionLabel}") }
                                     if (result.prizeType != null && result.prize == null) Text("Prize waiting — open this result to claim")
                                 }
                             },

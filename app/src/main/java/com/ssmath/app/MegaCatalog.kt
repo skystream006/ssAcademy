@@ -1,0 +1,127 @@
+package com.ssmath.app
+
+internal enum class MegaHabitat { GARDEN, FOREST, VOLCANO, OCEAN, RIVER, SKY, STORM, CAVE, MOON, SNOW, DESERT, RUINS, DOJO }
+internal enum class MegaMotion { STEP, FLIGHT, SWIM, FLOAT, COIL, POUNCE, TURN }
+
+internal data class MegaPokemonProfile(
+    val types: List<String>,
+    val habitat: MegaHabitat,
+    val motion: MegaMotion,
+    val imageSource: String,
+    val visualSignature: String
+)
+
+// The identifiers retain the supplied catalog suffixes, not alternative Pokédex numbering.
+// References document the designs; every frame is an original offline vector rendition.
+internal val megaPokemonProfiles: Map<Celebration, MegaPokemonProfile> = run {
+    val profiles = linkedMapOf<Celebration, MegaPokemonProfile>()
+    fun add(pokemon: Celebration, types: String, habitat: MegaHabitat, motion: MegaMotion, imageSource: String? = null) {
+        val species = pokemon.label.removePrefix("Mega ").removeSuffix(" X")
+            .removeSuffix(" Y").removeSuffix(" Z")
+        profiles[pokemon] = MegaPokemonProfile(
+            types.split('/'), habitat, motion,
+            imageSource ?: "https://bulbapedia.bulbagarden.net/wiki/${species}_(Pok%C3%A9mon)",
+            pokemon.description.substringAfter(" — ")
+        )
+    }
+    add(Celebration.MEGA_MEGANIUM, "Grass/Fairy", MegaHabitat.GARDEN, MegaMotion.STEP)
+    add(Celebration.MEGA_EMBOAR, "Fire/Fighting", MegaHabitat.VOLCANO, MegaMotion.STEP)
+    add(Celebration.MEGA_FERALIGATR, "Water/Dragon", MegaHabitat.RIVER, MegaMotion.POUNCE)
+    add(Celebration.MEGA_BEEDRILL, "Bug/Poison", MegaHabitat.GARDEN, MegaMotion.FLIGHT)
+    add(Celebration.MEGA_PIDGEOT, "Normal/Flying", MegaHabitat.SKY, MegaMotion.FLIGHT)
+    add(Celebration.MEGA_AMPHAROS, "Electric/Dragon", MegaHabitat.STORM, MegaMotion.STEP)
+    add(Celebration.MEGA_GYARADOS, "Water/Dark", MegaHabitat.OCEAN, MegaMotion.SWIM)
+    add(Celebration.MEGA_BARBARACLE, "Rock/Fighting", MegaHabitat.OCEAN, MegaMotion.STEP)
+    add(Celebration.MEGA_STARMIE, "Water/Psychic", MegaHabitat.RIVER, MegaMotion.TURN)
+    add(Celebration.MEGA_FLOETTE, "Fairy", MegaHabitat.GARDEN, MegaMotion.FLOAT)
+    add(Celebration.MEGA_MEOWSTIC, "Psychic", MegaHabitat.MOON, MegaMotion.FLOAT)
+    add(Celebration.MEGA_PYROAR, "Fire/Normal", MegaHabitat.DESERT, MegaMotion.POUNCE)
+    add(Celebration.MEGA_RAICHU_X, "Electric", MegaHabitat.STORM, MegaMotion.POUNCE)
+    add(Celebration.MEGA_RAICHU_Y, "Electric", MegaHabitat.STORM, MegaMotion.FLOAT)
+    add(Celebration.MEGA_CLEFABLE, "Fairy/Flying", MegaHabitat.MOON, MegaMotion.FLIGHT)
+    add(Celebration.MEGA_ALAKAZAM, "Psychic", MegaHabitat.RUINS, MegaMotion.FLOAT)
+    add(Celebration.MEGA_GENGAR, "Ghost/Poison", MegaHabitat.MOON, MegaMotion.FLOAT)
+    add(Celebration.MEGA_SCOLIPEDE, "Bug/Poison", MegaHabitat.FOREST, MegaMotion.COIL)
+    add(Celebration.MEGA_VICTREEBEL, "Grass/Poison", MegaHabitat.FOREST, MegaMotion.TURN)
+    add(Celebration.MEGA_MEDICHAM, "Fighting/Psychic", MegaHabitat.DOJO, MegaMotion.TURN)
+    add(Celebration.MEGA_MANECTRIC, "Electric", MegaHabitat.STORM, MegaMotion.POUNCE)
+    add(Celebration.MEGA_GARDEVOIR, "Psychic/Fairy", MegaHabitat.GARDEN, MegaMotion.TURN)
+    add(Celebration.MEGA_GALLADE, "Psychic/Fighting", MegaHabitat.DOJO, MegaMotion.TURN)
+    add(Celebration.MEGA_HOUNDOOM, "Dark/Fire", MegaHabitat.VOLCANO, MegaMotion.POUNCE)
+    add(Celebration.MEGA_ALTARIA, "Dragon/Fairy", MegaHabitat.SKY, MegaMotion.FLIGHT)
+    add(Celebration.MEGA_AUDINO, "Normal/Fairy", MegaHabitat.GARDEN, MegaMotion.STEP)
+    add(Celebration.MEGA_LOPUNNY, "Normal/Fighting", MegaHabitat.DOJO, MegaMotion.POUNCE)
+    add(Celebration.MEGA_BANETTE, "Ghost", MegaHabitat.MOON, MegaMotion.FLOAT)
+    add(Celebration.MEGA_CAMERUPT, "Fire/Ground", MegaHabitat.VOLCANO, MegaMotion.STEP)
+    add(Celebration.MEGA_EXCADRILL, "Ground/Steel", MegaHabitat.CAVE, MegaMotion.TURN)
+    add(Celebration.MEGA_GARCHOMP, "Dragon/Ground", MegaHabitat.DESERT, MegaMotion.TURN)
+    add(Celebration.MEGA_GARCHOMP_Z, "Dragon", MegaHabitat.SKY, MegaMotion.FLIGHT,
+        imageSource = "https://bulbapedia.bulbagarden.net/wiki/File:0445Garchomp-Mega_Z.png")
+    add(Celebration.MEGA_SABLEYE, "Dark/Ghost", MegaHabitat.CAVE, MegaMotion.STEP)
+    add(Celebration.MEGA_MAWILE, "Steel/Fairy", MegaHabitat.CAVE, MegaMotion.TURN)
+    add(Celebration.MEGA_ABSOL, "Dark", MegaHabitat.MOON, MegaMotion.POUNCE)
+    add(Celebration.MEGA_ABSOL_Z, "Dark/Ghost", MegaHabitat.MOON, MegaMotion.POUNCE)
+    add(Celebration.MEGA_LUCARIO, "Fighting/Steel", MegaHabitat.DOJO, MegaMotion.TURN)
+    add(Celebration.MEGA_LUCARIO_Z, "Fighting/Steel", MegaHabitat.DOJO, MegaMotion.FLOAT)
+    add(Celebration.MEGA_SLOWBRO, "Water/Psychic", MegaHabitat.RIVER, MegaMotion.TURN)
+    add(Celebration.MEGA_SHARPEDO, "Water/Dark", MegaHabitat.OCEAN, MegaMotion.SWIM)
+    add(Celebration.MEGA_EELEKTROSS, "Electric", MegaHabitat.RIVER, MegaMotion.COIL)
+    add(Celebration.MEGA_DRAGONITE, "Dragon/Flying", MegaHabitat.SKY, MegaMotion.FLIGHT)
+    add(Celebration.MEGA_VENUSAUR, "Grass/Poison", MegaHabitat.FOREST, MegaMotion.STEP)
+    add(Celebration.MEGA_CHARIZARD_X, "Fire/Dragon", MegaHabitat.VOLCANO, MegaMotion.FLIGHT)
+    add(Celebration.MEGA_CHARIZARD_Y, "Fire/Flying", MegaHabitat.SKY, MegaMotion.FLIGHT)
+    add(Celebration.MEGA_BLASTOISE, "Water", MegaHabitat.OCEAN, MegaMotion.STEP)
+    add(Celebration.MEGA_MALAMAR, "Dark/Psychic", MegaHabitat.MOON, MegaMotion.FLOAT)
+    add(Celebration.MEGA_DRAGALGE, "Poison/Dragon", MegaHabitat.OCEAN, MegaMotion.COIL)
+    add(Celebration.MEGA_GLALIE, "Ice", MegaHabitat.SNOW, MegaMotion.FLOAT)
+    add(Celebration.MEGA_FROSLASS, "Ice/Ghost", MegaHabitat.SNOW, MegaMotion.FLOAT)
+    add(Celebration.MEGA_ABOMASNOW, "Grass/Ice", MegaHabitat.SNOW, MegaMotion.STEP)
+    add(Celebration.MEGA_SCIZOR, "Bug/Steel", MegaHabitat.CAVE, MegaMotion.TURN)
+    add(Celebration.MEGA_PINSIR, "Bug/Flying", MegaHabitat.FOREST, MegaMotion.FLIGHT)
+    add(Celebration.MEGA_HERACROSS, "Bug/Fighting", MegaHabitat.FOREST, MegaMotion.STEP)
+    add(Celebration.MEGA_HAWLUCHA, "Fighting/Flying", MegaHabitat.DOJO, MegaMotion.POUNCE)
+    add(Celebration.MEGA_SCRAFTY, "Dark/Fighting", MegaHabitat.DESERT, MegaMotion.TURN)
+    add(Celebration.MEGA_CHANDELURE, "Ghost/Fire", MegaHabitat.RUINS, MegaMotion.FLOAT)
+    add(Celebration.MEGA_AERODACTYL, "Rock/Flying", MegaHabitat.SKY, MegaMotion.FLIGHT)
+    add(Celebration.MEGA_STEELIX, "Steel/Ground", MegaHabitat.CAVE, MegaMotion.COIL)
+    add(Celebration.MEGA_AGGRON, "Steel", MegaHabitat.CAVE, MegaMotion.STEP)
+    add(Celebration.MEGA_TYRANITAR, "Rock/Dark", MegaHabitat.DESERT, MegaMotion.STEP)
+    add(Celebration.MEGA_GRENINJA, "Water/Dark", MegaHabitat.RIVER, MegaMotion.TURN)
+    add(Celebration.MEGA_FALINKS, "Fighting", MegaHabitat.DOJO, MegaMotion.STEP)
+    add(Celebration.MEGA_CHESNAUGHT, "Grass/Fighting", MegaHabitat.FOREST, MegaMotion.STEP)
+    add(Celebration.MEGA_SKARMORY, "Steel/Flying", MegaHabitat.SKY, MegaMotion.FLIGHT)
+    add(Celebration.MEGA_DELPHOX, "Fire/Psychic", MegaHabitat.RUINS, MegaMotion.TURN)
+    add(Celebration.MEGA_SALAMENCE, "Dragon/Flying", MegaHabitat.SKY, MegaMotion.FLIGHT)
+    add(Celebration.MEGA_KANGASKHAN, "Normal", MegaHabitat.GARDEN, MegaMotion.POUNCE)
+    add(Celebration.MEGA_DRAMPA, "Normal/Dragon", MegaHabitat.SKY, MegaMotion.COIL)
+    add(Celebration.MEGA_METAGROSS, "Steel/Psychic", MegaHabitat.RUINS, MegaMotion.FLOAT)
+    add(Celebration.MEGA_ZYGARDE, "Dragon/Ground", MegaHabitat.RUINS, MegaMotion.COIL)
+    add(Celebration.MEGA_DIANCIE, "Rock/Fairy", MegaHabitat.CAVE, MegaMotion.TURN)
+    add(Celebration.MEGA_MEWTWO_X, "Psychic/Fighting", MegaHabitat.DOJO, MegaMotion.STEP)
+    add(Celebration.MEGA_MEWTWO_Y, "Psychic", MegaHabitat.MOON, MegaMotion.FLOAT)
+    add(Celebration.MEGA_SCOVILLAIN, "Grass/Fire", MegaHabitat.GARDEN, MegaMotion.TURN)
+    add(Celebration.MEGA_GLIMMORA, "Rock/Poison", MegaHabitat.CAVE, MegaMotion.TURN)
+    add(Celebration.MEGA_TATSUGIRI, "Dragon/Water", MegaHabitat.OCEAN, MegaMotion.COIL)
+    add(Celebration.MEGA_TATSUGIRI_C, "Dragon/Water", MegaHabitat.RIVER, MegaMotion.SWIM)
+    add(Celebration.MEGA_TATSUGIRI_D, "Dragon/Water", MegaHabitat.OCEAN, MegaMotion.SWIM)
+    add(Celebration.MEGA_BAXCALIBUR, "Dragon/Ice", MegaHabitat.SNOW, MegaMotion.STEP)
+    add(Celebration.MEGA_SCEPTILE, "Grass/Dragon", MegaHabitat.FOREST, MegaMotion.POUNCE)
+    add(Celebration.MEGA_BLAZIKEN, "Fire/Fighting", MegaHabitat.DOJO, MegaMotion.POUNCE)
+    add(Celebration.MEGA_SWAMPERT, "Water/Ground", MegaHabitat.RIVER, MegaMotion.STEP)
+    add(Celebration.MEGA_CHIMECHO, "Psychic/Steel", MegaHabitat.RUINS, MegaMotion.FLOAT)
+    add(Celebration.MEGA_GOLISOPOD, "Bug/Steel", MegaHabitat.OCEAN, MegaMotion.STEP)
+    add(Celebration.MEGA_GOLURK, "Ground/Ghost", MegaHabitat.RUINS, MegaMotion.STEP)
+    add(Celebration.MEGA_STARAPTOR, "Fighting/Flying", MegaHabitat.SKY, MegaMotion.FLIGHT)
+    add(Celebration.MEGA_CRABOMINABLE, "Fighting/Ice", MegaHabitat.SNOW, MegaMotion.STEP)
+    add(Celebration.MEGA_HEATRAN, "Fire/Steel", MegaHabitat.VOLCANO, MegaMotion.STEP)
+    add(Celebration.MEGA_DARKRAI, "Dark", MegaHabitat.MOON, MegaMotion.FLOAT)
+    add(Celebration.MEGA_LATIAS, "Dragon/Psychic", MegaHabitat.SKY, MegaMotion.FLIGHT)
+    add(Celebration.MEGA_LATIOS, "Dragon/Psychic", MegaHabitat.SKY, MegaMotion.FLIGHT)
+    add(Celebration.MEGA_RAYQUAZA, "Dragon/Flying", MegaHabitat.SKY, MegaMotion.COIL)
+    add(Celebration.MEGA_MAGEARNA, "Steel/Fairy", MegaHabitat.RUINS, MegaMotion.TURN)
+    add(Celebration.MEGA_ZERAORA, "Electric", MegaHabitat.STORM, MegaMotion.POUNCE)
+    profiles.toMap()
+}
+
+internal fun megaPokemonProfile(celebration: Celebration): MegaPokemonProfile =
+    requireNotNull(megaPokemonProfiles[celebration]) { "Not a Mega Pokémon: $celebration" }

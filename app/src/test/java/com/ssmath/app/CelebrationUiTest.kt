@@ -41,6 +41,8 @@ class CelebrationUiTest {
     @Test fun ivysaurPlaysAndFinishes() = playsAndFinishes(Celebration.IVYSAUR)
     @Test fun tentacruelGeodudePlaysAndFinishes() = playsAndFinishes(Celebration.TENTACRUEL_GEODUDE)
     @Test fun mewPlaysAndFinishes() = playsAndFinishes(Celebration.MEW)
+    @Test fun megaMeganiumPlaysAndFinishes() = playsAndFinishes(Celebration.MEGA_MEGANIUM)
+    @Test fun megaCharizardYCanBeSkipped() = skipsAndStaysFinished(Celebration.MEGA_CHARIZARD_Y)
 
     @Test fun everyCelebrationCanReplayWithItsLabelAndCloseOrFinish() {
         var selected by mutableStateOf<Celebration?>(null)
@@ -67,6 +69,10 @@ class CelebrationUiTest {
             compose.onNodeWithText("Hurray!!").assertIsDisplayed()
             compose.onNodeWithText("Congratulations!").assertDoesNotExist()
             compose.onNodeWithTag("close-celebration").assertIsDisplayed()
+            if (celebration.category == CelebrationCategory.MEGA_POKEMONS) {
+                compose.onNodeWithText("Mega Pokémon").assertIsDisplayed()
+                compose.onNodeWithText(celebration.collectionLabel).assertIsDisplayed()
+            }
             if (index % 2 == 0) compose.onNodeWithTag("close-celebration").performClick()
             compose.mainClock.advanceTimeBy(CELEBRATION_DURATION_MS.toLong())
             compose.onNodeWithTag("celebration-${celebration.name}").assertDoesNotExist()

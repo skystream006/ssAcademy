@@ -705,7 +705,7 @@ class ReadingScreenTest {
         val data = readingFixture().copy(page = ReadingPage.MENU)
         show(data, disabled = ReadingGame.entries.toSet())
         ReadingGame.entries.forEach { compose.onNodeWithTag("reading-game-${it.name}").assertDoesNotExist() }
-        compose.onNodeWithText("No reading games are active. Enable games in Settings > Reading Settings > Active Reading Games.")
+        compose.onNodeWithText("No reading games are active. Enable games in Settings > Admin > Game Settings > Reading Settings > Active Reading Games.")
             .performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Start here · three recommended games").assertDoesNotExist()
         compose.onNodeWithText("More ways to read and create").assertDoesNotExist()

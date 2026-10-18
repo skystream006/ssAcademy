@@ -74,6 +74,8 @@ class ReadingDatabaseBrowserTest {
         val description = compose.onNodeWithTag("debug-logging-description").performScrollTo()
         repeat(7) { description.performClick() }
         compose.onNodeWithText("Admin").assertIsDisplayed()
+        compose.onNodeWithTag("reading-database-open").assertDoesNotExist()
+        compose.onNodeWithText("Reading activities").performScrollTo().performClick()
         compose.onNodeWithTag("reading-database-open").performScrollTo().performClick()
         awaitTag("reading-database-row-${first.id}")
         compose.onNodeWithText("Read-only · installed activities").assertIsDisplayed()
@@ -131,7 +133,7 @@ class ReadingDatabaseBrowserTest {
         compose.setContent { ReadingDatabaseBrowser({}, databaseName, backLabel = "Back to test panel") }
         awaitTag("reading-database-empty")
         compose.onNodeWithText("Back to test panel").assertIsDisplayed()
-        compose.onNodeWithText("No reading activities installed. Import reading activities in Reading Settings first.")
+        compose.onNodeWithText("No reading activities installed. Import reading activities in Admin > Game Settings > Reading Settings first.")
             .assertIsDisplayed()
         compose.onNodeWithTag("reading-database-next").assertIsNotEnabled()
         compose.onNodeWithTag("reading-database-previous").assertIsNotEnabled()

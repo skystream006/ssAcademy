@@ -163,7 +163,7 @@ class HistoryStoreTest {
         store.claimReward(1)
         val before = store.loadSnapshot()
         Celebration.entries.forEach { store.collectPokemon(it) }
-        val expected = before.copy(pokemons = Celebration.entries.toSet())
+        val expected = before.copy(pokemons = Celebration.standardCelebrations.toSet())
         assertEquals(expected, HistoryStore(file).loadSnapshot())
         val bytes = file.readText()
         Celebration.entries.forEach { assertEquals(expected, store.collectPokemon(it)) }
@@ -286,7 +286,7 @@ class HistoryStoreTest {
             "claimedResultIds":[1],"lastResultId":1,"pokemons":["PIKACHU"]}""")
         val before = store.loadSnapshot()
         assertEquals(setOf(Celebration.PIKACHU), before.pokemons)
-        val expected = before.copy(pokemons = Celebration.entries.toSet())
+        val expected = before.copy(pokemons = Celebration.standardCelebrations.toSet())
         assertEquals(expected, store.collectPokemons(Celebration.entries))
         assertEquals(expected, HistoryStore(file).loadSnapshot())
         val bytes = file.readText()
@@ -298,7 +298,7 @@ class HistoryStoreTest {
         store.add(eligible(1))
         store.claimReward(1)
         store.collectPokemon(Celebration.SQUIRTLE)
-        val expected = store.loadSnapshot().copy(pokemons = Celebration.entries.toSet())
+        val expected = store.loadSnapshot().copy(pokemons = Celebration.standardCelebrations.toSet())
         val before = file.readText()
         val blocked = File(directory, "${file.name}.tmp").apply { mkdir() }
         assertThrows(IOException::class.java) { store.collectPokemons(Celebration.entries) }
