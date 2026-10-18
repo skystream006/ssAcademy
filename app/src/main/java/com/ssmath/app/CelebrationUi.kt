@@ -331,7 +331,10 @@ enum class Celebration(
     )
 
     val collectionLabel: String
-        get() = ndex?.let { "#${it.toString().padStart(4, '0')}$ndexSuffix $label" } ?: label
+        get() = ndex?.let {
+            val megaSuffix = if (category == CelebrationCategory.MEGA_POKEMONS) "-M" else ""
+            "#${it.toString().padStart(4, '0')}$ndexSuffix$megaSuffix $label"
+        } ?: label
 
     companion object {
         val pokemons: List<Celebration> = entries.filter { it.category == CelebrationCategory.POKEMONS }

@@ -111,18 +111,28 @@ class MegaCatalogTest {
         Expected(fields[0], fields[1], fields[2], fields[3].split('/'))
     }
 
-    @Test fun completeRequestedRosterRetainsOrderLabelsAndExactSuffixes() {
+    @Test fun completeRequestedRosterRetainsOrderLabelsAndExactSuffixesWithMegaMarker() {
         assertEquals(95, expected.size)
         assertEquals(expected.map { it.id }, Celebration.megaPokemons.map { it.name })
         expected.zip(Celebration.megaPokemons).forEach { (row, pokemon) ->
             assertEquals(row.ndex.take(4).toInt(), pokemon.ndex)
             assertEquals(row.ndex.drop(4), pokemon.ndexSuffix)
             assertEquals("Mega ${row.name}", pokemon.label)
-            assertEquals("#${row.ndex} Mega ${row.name}", pokemon.collectionLabel)
+            assertEquals("#${row.ndex}-M Mega ${row.name}", pokemon.collectionLabel)
             assertEquals(CelebrationCategory.MEGA_POKEMONS, pokemon.category)
             assertTrue(pokemon.description.startsWith("Mega Pokémon — "))
         }
         assertEquals(95, Celebration.megaPokemons.map { it.collectionLabel }.toSet().size)
+    }
+
+    @Test fun standardPokemonAndOtherLabelsRemainUnchanged() {
+        Celebration.pokemons.forEach { pokemon ->
+            assertEquals("#${pokemon.ndex.toString().padStart(4, '0')} ${pokemon.label}",
+                pokemon.collectionLabel)
+        }
+        Celebration.entries.filter { it.category == CelebrationCategory.OTHER }.forEach { celebration ->
+            assertEquals(celebration.label, celebration.collectionLabel)
+        }
     }
 
     @Test fun everyFormHasItsVerifiedTypesAndImageReference() {
