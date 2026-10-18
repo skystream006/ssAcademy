@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -110,7 +109,7 @@ fun UpdateSettings(model: AppUpdater = viewModel()) {
         }
     }
     if (confirm && state.availableVersion != null) {
-        AlertDialog(onDismissRequest = { confirm = false },
+        SettingsDialog(onDismissRequest = { confirm = false },
             title = { Text("Download and install ${state.availableVersion}?") },
             text = { Text("Download ${"%.1f".format(state.total / (1024.0 * 1024.0))} MB from GitHub. You may need to allow this app to install updates. Android will ask for final confirmation; your settings and practice history are kept.") },
             confirmButton = { TextButton(onClick = { confirm = false; model.download() }) { Text("Download and install") } },

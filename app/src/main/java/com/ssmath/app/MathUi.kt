@@ -106,8 +106,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -315,16 +313,11 @@ private fun HomeScreen(model: MathViewModel) {
         }
     }
     when (model.setupDialog) {
-        SetupDialog.PRACTICE -> GameSetupDialog(model::dismissSetupDialog) {
-            Text("Practice Game", style = MaterialTheme.typography.headlineSmall)
+        SetupDialog.PRACTICE -> GameSetupDialog("Practice Game", model::dismissSetupDialog) {
             Text("Practice with Other animations only. No prizes or Pokémon are awarded.")
             SetupForm(model, Modifier.fillMaxWidth())
-            TextButton(onClick = model::dismissSetupDialog, modifier = Modifier.align(Alignment.End)) {
-                Text("Cancel")
-            }
         }
-        SetupDialog.REWARDS -> GameSetupDialog(model::dismissSetupDialog) {
-            Text("Rewards Game", style = MaterialTheme.typography.headlineSmall)
+        SetupDialog.REWARDS -> GameSetupDialog("Rewards Game", model::dismissSetupDialog) {
             Text("How many questions would you like?", style = MaterialTheme.typography.titleLarge)
             RewardsQuestionCountChoices(model.rewardsQuestionCount,
                 { model.updateRewardsQuestionCount(it.toString()) })
@@ -336,9 +329,6 @@ private fun HomeScreen(model: MathViewModel) {
                     modifier = Modifier.fillMaxWidth().testTag("rewards-operation-${operation.name}")) {
                     Text("${operation.symbol}  ${operation.label}", textAlign = TextAlign.Center)
                 }
-            }
-            TextButton(onClick = model::dismissSetupDialog, modifier = Modifier.align(Alignment.End)) {
-                Text("Cancel")
             }
         }
         null -> Unit
@@ -476,14 +466,14 @@ private fun RewardsCriteria(model: MathViewModel) {
 }
 
 @Composable
-private fun GameSetupDialog(onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Card(Modifier.widthIn(max = 480.dp).fillMaxWidth().padding(16.dp).imePadding(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)) {
-            Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp), content = content)
-        }
-    }
+private fun GameSetupDialog(title: String, onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+    SettingsDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { Column(verticalArrangement = Arrangement.spacedBy(16.dp), content = content) },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        modifier = Modifier.testTag("game-setup-dialog")
+    )
 }
 
 @Composable

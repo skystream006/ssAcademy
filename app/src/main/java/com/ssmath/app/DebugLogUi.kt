@@ -6,11 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -122,7 +118,7 @@ fun DebugLogSettings(onOpenDebug: () -> Unit) {
         message?.let { Text(it) }
     }
     if (choosingMode) {
-        AlertDialog(
+        SettingsDialog(
             onDismissRequest = { choosingMode = false },
             title = { Text("Choose debug logging mode") },
             text = { Text("Full keeps rotating logs (up to 64 KB). Reactive keeps only the latest 100 complete events. Neither mode records credentials or personal content.") },
@@ -134,13 +130,12 @@ fun DebugLogSettings(onOpenDebug: () -> Unit) {
         )
     }
     log?.let { text ->
-        AlertDialog(
+        SettingsDialog(
             onDismissRequest = { log = null },
             title = { Text("Debug log") },
             text = {
                 SelectionContainer {
                     Text(text.ifEmpty { "No debug logs saved." },
-                        Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState()),
                         style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
                 }
             },

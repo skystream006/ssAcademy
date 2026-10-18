@@ -55,7 +55,6 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
 import kotlin.math.roundToInt
@@ -194,10 +193,10 @@ internal fun ChangeNameDialog(model: ReadingViewModel, onDismiss: () -> Unit) {
             onDismiss()
         }
     }
-    AlertDialog(onDismissRequest = onDismiss,
+    SettingsDialog(onDismissRequest = onDismiss,
         title = { Text("Change Name") },
         text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("One name for all your games, saved only on this device. Your progress stays the same.")
                 if (model.storageError != null) {
                     Text(requireNotNull(model.storageError))
@@ -221,18 +220,16 @@ internal fun ChangeNameDialog(model: ReadingViewModel, onDismiss: () -> Unit) {
                 modifier = Modifier.testTag("settings-save-name")) { Text("Save") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-        // Keep text-field remeasurement from alternating between platform dialog widths.
-        properties = DialogProperties(usePlatformDefaultWidth = false),
-        modifier = Modifier.widthIn(max = 440.dp).fillMaxWidth().padding(16.dp).testTag("change-name-dialog"))
+        modifier = Modifier.testTag("change-name-dialog"))
 }
 
 @Composable
 internal fun ReadingLevelDialog(model: ReadingViewModel, onDismiss: () -> Unit) {
     val profile = model.data?.profile
-    AlertDialog(onDismissRequest = onDismiss,
+    SettingsDialog(onDismissRequest = onDismiss,
         title = { Text("Set Reading Level") },
         text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (model.storageError != null) {
                     Text(requireNotNull(model.storageError))
                     TextButton(onClick = model::retry) { Text("Retry storage") }
@@ -263,11 +260,11 @@ internal fun ReadingLevelDialog(model: ReadingViewModel, onDismiss: () -> Unit) 
 
 @Composable
 private fun ActiveReadingGamesDialog(model: MathViewModel, onDismiss: () -> Unit) {
-    AlertDialog(
+    SettingsDialog(
         onDismissRequest = onDismiss,
         title = { Text("Active Reading Games") },
         text = {
-            Column(Modifier.verticalScroll(rememberScrollState()),
+            Column(
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Choose which games are available. Changes are saved automatically. " +
                     "Saved drafts, history, and rewards are kept when a game is disabled.")
@@ -329,16 +326,17 @@ fun SubjectHistoryScreen(model: MathViewModel) {
 private fun DebugDialog(model: MathViewModel, onDismiss: () -> Unit) {
     var browsingReading by rememberSaveable { mutableStateOf(false) }
     val sectionState = rememberSaveableStateHolder()
+    val scrollState = rememberScrollState()
     if (browsingReading) {
         ReadingDatabaseBrowser(onDismiss = { browsingReading = false }, backLabel = "Back to Debug Menu")
         return
     }
-    AlertDialog(
+    SettingsDialog(
         onDismissRequest = onDismiss,
         title = { Text("Debug Menu", Modifier.fillMaxWidth()) },
         text = {
             sectionState.SaveableStateProvider("debug-sections") {
-                Column(Modifier.verticalScroll(rememberScrollState()),
+                Column(
                     verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     CollapsibleSettingsSection("My Pokémons", defaultExpanded = false) {
                         Text("Add all celebrations, including Mega Pokémons, without changing practice history or rewards.")
@@ -359,6 +357,7 @@ private fun DebugDialog(model: MathViewModel, onDismiss: () -> Unit) {
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        scrollState = scrollState,
         modifier = Modifier.testTag("debug-dialog")
     )
 }
@@ -370,6 +369,7 @@ private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit) {
     var showingReadingGames by rememberSaveable { mutableStateOf(false) }
     var showingReadingLevel by rememberSaveable { mutableStateOf(false) }
     val sectionState = rememberSaveableStateHolder()
+    val scrollState = rememberScrollState()
     if (changingPin) {
         ChangeAdminPinDialog(onChanged = onDismiss, onDismiss = { changingPin = false })
         return
@@ -389,12 +389,12 @@ private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit) {
         ReadingLevelDialog(rememberReadingViewModel(), onDismiss = { showingReadingLevel = false })
         return
     }
-    AlertDialog(
+    SettingsDialog(
         onDismissRequest = onDismiss,
         title = { Text("Admin Menu", Modifier.fillMaxWidth()) },
         text = {
             sectionState.SaveableStateProvider("admin-sections") {
-                Column(Modifier.verticalScroll(rememberScrollState()),
+                Column(
                     verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Button(onClick = { changingPin = true }, modifier = Modifier.fillMaxWidth().testTag("change-pin")) {
                         Text("Change PIN", textAlign = TextAlign.Center)
@@ -434,9 +434,8 @@ private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit) {
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
-        // Keep text-field remeasurement from alternating between platform dialog widths.
-        properties = DialogProperties(usePlatformDefaultWidth = false),
-        modifier = Modifier.widthIn(max = 440.dp).fillMaxWidth().padding(16.dp).testTag("admin-dialog")
+        scrollState = scrollState,
+        modifier = Modifier.testTag("admin-dialog")
     )
 }
 
@@ -603,12 +602,25 @@ internal fun AddRemoveRewardsDialog(
     val canConfirm = if (adding) {
         if (fragment) balance.canAddFragment else balance.canAddWhole
     } else (if (fragment) balance.fragments else balance.whole) > 0
-    AlertDialog(
+    SettingsDialog(
         onDismissRequest = { if (choice != null) selected = null else onDismiss() },
         title = { Text(if (choice == null) "Add/Remove Rewards" else if (adding) "Add reward?" else "Remove reward?") },
+        status = {
+            if (choice == null && (updatingReward || error != null)) {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    if (updatingReward) {
+                        Text("Updating reward…", modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+                    }
+                    if (error != null) {
+                        Text(error, color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+                    }
+                }
+            }
+        },
         text = {
             if (choice != null) {
-                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(if (adding) {
                         if (fragment) "Add 1 ${choice.label} fragment?" else "Add 1 whole ${choice.label} reward?"
                     } else {
@@ -620,14 +632,7 @@ internal fun AddRemoveRewardsDialog(
                 }
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    if (updatingReward) {
-                        Text("Updating reward…", modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-                    }
-                    if (error != null) {
-                        Text(error, color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-                    }
-                    Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
+                    Column(
                         verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("Add or remove one fragment or whole reward at a time. " +
                             "3 matching fragments become 1 whole reward. Removing a fragment does not break a whole reward.")
@@ -636,40 +641,25 @@ internal fun AddRemoveRewardsDialog(
                         }
                         RewardTier.entries.forEach { tier ->
                             Text(tier.label, style = MaterialTheme.typography.titleMedium)
-                            RewardType.entries.filter { it.tier == tier }.forEach { type ->
-                                val available = balances[type] ?: RewardBalance()
-                                Column(Modifier.fillMaxWidth().testTag("adjust-reward-${type.name}"),
-                                    verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Text(type.label, style = MaterialTheme.typography.titleSmall)
-                                    Text("Whole: ${available.whole} · Fragments: ${available.fragments}/3")
-                                    OutlinedButton(
-                                        onClick = { selected = type; fragment = true; adding = true },
-                                        enabled = !updatingReward && available.canAddFragment,
-                                        modifier = Modifier.fillMaxWidth().semantics {
-                                            contentDescription = "Add 1 ${type.label} fragment"
+                            RewardType.entries.filter { it.tier == tier }.chunked(4).forEach { row ->
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    row.forEach { type ->
+                                        val available = balances[type] ?: RewardBalance()
+                                        Column(Modifier.weight(1f).testTag("adjust-reward-${type.name}"),
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            Text(type.label, style = MaterialTheme.typography.labelMedium,
+                                                textAlign = TextAlign.Center, modifier = Modifier.heightIn(min = 48.dp))
+                                            Text("Whole: ${available.whole} · Fragments: ${available.fragments}/3",
+                                                style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+                                            listOf(false, true).forEach { part ->
+                                                RewardAdjustmentReel(type, part, available, updatingReward,
+                                                    onAdd = { selected = type; fragment = part; adding = true },
+                                                    onRemove = { selected = type; fragment = part; adding = false })
+                                            }
                                         }
-                                    ) { Text("Add 1 fragment", textAlign = TextAlign.Center) }
-                                    OutlinedButton(
-                                        onClick = { selected = type; fragment = false; adding = true },
-                                        enabled = !updatingReward && available.canAddWhole,
-                                        modifier = Modifier.fillMaxWidth().semantics {
-                                            contentDescription = "Add 1 whole ${type.label} reward"
-                                        }
-                                    ) { Text("Add 1 whole reward", textAlign = TextAlign.Center) }
-                                    OutlinedButton(
-                                        onClick = { selected = type; fragment = true; adding = false },
-                                        enabled = !updatingReward && available.fragments > 0,
-                                        modifier = Modifier.fillMaxWidth().semantics {
-                                            contentDescription = "Remove 1 ${type.label} fragment"
-                                        }
-                                    ) { Text("Remove 1 fragment", textAlign = TextAlign.Center) }
-                                    OutlinedButton(
-                                        onClick = { selected = type; fragment = false; adding = false },
-                                        enabled = !updatingReward && available.whole > 0,
-                                        modifier = Modifier.fillMaxWidth().semantics {
-                                            contentDescription = "Remove 1 whole ${type.label} reward"
-                                        }
-                                    ) { Text("Remove 1 whole reward", textAlign = TextAlign.Center) }
+                                    }
+                                    repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
                                 }
                             }
                         }
@@ -697,9 +687,37 @@ internal fun AddRemoveRewardsDialog(
                 TextButton(onClick = { selected = null }) { Text("Cancel") }
             }
         },
-        properties = DialogProperties(usePlatformDefaultWidth = false),
-        modifier = Modifier.widthIn(max = 440.dp).fillMaxWidth().padding(16.dp).testTag("adjust-rewards-dialog")
+        modifier = Modifier.testTag("adjust-rewards-dialog")
     )
+}
+
+@Composable
+private fun RewardAdjustmentReel(
+    type: RewardType,
+    fragment: Boolean,
+    balance: RewardBalance,
+    busy: Boolean,
+    onAdd: () -> Unit,
+    onRemove: () -> Unit
+) {
+    val description = if (fragment) "${type.label} fragment" else "whole ${type.label} reward"
+    Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer, MaterialTheme.shapes.small),
+        horizontalAlignment = Alignment.CenterHorizontally) {
+        IconButton(onClick = onAdd,
+            enabled = !busy && if (fragment) balance.canAddFragment else balance.canAddWhole) {
+            Icon(Icons.Rounded.ExpandLess, "Add 1 $description")
+        }
+        Text(if (fragment) "${balance.fragments}/3" else "${balance.whole}",
+            style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+        RewardImage(type, fragment, Modifier.fillMaxWidth().aspectRatio(1f)
+            .testTag("adjust-image-${type.name}-$fragment"))
+        Text(if (fragment) "Fragments" else "Whole", style = MaterialTheme.typography.labelSmall,
+            textAlign = TextAlign.Center)
+        IconButton(onClick = onRemove,
+            enabled = !busy && (if (fragment) balance.fragments else balance.whole) > 0) {
+            Icon(Icons.Rounded.ExpandMore, "Remove 1 $description")
+        }
+    }
 }
 
 @Composable
@@ -915,14 +933,14 @@ fun HistoryScreen(model: MathViewModel) {
         }
     }
     if (confirmClear) {
-        AlertDialog(onDismissRequest = { confirmClear = false },
+        SettingsDialog(onDismissRequest = { confirmClear = false },
             title = { Text("Clear practice history?") },
             text = { Text("All saved results and their earned reward fragments and My Pokémons rewards will be permanently removed. Used rewards cannot be recovered.") },
             confirmButton = { TextButton(onClick = { confirmClear = false; model.clearHistory() }) { Text("Clear") } },
             dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Cancel") } })
     }
     if (confirmDelete && detail != null) {
-        AlertDialog(onDismissRequest = { confirmDelete = false },
+        SettingsDialog(onDismissRequest = { confirmDelete = false },
             title = { Text("Delete this result?") },
             text = { Text("This result and its earned reward fragment will be permanently removed, along with its My Pokémons reward unless another saved result also earned it. Used rewards cannot be recovered.") },
             confirmButton = { TextButton(onClick = { confirmDelete = false; model.deleteResult(detail.id) }) { Text("Delete") } },
@@ -961,8 +979,8 @@ internal fun SkinSetting(
 
 @Composable
 private fun SkinPickerDialog(skin: AppSkin, onSkinChange: (AppSkin) -> Unit, dismiss: () -> Unit) {
-    AlertDialog(onDismissRequest = dismiss, title = { Text("Choose skin") }, text = {
-        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    SettingsDialog(onDismissRequest = dismiss, title = { Text("Choose skin") }, text = {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Background images • Your color theme stays the same", style = MaterialTheme.typography.bodySmall)
             Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 AppSkin.entries.forEach { option ->

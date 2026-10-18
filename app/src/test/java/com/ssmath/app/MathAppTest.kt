@@ -287,7 +287,7 @@ class MathAppTest {
         compose.onNodeWithTag("practice-game").performClick()
         compose.onNode(isDialog()).assertIsDisplayed()
         compose.onNodeWithTag("submit-setup").performScrollTo().assertIsDisplayed().assertIsNotEnabled()
-        compose.onNodeWithText("Cancel").performScrollTo().performClick()
+        compose.onNodeWithText("Cancel").assertIsDisplayed().performClick()
         compose.onNode(isDialog()).assertDoesNotExist()
         assertEquals(rewards, compose.onNodeWithTag("home-rewards").assertIsDisplayed().fetchSemanticsNode().boundsInRoot)
         assertEquals(pokemons, compose.onNodeWithTag("home-pokemons").assertIsDisplayed().fetchSemanticsNode().boundsInRoot)
@@ -550,7 +550,7 @@ class MathAppTest {
         Operation.entries.forEach {
             compose.onNodeWithTag("rewards-operation-${it.name}").performScrollTo().assertIsDisplayed().assertIsEnabled()
         }
-        compose.onNodeWithText("Cancel").performScrollTo().performClick()
+        compose.onNodeWithText("Cancel").assertIsDisplayed().performClick()
         compose.onNodeWithContentDescription("Settings").performClick()
         compose.openGameSettings()
         compose.onNodeWithTag("rewards-setup").performScrollTo().assertIsDisplayed()
@@ -621,7 +621,7 @@ class MathAppTest {
             compose.onNodeWithTag("rewards-question-count-$count").performScrollTo().assertIsNotSelected()
         }
         compose.onNodeWithTag("rewards-question-count-25").performScrollTo().performClick()
-        compose.onNodeWithText("Cancel").performScrollTo().performClick()
+        compose.onNodeWithText("Cancel").assertIsDisplayed().performClick()
         compose.onNodeWithTag("rewards-game").performClick()
         assertEquals("", model.rewardsQuestionCountText)
         choices.forEach { (count, _) ->
@@ -647,7 +647,7 @@ class MathAppTest {
         compose.onNodeWithText("• Tier 1: 15–24 questions").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("• Tier 2: 25 or more questions").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("25–49 questions", substring = true).assertDoesNotExist()
-        compose.onNodeWithText("Cancel").performScrollTo().performClick()
+        compose.onNodeWithText("Cancel").assertIsDisplayed().performClick()
         compose.onNodeWithTag("multiplication-matrix-game").performScrollTo().performClick()
         compose.onNodeWithText("Eligible for enabled Tier 1 prize fragments.").performScrollTo().assertIsDisplayed()
         compose.runOnIdle {
@@ -1144,7 +1144,7 @@ class MathAppTest {
         compose.onNodeWithTag("subject-Math").performClick()
         compose.onNodeWithTag("practice-game").performClick()
         assertEquals(Typography().titleLarge.fontSize, textLayout("What would you like to practice?").layoutInput.style.fontSize)
-        compose.onNodeWithText("Cancel").performScrollTo().performClick()
+        compose.onNodeWithText("Cancel").assertIsDisplayed().performClick()
         compose.onNodeWithContentDescription("Settings").performClick()
         compose.onNodeWithText("Appearance").performScrollTo().performClick()
         val slider = compose.onNodeWithContentDescription("Text size")

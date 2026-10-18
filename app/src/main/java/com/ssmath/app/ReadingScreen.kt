@@ -239,7 +239,7 @@ internal fun ReadingHistoryContent(model: ReadingViewModel, appModel: MathViewMo
     val clearing = data?.profiles?.find { it.id == clearReaderId }
     if (deleting != null || clearing != null) {
         val session = data?.sessions?.find { deleting?.id in it.attemptIds }
-        AlertDialog(onDismissRequest = { deleteAttemptId = null; clearReaderId = null },
+        SettingsDialog(onDismissRequest = { deleteAttemptId = null; clearReaderId = null },
             title = { Text(if (clearing != null) "Clear reading history?" else "Delete this result?") },
             text = {
                 Text((if (clearing != null) "All reading history for ${clearing.name}" else if (session != null)
