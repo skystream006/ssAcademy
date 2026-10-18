@@ -116,7 +116,9 @@ class ReadingSqliteStore(
                               rewardsEnabledAtStart: Boolean, timeLimitMs: Long?): ReadingData {
         val result = transaction {
             check(loaded) { "Load reading data successfully before starting." }
-            require(count in listOf(15, 25, 50)) { "Choose 15, 25, or 50 questions." }
+            require(count in MIN_QUESTION_COUNT..MAX_QUESTION_COUNT) {
+                "Question count must be between $MIN_QUESTION_COUNT and $MAX_QUESTION_COUNT."
+            }
             require(encode(data) == encode(requireNotNull(readState()))) {
                 "Reading progress changed. Reopen reading before starting another session."
             }

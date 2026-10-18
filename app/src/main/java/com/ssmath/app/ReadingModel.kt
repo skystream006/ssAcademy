@@ -220,7 +220,9 @@ object ReadingEngine {
         now: Long = System.currentTimeMillis(), timeLimitMs: Long? = null,
         assigned: List<ReadingAttempt>? = null
     ): ReadingData {
-        require(count in listOf(15, 25, 50)) { "Choose 15, 25, or 50 questions." }
+        require(count in MIN_QUESTION_COUNT..MAX_QUESTION_COUNT) {
+            "Question count must be between $MIN_QUESTION_COUNT and $MAX_QUESTION_COUNT."
+        }
         val owner = requireNotNull(data.profile)
         require(data.sessions.none { it.id == id } && id !in data.deletedSessionIds && id.isNotBlank())
         require(timeLimitMs == null || (rewardsEnabledAtStart && timeLimitMs > 0))
@@ -503,7 +505,7 @@ object ReadingEngine {
         require(sessionAttempts.distinct().size == sessionAttempts.size)
         data.sessions.forEach { session ->
             require(session.id.isNotBlank() && session.ownerId in profileIds)
-            require(session.questionCount in listOf(15, 25, 50))
+            require(session.questionCount in MIN_QUESTION_COUNT..MAX_QUESTION_COUNT)
             require(session.startedAt >= 0 && (session.finishedAt == null || session.finishedAt >= session.startedAt))
             require(session.elapsedMs >= 0 && (session.timeLimitMs == null ||
                 (session.timeLimitMs > 0 && session.rewardsEnabledAtStart && session.elapsedMs <= session.timeLimitMs)))

@@ -325,7 +325,7 @@ internal fun ReadingModule(
     val profile = data.profile
     when (page) {
         ReadingPage.MENU, ReadingPage.PROFILES -> ReadingMenu(data, model, onExit, stop, disabledGames,
-            onRewards, onPokemons)
+            onRewards, onPokemons, appModel?.rewardThresholds ?: RewardThresholds())
         ReadingPage.PROGRESS -> ReadingProgress(data, model, textSizePercent, onTextSizeChange,
             narrationAvailable, speak, stop, back, disabledGames)
         ReadingPage.ACTIVITY -> {
@@ -423,10 +423,11 @@ private fun ReadingPictureView(picture: ReadingPicture) {
 
 @Composable
 private fun ReadingMenu(data: ReadingData, model: ReadingViewModel, onExit: () -> Unit, stop: () -> Unit,
-                        disabledGames: Set<ReadingGame>, onRewards: () -> Unit, onPokemons: () -> Unit) {
+                        disabledGames: Set<ReadingGame>, onRewards: () -> Unit, onPokemons: () -> Unit,
+                        thresholds: RewardThresholds) {
     val context = LocalContext.current
     val profile = data.profile
-    var questionCount by rememberSaveable { mutableStateOf<Int?>(null) }
+    var questionCount by rememberSaveable(thresholds) { mutableStateOf<Int?>(null) }
     val games = listOf(ReadingGame.MISSING, ReadingGame.SEQUENCE, ReadingGame.STUDIO, ReadingGame.SCRAMBLE,
         ReadingGame.DETECTIVE, ReadingGame.GRAMMAR)
         .filterNot { it in disabledGames }
@@ -438,7 +439,7 @@ private fun ReadingMenu(data: ReadingData, model: ReadingViewModel, onExit: () -
             ReadingHeading("Reading adventures")
             Text("How many questions would you like?", style = MaterialTheme.typography.titleLarge)
             RewardsQuestionCountChoices(questionCount, { questionCount = it }, "reading",
-                enabled = !model.saving && !model.importing)
+                enabled = !model.saving && !model.importing, thresholds = thresholds)
             model.message?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
             if (model.packStatus?.counts?.values?.sum() == 0)
                 Text("Import reading activities in Settings > Admin Menu > Game Settings > Reading Settings to begin. Saved drafts can still be resumed.")

@@ -320,7 +320,7 @@ private fun HomeScreen(model: MathViewModel) {
         SetupDialog.REWARDS -> GameSetupDialog("Rewards Game", model::dismissSetupDialog) {
             Text("How many questions would you like?", style = MaterialTheme.typography.titleLarge)
             RewardsQuestionCountChoices(model.rewardsQuestionCount,
-                { model.updateRewardsQuestionCount(it.toString()) })
+                { model.updateRewardsQuestionCount(it.toString()) }, thresholds = model.rewardThresholds)
             RewardsCriteria(model)
             Text("Choose a math type to play with its saved number limits.")
             Operation.entries.forEach { operation ->
@@ -405,12 +405,17 @@ internal fun SubjectButton(label: String, background: Int, onClick: () -> Unit, 
 
 @Composable
 internal fun RewardsQuestionCountChoices(questionCount: Int?, onSelect: (Int) -> Unit,
-                                        tagPrefix: String = "rewards", enabled: Boolean = true) {
+                                        tagPrefix: String = "rewards", enabled: Boolean = true,
+                                        thresholds: RewardThresholds = RewardThresholds()) {
     val choices = listOf(
         Triple(15, R.drawable.ic_pokeball, "Poké Ball"),
-        Triple(25, R.drawable.ic_gift_box_blue, "Blue gift box"),
-        Triple(50, R.drawable.ic_gift_box_royal_purple, "Royal purple gift box")
+        Triple(thresholds.tier1Minimum, R.drawable.ic_gift_box_blue, "Blue gift box"),
+        Triple(thresholds.tier2Minimum, R.drawable.ic_gift_box_royal_purple, "Royal purple gift box")
     )
+    // A tier minimum can equal the Poké Ball count; keep only the clicked choice selected.
+    var selectedChoice by rememberSaveable { mutableStateOf<Int?>(null) }
+    val selectedIndex = selectedChoice?.takeIf { choices[it].first == questionCount }
+        ?: choices.indexOfFirst { it.first == questionCount }
     val textMeasurer = rememberTextMeasurer()
     val labelWidth = choices.maxOf { (count, _, _) ->
         textMeasurer.measure(count.toString(), MaterialTheme.typography.labelLarge, softWrap = false).size.width
@@ -419,9 +424,9 @@ internal fun RewardsQuestionCountChoices(questionCount: Int?, onSelect: (Int) ->
     FlowRow(Modifier.fillMaxWidth().selectableGroup().testTag("$tagPrefix-question-count-choices"),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp), maxItemsInEachRow = 3) {
-        choices.forEach { (count, image, description) ->
-            val selected = questionCount == count
-            OutlinedButton(onClick = { onSelect(count) }, enabled = enabled,
+        choices.forEachIndexed { index, (count, image, description) ->
+            val selected = selectedIndex == index
+            OutlinedButton(onClick = { selectedChoice = index; onSelect(count) }, enabled = enabled,
                 modifier = Modifier.weight(1f).widthIn(min = minimumButtonWidth)
                     .testTag("$tagPrefix-question-count-$count").semantics {
                         this.selected = selected

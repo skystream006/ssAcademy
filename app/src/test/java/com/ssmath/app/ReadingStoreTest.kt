@@ -82,6 +82,19 @@ class ReadingStoreTest {
         settings.edit().clear().commit()
     }
 
+    @Test fun configuredAndLegacySessionCountsSurviveJsonReload() {
+        val store = ReadingStore(file)
+        store.load()
+        var data = ReadingEngine.addProfile(ReadingData(), "Ari", "reader-a")
+        val counts = listOf(15, 25, 50, 1, 20, 40, 1000)
+        counts.forEach { count ->
+            data = ReadingEngine.startSession(data, ReadingGame.MISSING, ReadingLevel.SPROUT, count)
+            store.save(data)
+            assertEquals(data, ReadingStore(file).load())
+        }
+        assertEquals(counts, ReadingStore(file).load().sessions.map { it.questionCount })
+    }
+
     @Test fun readingReadsNewThresholdsAtFinishAndReloadsTheRuleSnapshot() {
         for (count in listOf(15, 25)) for (completion in listOf("submit", "wrong-submit", "finish")) {
             settings.edit().clear().putBoolean("rewards_enabled", false).commit()
