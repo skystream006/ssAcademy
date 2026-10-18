@@ -125,14 +125,19 @@ class MegaCatalogTest {
         assertEquals(95, Celebration.megaPokemons.map { it.collectionLabel }.toSet().size)
     }
 
-    @Test fun everyFormHasItsVerifiedTypesAndSpeciesImageReference() {
+    @Test fun everyFormHasItsVerifiedTypesAndImageReference() {
         assertEquals(Celebration.megaPokemons.toSet(), megaPokemonProfiles.keys)
         expected.forEach { row ->
             val pokemon = Celebration.valueOf(row.id)
             val profile = megaPokemonProfile(pokemon)
             assertEquals(row.id, row.types, profile.types)
             val species = row.name.substringBeforeLast(' ', row.name)
-            assertEquals("https://bulbapedia.bulbagarden.net/wiki/${species}_(Pok%C3%A9mon)", profile.imageSource)
+            val expectedImageSource = if (pokemon == Celebration.MEGA_GARCHOMP_Z) {
+                "https://bulbapedia.bulbagarden.net/wiki/File:0445Garchomp-Mega_Z.png"
+            } else {
+                "https://bulbapedia.bulbagarden.net/wiki/${species}_(Pok%C3%A9mon)"
+            }
+            assertEquals(row.id, expectedImageSource, profile.imageSource)
             assertTrue(row.id, profile.visualSignature.startsWith(pokemon.label))
             assertTrue(row.id, profile.visualSignature.length > pokemon.label.length + 25)
         }

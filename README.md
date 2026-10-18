@@ -104,8 +104,9 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    are collected on live presentation, never by replay, and do not require prize fragments
    to be enabled. Early exits and timeouts do not award celebrations.
    Each animation shows its name alongside the scene, which says **Hurray!!**. These animations
-   are drawn in the app and work offline. Press **View results** to
-   skip the animation, or wait for it to finish.
+   are drawn in the app and work offline. Press **Next celebration** after the matrix's
+   Mega animation, then **View results** after the standard animation, or wait for each to finish.
+   Other games show **View results** after their single animation.
    In both math modes, the game ends when wrong answers go **above 10%** of the
    chosen total; exactly 10% is allowed. For example, 10 questions ends at 2 wrong,
    25 at 3 wrong, 50 or 51 at 6 wrong, and 100 at 11 wrong.
@@ -119,6 +120,10 @@ Bulbapedia pages were unavailable during development; alternative
 [official-art references](https://github.com/PokeAPI/sprites/tree/d379dda349f02e965950c341f2dcff6d21bd1cfc/sprites/pokemon/other/official-artwork)
 and [Pokémon type data](https://github.com/PokeAPI/pokeapi/tree/b369a1c44ab9343fb41ed18e076453235e1f3884/data/v2/csv)
 were used instead. The drawings are simplified original renditions, not copies of the source images.
+The [Mega Garchomp Z reference](https://bulbapedia.bulbagarden.net/wiki/File:0445Garchomp-Mega_Z.png)
+was verified through its [filename-matched upstream artwork](https://raw.githubusercontent.com/PokeAPI/sprites/7c50fd69547027df0b86a13ccc5cb128e69625c0/sprites/pokemon/other/official-artwork/10309.png).
+Its original vector uses a navy body, orange-red wing blades, white outer spikes,
+yellow chest chevrons, and red head horns.
 
 The semi-transparent (50% opacity) settings button in the bottom-right corner opens
 **Settings**:

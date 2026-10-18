@@ -1852,7 +1852,7 @@ private fun DrawScope.megaEarlyGarchomp(m: Float) {
         val chop = side * scythe
         kantoPolygon(0xFF647896, side * 16f, -22f, side * 36f, -23f,
             side * 50f, -8f + chop, side * 43f, 6f + chop, side * 23f, -2f)
-        // Solid forearm scythes distinguish this grounded Mega from Z's flight wings.
+        // Pale forearm scythes distinguish this Mega from Z's red, white-spiked blades.
         megaEarlyShape(0xFFC5B28F) {
             moveTo(side * 39f, -12f + chop); lineTo(side * 61f, -20f + chop)
             quadraticTo(side * 84f, 0f + chop, side * 85f, 35f + chop)
@@ -1884,61 +1884,63 @@ private fun DrawScope.megaEarlyGarchomp(m: Float) {
 
 private fun DrawScope.megaEarlyGarchompZ(m: Float) {
     val sweep = m * 5f
-    megaEarlyShape(0xFF8F4E7B) {
+    megaEarlyShape(0xFF42465F) {
         moveTo(5f, 12f); cubicTo(16f, 34f, 45f, 28f, 62f, 45f + sweep)
         quadraticTo(36f, 37f, 30f, 49f); quadraticTo(1f, 54f, -9f, 21f)
     }
-    kantoPolygon(0xFFBD7198, 32f, 31f, 40f, 24f, 49f, 37f, 62f, 45f + sweep, 40f, 39f)
+    kantoPolygon(0xFF62647C, 32f, 31f, 40f, 24f, 49f, 37f, 62f, 45f + sweep, 40f, 39f)
+    kantoPolygon(0xFFF3EEE3, 54f, 39f + sweep, 68f, 38f + sweep, 62f, 45f + sweep)
     for (side in listOf(-1f, 1f)) {
         val wing = side * sweep
-        // Z has an aerial frame, head fins, and broad hooked wings with extra talons.
-        megaEarlyShape(0xFFA85A8D) {
-            moveTo(side * 11f, -22f); quadraticTo(side * 31f, -29f, side * 46f, -40f + wing)
-            lineTo(side * 74f, -68f + wing); lineTo(side * 79f, -43f + wing)
+        kantoPolygon(0xFF4C506A, side * 11f, -22f, side * 39f, -35f + wing,
+            side * 49f, -21f + wing, side * 27f, -2f, side * 13f, 9f)
+        // The broad red blades have smooth inner edges and white outer spikes, not wing talons.
+        megaEarlyShape(0xFFCE553C) {
+            moveTo(side * 39f, -35f + wing); quadraticTo(side * 51f, -49f + wing, side * 65f, -45f + wing)
+            lineTo(side * 79f, -35f + wing)
             quadraticTo(side * 98f, -21f + wing, side * 99f, 19f + wing)
-            lineTo(side * 87f, 10f + wing); lineTo(side * 80f, 25f + wing)
-            lineTo(side * 73f, 5f + wing); lineTo(side * 62f, 13f + wing)
-            quadraticTo(side * 52f, -5f + wing, side * 27f, -2f); lineTo(side * 13f, 9f)
+            quadraticTo(side * 71f, -5f + wing, side * 44f, -9f + wing)
+            lineTo(side * 35f, -18f + wing)
         }
-        megaEarlyShade(0xFFD28AAF) {
-            moveTo(side * 22f, -20f); quadraticTo(side * 51f, -35f, side * 70f, -58f + wing)
-            lineTo(side * 70f, -32f + wing); quadraticTo(side * 86f, -12f + wing, side * 92f, 7f + wing)
-            quadraticTo(side * 69f, -21f + wing, side * 44f, -15f); lineTo(side * 27f, -9f)
+        megaEarlyShade(0xFFE77543) {
+            moveTo(side * 43f, -34f + wing); quadraticTo(side * 55f, -47f + wing, side * 66f, -40f + wing)
+            quadraticTo(side * 83f, -28f + wing, side * 91f, -6f + wing)
+            quadraticTo(side * 65f, -22f + wing, side * 43f, -19f + wing)
         }
-        megaEarlyShape(0xFF3D3C50) {
-            moveTo(side * 69f, -38f + wing); quadraticTo(side * 95f, -28f + wing, side * 99f, 19f + wing)
-            lineTo(side * 87f, 10f + wing); quadraticTo(side * 85f, -11f + wing, side * 69f, -20f + wing)
-        }
-        kantoPolygon(0xFF444052, side * 61f, -9f + wing, side * 76f, -5f + wing,
-            side * 80f, 25f + wing, side * 71f, 8f + wing)
-        kantoPolygon(0xFF444052, side * 47f, -11f + wing, side * 61f, -6f + wing,
-            side * 62f, 13f + wing, side * 53f, 2f + wing)
-        kantoLine(0xFFEDAFCE, 2f, side * 30f, -18f, side * 53f, -30f + wing, side * 66f, -46f + wing)
+        kantoPolygon(0xFFF3EEE3, side * 43f, -40f + wing, side * 45f, -62f + wing, side * 52f, -46f + wing)
+        kantoPolygon(0xFFF3EEE3, side * 61f, -45f + wing, side * 73f, -64f + wing, side * 73f, -39f + wing)
+        kantoPolygon(0xFFF3EEE3, side * 79f, -35f + wing, side * 102f, -43f + wing, side * 89f, -24f + wing)
+        kantoPolygon(0xFFF3EEE3, side * 92f, -17f + wing, side * 113f, -17f + wing, side * 97f, -6f + wing)
+        kantoPolygon(0xFFF3EEE3, side * 98f, 1f + wing, side * 116f, 5f + wing, side * 99f, 12f + wing)
+        kantoLine(KANTO_INK, 1.5f, side * 31f, -28f + wing, side * 37f, -15f + wing)
     }
-    megaEarlyShape(0xFFAF648F) {
+    megaEarlyShape(0xFF53556F) {
         moveTo(-14f, -30f); quadraticTo(-28f, -10f, -14f, 17f)
         quadraticTo(-5f, 32f, 9f, 22f); quadraticTo(25f, 7f, 16f, -27f)
     }
-    kantoPolygon(0xFF363A4E, -9f, -25f, 10f, -25f, 15f, -7f, 5f, 23f,
+    kantoPolygon(0xFFCE553C, -9f, -25f, 10f, -25f, 15f, -7f, 5f, 23f,
         -4f, 21f, -17f, -3f)
-    kantoPolygon(0xFFE6BE75, -5f, -20f, 5f, -20f, 1f, -9f)
+    kantoPolygon(0xFFF2CB65, -12f, -5f, 0f, 4f, 12f, -5f, 9f, 4f, 0f, 12f, -9f, 4f)
+    kantoPolygon(0xFFF2CB65, -7f, 9f, 0f, 15f, 8f, 8f, 5f, 19f, 0f, 23f, -4f, 19f)
     for (side in listOf(-1f, 1f)) {
         val tuck = side * m * 3f
-        kantoPolygon(0xFFAA5E89, side * 7f, 15f, side * 21f, 14f,
+        kantoPolygon(0xFF53556F, side * 7f, 15f, side * 21f, 14f,
             side * 29f, 29f + tuck, side * 21f, 34f + tuck, side * 10f, 25f)
-        kantoPolygon(0xFF3C3B4E, side * 20f, 27f + tuck, side * 30f, 27f + tuck,
-            side * 32f, 40f + tuck, side * 26f, 35f + tuck, side * 20f, 39f + tuck)
+        kantoPolygon(0xFFF3EEE3, side * 17f, 17f, side * 19f, 5f, side * 23f, 19f)
+        kantoPolygon(0xFF42465F, side * 20f, 27f + tuck, side * 30f, 27f + tuck,
+            side * 33f, 50f + tuck, side * 26f, 44f + tuck, side * 20f, 49f + tuck)
+        kantoLine(0xFFF2CB65, 2f, side * 21f, 33f + tuck, side * 25f, 37f + tuck, side * 30f, 33f + tuck)
+        kantoPolygon(0xFFCE553C, side * 29f, -51f, side * 56f, -62f, side * 35f, -42f)
     }
-    megaEarlyShape(0xFFB66C97) {
-        moveTo(-17f, -50f); lineTo(-35f, -56f); lineTo(-30f, -41f)
+    megaEarlyShape(0xFF53556F) {
+        moveTo(-17f, -50f); lineTo(-35f, -53f); lineTo(-35f, -41f)
         lineTo(-18f, -35f); lineTo(-18f, -25f); lineTo(-1f, -17f)
         lineTo(16f, -27f); lineTo(19f, -36f); lineTo(35f, -44f)
-        lineTo(37f, -61f); lineTo(16f, -52f); lineTo(0f, -62f)
+        lineTo(35f, -56f); lineTo(16f, -52f); lineTo(0f, -62f)
     }
-    kantoPolygon(0xFFDB95B8, -19f, -43f, -43f, -49f, -31f, -29f, -15f, -29f)
-    kantoPolygon(0xFFDB95B8, 18f, -43f, 44f, -51f, 32f, -31f, 15f, -29f)
-    kantoLine(0xFF70486D, 2f, -31f, -42f, -24f, -34f)
-    kantoLine(0xFF70486D, 2f, 31f, -43f, 24f, -35f)
+    kantoOval(0xFF62647C, -39f, -53f, 13f, 13f)
+    kantoOval(0xFF62647C, 26f, -56f, 13f, 13f)
+    kantoPolygon(0xFFCE553C, -12f, -31f, -1f, -25f, 12f, -32f, 9f, -22f, -1f, -17f, -11f, -23f)
     kantoPolygon(0xFFECCB7D, -5f, -54f, 5f, -54f, 0f, -43f)
     kantoPolygon(0xFFF2E8CA, -15f, -36f, -5f, -32f, -11f, -28f)
     kantoPolygon(0xFFF2E8CA, 5f, -32f, 16f, -37f, 11f, -28f)

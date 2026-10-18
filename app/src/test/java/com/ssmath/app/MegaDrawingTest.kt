@@ -128,6 +128,26 @@ class MegaDrawingTest {
         assertThrows(IllegalArgumentException::class.java) { image { drawMegaPokemon(Celebration.GENGAR, 0f) } }
     }
 
+    @Test fun garchompZRetainsRedBladesWhiteSpikesAndNavyBodyAcrossMotion() {
+        val bladeColors = setOf(Color(0xFFCE553C).toArgb(), Color(0xFFE77543).toArgb())
+        val spike = Color(0xFFF3EEE3).toArgb()
+        val navy = Color(0xFF53556F).toArgb()
+        val gold = Color(0xFFF2CB65).toArgb()
+        listOf(-1f, 0f, 1f).forEach { motion ->
+            val frame = body(Celebration.MEGA_GARCHOMP_Z, motion)
+            for (side in listOf(-1, 1)) {
+                val arm = frame.indices.filter { side * (it % 320 - 160) in 40..118 }
+                assertTrue("Each Z forearm needs a broad red blade at $motion",
+                    arm.count { frame[it] in bladeColors } > 450)
+                assertTrue("Each Z blade needs visible white outer spikes at $motion",
+                    arm.count { frame[it] == spike } > 160)
+            }
+            val torso = frame.indices.filter { it % 320 in 136..184 && it / 320 in 102..155 }
+            assertTrue("Z needs a navy body, not purple wing membranes", torso.count { frame[it] == navy } > 150)
+            assertTrue("Z needs the yellow chest chevrons", torso.count { frame[it] == gold } > 70)
+        }
+    }
+
     @Test fun renderReviewContactSheet() {
         val sheet = Bitmap.createBitmap(800, 19 * 128, Bitmap.Config.ARGB_8888)
         val canvas = android.graphics.Canvas(sheet)

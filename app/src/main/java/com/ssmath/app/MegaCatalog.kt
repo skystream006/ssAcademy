@@ -15,12 +15,12 @@ internal data class MegaPokemonProfile(
 // References document the designs; every frame is an original offline vector rendition.
 internal val megaPokemonProfiles: Map<Celebration, MegaPokemonProfile> = run {
     val profiles = linkedMapOf<Celebration, MegaPokemonProfile>()
-    fun add(pokemon: Celebration, types: String, habitat: MegaHabitat, motion: MegaMotion) {
+    fun add(pokemon: Celebration, types: String, habitat: MegaHabitat, motion: MegaMotion, imageSource: String? = null) {
         val species = pokemon.label.removePrefix("Mega ").removeSuffix(" X")
             .removeSuffix(" Y").removeSuffix(" Z")
         profiles[pokemon] = MegaPokemonProfile(
             types.split('/'), habitat, motion,
-            "https://bulbapedia.bulbagarden.net/wiki/${species}_(Pok%C3%A9mon)",
+            imageSource ?: "https://bulbapedia.bulbagarden.net/wiki/${species}_(Pok%C3%A9mon)",
             pokemon.description.substringAfter(" — ")
         )
     }
@@ -55,7 +55,8 @@ internal val megaPokemonProfiles: Map<Celebration, MegaPokemonProfile> = run {
     add(Celebration.MEGA_CAMERUPT, "Fire/Ground", MegaHabitat.VOLCANO, MegaMotion.STEP)
     add(Celebration.MEGA_EXCADRILL, "Ground/Steel", MegaHabitat.CAVE, MegaMotion.TURN)
     add(Celebration.MEGA_GARCHOMP, "Dragon/Ground", MegaHabitat.DESERT, MegaMotion.TURN)
-    add(Celebration.MEGA_GARCHOMP_Z, "Dragon", MegaHabitat.SKY, MegaMotion.FLIGHT)
+    add(Celebration.MEGA_GARCHOMP_Z, "Dragon", MegaHabitat.SKY, MegaMotion.FLIGHT,
+        imageSource = "https://bulbapedia.bulbagarden.net/wiki/File:0445Garchomp-Mega_Z.png")
     add(Celebration.MEGA_SABLEYE, "Dark/Ghost", MegaHabitat.CAVE, MegaMotion.STEP)
     add(Celebration.MEGA_MAWILE, "Steel/Fairy", MegaHabitat.CAVE, MegaMotion.TURN)
     add(Celebration.MEGA_ABSOL, "Dark", MegaHabitat.MOON, MegaMotion.POUNCE)
