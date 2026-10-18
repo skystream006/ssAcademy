@@ -602,7 +602,9 @@ private fun ReadyDialog(model: MathViewModel) {
             style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.fillMaxWidth())
         if (model.readyMultiplicationMatrix) {
-            Text("Answer each row in order: 1 × 1 to 1 × 11, then 2 × 1 to 2 × 11, up to 11 × 11.")
+            Text(if (model.randomizeMatrixQuestions)
+                "Answer all 121 questions in random order, with each pair from 1 × 1 to 11 × 11 appearing once."
+                else "Answer each row in order: 1 × 1 to 1 × 11, then 2 × 1 to 2 × 11, up to 11 × 11.")
             Text("The same Rewards Game rules apply: finish all 121 questions with more than 90% correct " +
                 "before the time limit, if enabled. The game ends at 13 wrong answers.")
             Text("Complete the matrix to collect both a Mega Pokémon and a Pokémon or Other animation.")

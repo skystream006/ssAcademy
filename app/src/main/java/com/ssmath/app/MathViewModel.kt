@@ -179,6 +179,8 @@ class MathViewModel(
         private set
     var verticalEquations by mutableStateOf(settings.getBoolean("vertical_equations", true))
         private set
+    var randomizeMatrixQuestions by mutableStateOf(settings.getBoolean("randomize_matrix_questions", false))
+        private set
     var textSizePercent by mutableStateOf(settings.getInt("text_size_percent", DEFAULT_TEXT_SIZE_PERCENT)
         .coerceIn(MIN_TEXT_SIZE_PERCENT, MAX_TEXT_SIZE_PERCENT))
         private set
@@ -408,7 +410,7 @@ class MathViewModel(
         val maximumSecond = if (division) parameters.second ?: return else maximum
         val questionCount = parameters.questionCount ?: return
         gameMode = ready.mode
-        game = if (ready.isMultiplicationMatrix) GameState.startMultiplicationMatrix()
+        game = if (ready.isMultiplicationMatrix) GameState.startMultiplicationMatrix(randomizeMatrixQuestions)
             else GameState.start(operation, maximum, generator, questionCount, minimum, maximumSecond)
         progressIcon = ProgressIcon.entries.random(progressIconRandom)
         answerText = ""
@@ -1103,6 +1105,11 @@ class MathViewModel(
     fun chooseVerticalEquations(value: Boolean) {
         verticalEquations = value
         settings.edit().putBoolean("vertical_equations", value).apply()
+    }
+
+    fun chooseRandomizeMatrixQuestions(value: Boolean) {
+        randomizeMatrixQuestions = value
+        settings.edit().putBoolean("randomize_matrix_questions", value).apply()
     }
 
     fun chooseTextSize(value: Int) {

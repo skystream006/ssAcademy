@@ -469,6 +469,15 @@ private fun GameSettings(
             Switch(model.verticalEquations, model::chooseVerticalEquations,
                 modifier = Modifier.semantics { contentDescription = "Vertical equations" })
         }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Randomize matrix question order")
+                Text("Shuffle all 121 questions once per Multiplication Matrix Rewards Game. Applies to new games.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Switch(model.randomizeMatrixQuestions, model::chooseRandomizeMatrixQuestions,
+                modifier = Modifier.semantics { contentDescription = "Randomize matrix question order" })
+        }
         ListItem(headlineContent = { Text("Default Math Reward Game Settings") },
             supportingContent = { Text("Default number limits for each math type") },
             leadingContent = { Icon(Icons.Rounded.Settings, null) },
