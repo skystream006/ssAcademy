@@ -70,9 +70,7 @@ class ReadingDatabaseBrowserTest {
         val model = MathViewModel(application).also { models.put("math", it) }
         compose.setContent { MathTheme { SettingsScreen(model) } }
         compose.onNodeWithTag("reading-database-open").assertDoesNotExist()
-        compose.onNodeWithText("Debug logging").performScrollTo().performClick()
-        val description = compose.onNodeWithTag("debug-logging-description").performScrollTo()
-        repeat(7) { description.performClick() }
+        compose.openDebugSettings()
         compose.onNodeWithText("Debug Menu").assertIsDisplayed()
         compose.onNodeWithTag("reading-database-open").assertDoesNotExist()
         compose.onNodeWithText("Reading activities").performScrollTo().performClick()

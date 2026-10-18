@@ -11,9 +11,9 @@ import androidx.compose.ui.test.performTextInput
 
 internal fun ComposeContentTestRule.openAdminSettings() {
     onNodeWithTag("admin-menu").performScrollTo().performClick()
-    onNodeWithTag("admin-pin").performTextInput("4826")
+    onNodeWithTag("admin-pin").performScrollTo().performTextInput("4826")
     if (onAllNodesWithTag("admin-pin-confirm").fetchSemanticsNodes().isNotEmpty()) {
-        onNodeWithTag("admin-pin-confirm").performTextInput("4826")
+        onNodeWithTag("admin-pin-confirm").performScrollTo().performTextInput("4826")
     }
     onNodeWithTag("admin-pin-submit").performScrollTo().performClick()
     waitUntil(10_000) {

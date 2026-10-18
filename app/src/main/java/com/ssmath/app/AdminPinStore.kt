@@ -16,7 +16,7 @@ internal class AdminPinStore(
     val hasPin: Boolean
         get() = preferences.contains("admin_pin_hash") || preferences.contains("admin_pin_salt")
 
-    fun create(pin: String) {
+    fun create(pin: String) = synchronized(lock) {
         check(!hasPin)
         require(isValid(pin))
         val salt = ByteArray(16).also { SecureRandom().nextBytes(it) }
@@ -28,7 +28,7 @@ internal class AdminPinStore(
             .commit())
     }
 
-    fun verify(pin: String): Result {
+    fun verify(pin: String): Result = synchronized(lock) {
         check(hasPin)
         val lockedUntil = preferences.getLong("admin_pin_locked_until", 0)
         if (now() < lockedUntil) return Result.LOCKED
@@ -62,6 +62,7 @@ internal class AdminPinStore(
     private fun encode(value: ByteArray) = Base64.encodeToString(value, Base64.NO_WRAP)
 
     companion object {
+        private val lock = Any()
         fun isValid(pin: String) = pin.length in 4..8 && pin.all { it in '0'..'9' }
     }
 }
