@@ -40,7 +40,11 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    **Cancel** or Android Back closes either game dialog.
    **Multiplication Matrix Rewards Game** has a fixed **121 questions**, covering every pair
    from **1 × 1 through 11 × 11** in row order: 1 × 1, 1 × 2, …, 1 × 11, then
-   2 × 1, and so on. It does not change your other games' saved number limits or question counts.
+   2 × 1, and so on by default. Enable **Randomize matrix question order** in
+   **Settings > Admin Menu > Game Settings > Math Settings** to shuffle all 121 questions
+   once per new matrix game, with every pair appearing exactly once. The option is off by
+   default, is remembered for next time, and does not change a game already in progress.
+   It does not change your other games' saved number limits or question counts.
    The same rewards rules apply: finish all questions with **more than 90% correct** for an
    enabled **Tier 2** prize fragment, with Math Rewards System enabled at start and finish.
    The configured time limit per 5 questions scales to all 121 questions, and the game stops
@@ -48,7 +52,7 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    **Mega Pokémons** celebration pool, exclusive to this game; ordinary multiplication
    games (even with 121 questions), Practice Game, and reading cannot award this tier.
 2. **Press Start when Ready** – press **Start** to begin. The timer starts now.
-3. **Play** – except for the ordered matrix game, addition, subtraction and multiplication use two random numbers
+3. **Play** – except for the matrix game, addition, subtraction and multiplication use two random numbers
    between the minimum and maximum, inclusive. Subtraction never goes below zero.
    Division always has a whole-number answer, using a first number from 1 to its first maximum
    and a second number from 1 to its second maximum, choosing only exactly divisible pairs.
