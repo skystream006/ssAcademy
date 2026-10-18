@@ -82,6 +82,9 @@ class MathAppTest {
                 model.updateAnswer(model.game!!.problem.answer.toString())
                 model.submitAnswer()
             }
+            assertEquals(CelebrationCategory.MEGA_POKEMONS, model.celebration?.category)
+            model.dismissCelebration()
+            assertTrue(model.celebration in Celebration.standardCelebrations)
             model.dismissCelebration()
             model.dismissReward()
         }
@@ -103,6 +106,54 @@ class MathAppTest {
         compose.onNode(hasScrollToIndexAction()).performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 10_000f) }
         compose.onNodeWithTag("matrix-cell-11-11").performScrollTo()
             .assertIsDisplayed().assertContentDescriptionEquals("11 × 11 = 121: Correct")
+    }
+
+    @Test fun emptyCollectionMatrixPresentsMegaThenStandardBeforeTierTwoPrize() {
+        val model = model(Dispatchers.Unconfined)
+        assertTrue(model.pokemons.isEmpty())
+        model.openMultiplicationMatrixGame()
+        model.start()
+        compose.mainClock.autoAdvance = false
+        compose.setContent { MathAppContent(model) }
+        compose.runOnIdle {
+            repeat(121) {
+                model.updateAnswer(model.game!!.problem.answer.toString())
+                model.submitAnswer()
+            }
+        }
+        compose.mainClock.advanceTimeBy(64)
+        val mega = requireNotNull(model.celebration)
+        assertEquals(CelebrationCategory.MEGA_POKEMONS, mega.category)
+        compose.onNodeWithTag("celebration-${mega.name}").assertIsDisplayed()
+        compose.onNodeWithTag("gift-box").assertDoesNotExist()
+        compose.waitUntil(5_000) { model.lastResult?.megaPokemonReward == mega }
+        assertEquals(setOf(mega), model.pokemons)
+
+        compose.onNodeWithTag("view-results").assertTextEquals("Next celebration").performClick()
+        compose.mainClock.advanceTimeBy(64)
+        val standard = requireNotNull(model.celebration)
+        assertTrue(standard in Celebration.standardCelebrations)
+        compose.onNodeWithTag("celebration-${mega.name}").assertDoesNotExist()
+        compose.onNodeWithTag("celebration-${standard.name}").assertIsDisplayed()
+        compose.onNodeWithTag("gift-box").assertDoesNotExist()
+        compose.waitUntil(5_000) { model.lastResult?.pokemonReward == standard }
+        assertEquals(setOf(mega, standard), model.pokemons)
+
+        compose.onNodeWithTag("view-results").assertTextEquals("View results").performClick()
+        compose.mainClock.advanceTimeBy(64)
+        compose.onNodeWithTag("celebration-${standard.name}").assertDoesNotExist()
+        val prize = requireNotNull(model.lastResult?.prizeType)
+        assertEquals(RewardTier.TIER_2, prize.tier)
+        compose.onNodeWithTag("gift-box").assertIsDisplayed().performClick()
+        compose.mainClock.advanceTimeBy(2_000)
+        compose.waitUntil(5_000) { model.lastResult?.prize != null }
+        assertEquals(RewardBalance(fragments = 1), model.rewardBalances[prize])
+        compose.onNodeWithTag("view-results").performClick()
+        compose.mainClock.advanceTimeBy(64)
+        compose.onNodeWithText("My Pokémons: ${mega.collectionLabel}").assertIsDisplayed()
+        compose.onNodeWithText("My Pokémons: ${standard.collectionLabel}").assertIsDisplayed()
+        assertEquals(setOf(mega, standard), HistoryStore(File(application.filesDir, "practice_history.json"))
+            .load().single().pokemonRewards)
     }
 
     @Test
