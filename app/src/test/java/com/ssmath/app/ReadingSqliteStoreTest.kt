@@ -69,6 +69,33 @@ class ReadingSqliteStoreTest {
         it.getLong(0)
     }
 
+    @Test fun customThresholdPrizesSurviveSqliteReloadAndLegacyDefaultsRemainReadable() {
+        install()
+        var data = reader()
+        for ((count, thresholds) in listOf(25 to RewardThresholds(), 15 to RewardThresholds(15, 25),
+            25 to RewardThresholds(15, 25))) {
+            data = store.startSession(data, ReadingGame.MISSING, ReadingLevel.SPROUT, count, true)
+            repeat(count) {
+                data = ReadingEngine.submit(ReadingEngine.field(data, "answer", readingCorrect(data).toString()), "answer",
+                    rewardThresholds = thresholds)
+                data = store.prepare(ReadingEngine.nextSessionActivity(ReadingEngine.finish(data, rewardThresholds = thresholds)))
+            }
+            store.save(data)
+            assertEquals(thresholds, data.activeSession?.rewardThresholds)
+            assertEquals(thresholds.tierForQuestionCount(count), data.activeSession?.prizeType?.tier)
+        }
+        val sessions = data.sessions
+        database.close()
+        database = ReadingDatabase(application, "rotation.db")
+        store = ReadingSqliteStore(application, database, legacy)
+        val restored = store.load()
+        assertEquals(sessions, restored.sessions)
+        assertEquals(listOf(RewardTier.TIER_1, RewardTier.TIER_1, RewardTier.TIER_2),
+            restored.sessions.map { it.prizeType?.tier })
+        assertEquals(restored, ReadingEngine.endSession(restored, sessions.first().id,
+            rewardThresholds = RewardThresholds(999, 1000)))
+    }
+
     @Test fun freshInstallIsEmptyAndEmptySelectionDoesNotConsumeAnything() {
         val data = reader()
         assertEquals(ReadingPackStatus(), store.catalog.status())

@@ -11,6 +11,71 @@ class RewardsTest {
         disabledRewards: Set<RewardType> = emptySet()) =
         selectPrize(count, correct, answered, atStart, atFinish, timedOut, Random(seed), disabledRewards)
 
+    @Test fun configurableThresholdsValidateAndMapEveryBoundary() {
+        listOf(RewardThresholds(), RewardThresholds(15, 25), RewardThresholds(1, 2),
+            RewardThresholds(999, 1000)).forEach { thresholds ->
+            assertNull(thresholds.tierForQuestionCount(Int.MIN_VALUE))
+            assertNull(thresholds.tierForQuestionCount(thresholds.tier1Minimum - 1))
+            assertEquals(RewardTier.TIER_1, thresholds.tierForQuestionCount(thresholds.tier1Minimum))
+            assertEquals(RewardTier.TIER_1, thresholds.tierForQuestionCount(thresholds.tier2Minimum - 1))
+            assertEquals(RewardTier.TIER_2, thresholds.tierForQuestionCount(thresholds.tier2Minimum))
+            assertEquals(RewardTier.TIER_2, thresholds.tierForQuestionCount(Int.MAX_VALUE))
+            assertEquals(thresholds.tier1Minimum, thresholds.minimum(RewardTier.TIER_1))
+            assertEquals(thresholds.tier2Minimum, thresholds.minimum(RewardTier.TIER_2))
+            assertEquals(thresholds, Json.decodeFromString(RewardThresholds.serializer(),
+                Json.encodeToString(RewardThresholds.serializer(), thresholds)))
+        }
+        assertEquals("15–24 questions", RewardThresholds(15, 25).questionCountLabel(RewardTier.TIER_1))
+        assertEquals("25 or more questions", RewardThresholds(15, 25).questionCountLabel(RewardTier.TIER_2))
+        listOf(0 to 50, -1 to 50, 25 to 25, 50 to 25, 25 to 0, 25 to 1001,
+            1000 to 1001, Int.MIN_VALUE to Int.MAX_VALUE).forEach { (first, second) ->
+            assertThrows(IllegalArgumentException::class.java) { RewardThresholds(first, second) }
+        }
+        RewardTier.entries.forEach {
+            assertEquals("\"${it.name}\"", Json.encodeToString(RewardTier.serializer(), it))
+            assertEquals(it, Json.decodeFromString(RewardTier.serializer(), "\"${it.name}\""))
+        }
+    }
+
+    @Test fun changedThresholdsPreserveAccuracyCompletionAndEnabledGuards() {
+        val thresholds = RewardThresholds(15, 25)
+        listOf(14, 15, 24, 25, 50).forEach { count ->
+            assertEquals(thresholds.tierForQuestionCount(count),
+                selectPrize(count, count, count, true, true, rewardThresholds = thresholds)?.tier)
+            assertNull(selectPrize(count, count - 1, count - 1, true, true, rewardThresholds = thresholds))
+            assertNull(selectPrize(count, count, count, false, true, rewardThresholds = thresholds))
+            assertNull(selectPrize(count, count, count, true, false, rewardThresholds = thresholds))
+            assertNull(selectPrize(count, count, count, true, true, timedOut = true, rewardThresholds = thresholds))
+            assertNull(selectPrize(count, count, count, true, true, rewardThresholds = thresholds,
+                disabledRewards = RewardType.entries.filter { it.tier == thresholds.tierForQuestionCount(count) }.toSet()))
+        }
+        assertNull(selectPrize(20, 18, 20, true, true, rewardThresholds = thresholds))
+        assertNotNull(selectPrize(20, 19, 20, true, true, rewardThresholds = thresholds))
+    }
+
+    @Test fun selectedMatrixTierIgnoresMinimaButNeverQualificationOrAvailability() {
+        for (thresholds in listOf(RewardThresholds(15, 25), RewardThresholds(200, 300))) {
+            for (tier in RewardTier.entries) {
+                fun matrix(correct: Int = 109, answered: Int = 121, count: Int = 121,
+                    start: Boolean = true, finish: Boolean = true, timeout: Boolean = false,
+                    disabled: Set<RewardType> = emptySet()) =
+                    selectPrize(count, correct, answered, start, finish, timeout,
+                        disabledRewards = disabled, rewardThresholds = thresholds, matrixRewardTier = tier)
+                assertEquals(tier, matrix()?.tier)
+                assertNull(matrix(correct = 108))
+                assertNull(matrix(correct = 120, answered = 120))
+                assertNull(matrix(count = 120, correct = 120, answered = 120))
+                assertNull(matrix(correct = 122))
+                assertNull(matrix(start = false))
+                assertNull(matrix(finish = false))
+                assertNull(matrix(timeout = true))
+                assertNull(matrix(disabled = RewardType.entries.filter { it.tier == tier }.toSet()))
+                val only = RewardType.entries.first { it.tier == tier }
+                assertEquals(only, matrix(disabled = RewardType.entries.toSet() - only))
+            }
+        }
+    }
+
     @Test fun questionCountsMapToNamedTiersAtTheBoundaries() {
         listOf(Int.MIN_VALUE, 0, 1, 24).forEach { assertNull(rewardTierForQuestionCount(it)) }
         (25..49).forEach { assertEquals(RewardTier.TIER_1, rewardTierForQuestionCount(it)) }
@@ -119,6 +184,35 @@ class RewardsTest {
             assertEquals((it + 1) % 3, balance.fragments)
         }
         assertEquals(RewardBalance(3, 0), balance)
+    }
+
+    @Test fun addingWholeRewardsPreservesEveryFragmentRemainder() {
+        (0..2).forEach { fragments ->
+            val balance = RewardBalance(2, fragments)
+            assertTrue(balance.canAddWhole)
+            assertTrue(balance.canAddFragment)
+            assertEquals(RewardBalance(3, fragments), balance.addWhole())
+            assertEquals(balance.totalFragments + 3, balance.addWhole().totalFragments)
+        }
+        assertEquals(RewardBalance(1, 0), RewardBalance().addWhole())
+    }
+
+    @Test fun additionLimitsAllowSafeCarriesAndRejectOverflowWithoutChangingBalances() {
+        val maximumWhole = (Int.MAX_VALUE - 2) / 3
+        (0..2).forEach { fragments ->
+            val nearLimit = RewardBalance(maximumWhole - 1, fragments)
+            assertTrue(nearLimit.canAddWhole)
+            assertTrue(nearLimit.canAddFragment)
+            assertEquals(RewardBalance(maximumWhole, fragments), nearLimit.addWhole())
+            val limit = RewardBalance(maximumWhole, fragments)
+            assertFalse(limit.canAddWhole)
+            assertEquals(fragments < 2, limit.canAddFragment)
+            assertThrows(IllegalArgumentException::class.java) { limit.addWhole() }
+            if (fragments < 2) assertEquals(RewardBalance(maximumWhole, fragments + 1), limit.addFragment())
+            else assertThrows(IllegalArgumentException::class.java) { limit.addFragment() }
+            assertEquals(maximumWhole * 3 + fragments, limit.totalFragments)
+        }
+        assertEquals(RewardBalance(maximumWhole, 0), RewardBalance(maximumWhole - 1, 2).addFragment())
     }
 
     @Test fun invalidBalancesAreRejectedRatherThanLosingInventory() {

@@ -16,6 +16,55 @@ internal fun readingSessionFixture(
 )
 
 class ReadingSessionTest {
+    @Test fun finishAndWrongFinalSubmitStoreNewThresholdsWithoutReinterpretingCompletedSessions() {
+        val thresholds = RewardThresholds(15, 25)
+        for (count in listOf(15, 25)) for (wrongFinalAnswer in listOf(false, true)) {
+            var data = readingSessionFixture(count = count)
+            repeat(count - 1) { data = ReadingEngine.nextSessionActivity(readingSolve(data)) }
+            assertEquals(RewardThresholds(), data.activeSession?.rewardThresholds)
+            val answer = if (wrongFinalAnswer) readingWrong(data) else readingCorrect(data)
+            data = ReadingEngine.submit(ReadingEngine.field(data, "answer", answer.toString()), "answer",
+                rewardThresholds = thresholds)
+            data = ReadingEngine.finish(data, rewardThresholds = thresholds)
+            val session = requireNotNull(data.activeSession)
+            assertEquals(thresholds, session.rewardThresholds)
+            assertEquals(thresholds.tierForQuestionCount(count), session.prizeType?.tier)
+            assertEquals(count - if (wrongFinalAnswer) 1 else 0, data.sessionCorrect(session))
+            ReadingEngine.validate(data)
+            assertEquals(data, ReadingEngine.finish(data, rewardsEnabled = false, rewardThresholds = RewardThresholds(999, 1000)))
+            assertEquals(data, ReadingEngine.endSession(data, session.id, rewardThresholds = RewardThresholds()))
+            assertThrows(IllegalArgumentException::class.java) {
+                ReadingEngine.validate(data.copy(sessions = listOf(session.copy(rewardThresholds = RewardThresholds()))))
+            }
+        }
+    }
+
+    @Test fun newThresholdsKeepReadingStartFinishAccuracyAndDisabledTierGuards() {
+        val thresholds = RewardThresholds(15, 25)
+        for (enabledAtStart in listOf(false, true)) for (enabledAtFinish in listOf(false, true)) {
+            var data = readingSessionFixture(rewardsEnabled = enabledAtStart)
+            repeat(14) { data = ReadingEngine.nextSessionActivity(readingSolve(data)) }
+            data = readingAnswer(data, readingCorrect(data))
+            val completed = ReadingEngine.finish(data, rewardsEnabled = enabledAtFinish, rewardThresholds = thresholds)
+            assertEquals(enabledAtStart && enabledAtFinish, completed.activeSession?.prizeType != null)
+            ReadingEngine.validate(completed)
+            val disabled = ReadingEngine.finish(data, rewardThresholds = thresholds,
+                disabledRewards = RewardType.entries.filter { it.tier == RewardTier.TIER_1 }.toSet())
+            assertNull(disabled.activeSession?.prizeType)
+            ReadingEngine.validate(disabled)
+        }
+        var failed = readingSessionFixture()
+        repeat(2) {
+            failed = ReadingEngine.nextSessionActivity(ReadingEngine.submit(
+                ReadingEngine.field(failed, "answer", readingWrong(failed).toString()), "answer",
+                rewardThresholds = thresholds))
+        }
+        assertNotNull(failed.activeSession?.finishedAt)
+        assertEquals(thresholds, failed.activeSession?.rewardThresholds)
+        assertNull(failed.activeSession?.prizeType)
+        ReadingEngine.validate(failed)
+    }
+
     @Test fun deletingAnySessionMemberRemovesTheWholeGameAndKeepsADurableReceipt() {
         var data = readingSessionFixture(ReadingGame.STUDIO)
         data = ReadingEngine.nextSessionActivity(readingSolve(data))

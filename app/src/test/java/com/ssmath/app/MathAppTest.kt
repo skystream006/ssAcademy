@@ -72,6 +72,7 @@ class MathAppTest {
         compose.onNodeWithTag("multiplication-matrix-game").performScrollTo().performClick()
         compose.onNodeWithText("Multiplication Matrix Rewards Game").assertIsDisplayed()
         compose.onNodeWithText("Multiplication · numbers 1 to 11 · 121 questions").assertIsDisplayed()
+        compose.onNodeWithText("Answer each row in order:", substring = true).assertIsDisplayed()
         compose.onNodeWithTag("start-button").performScrollTo().performClick()
         compose.onNodeWithTag("question-progress").assertTextEquals("Question 1 of 121")
         compose.onNodeWithTag("answer-input").performTextInput("0")
@@ -106,6 +107,38 @@ class MathAppTest {
         compose.onNode(hasScrollToIndexAction()).performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 10_000f) }
         compose.onNodeWithTag("matrix-cell-11-11").performScrollTo()
             .assertIsDisplayed().assertContentDescriptionEquals("11 × 11 = 121: Correct")
+    }
+
+    @Test fun randomizedMatrixReadyScreenAndAnswerCellsMatchTheQuestions() {
+        val model = model(Dispatchers.Unconfined)
+        model.chooseRandomizeMatrixQuestions(true)
+        model.openMultiplicationMatrixGame()
+        compose.setContent { MathAppContent(model) }
+        compose.onNodeWithText("Answer all 121 questions in random order", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Answer each row in order:", substring = true).assertDoesNotExist()
+        compose.onNodeWithTag("start-button").performScrollTo().performClick()
+        compose.runOnIdle {
+            repeat(121) {
+                model.updateAnswer(if (model.game!!.problem == Problem(1, 1, Operation.MULTIPLICATION))
+                    "0" else model.game!!.problem.answer.toString())
+                model.submitAnswer()
+            }
+            model.dismissCelebration()
+            model.dismissCelebration()
+            model.dismissReward()
+        }
+        compose.onNodeWithTag("result-correct").assertTextEquals("You got 120 right!")
+        compose.onNode(hasScrollToIndexAction()).performScrollToIndex(1)
+        compose.onNodeWithTag("matrix-cell-1-1").performScrollTo()
+            .assertContentDescriptionEquals("1 × 1 = 0: Wrong. Correct answer: 1")
+        compose.onNodeWithTag("matrix-cell-1-11").performScrollTo()
+            .assertContentDescriptionEquals("1 × 11 = 11: Correct")
+        compose.onNodeWithTag("done-button").performClick()
+        compose.runOnIdle { model.openHistory() }
+        compose.onNodeWithText("Multiplication Matrix · 1 to 11").performClick()
+        compose.onNode(hasScrollToIndexAction()).performScrollToIndex(1)
+        compose.onNodeWithTag("matrix-cell-1-1").performScrollTo()
+            .assertContentDescriptionEquals("1 × 1 = 0: Wrong. Correct answer: 1")
     }
 
     @Test fun emptyCollectionMatrixPresentsMegaThenStandardBeforeTierTwoPrize() {
@@ -603,6 +636,27 @@ class MathAppTest {
         compose.onNode(isDialog()).assertDoesNotExist()
         compose.onNodeWithTag("practice-game").performClick()
         compose.onNodeWithTag("question-count-input").performScrollTo().assertTextContains("37")
+    }
+
+    @Test fun configuredRewardThresholdsAndMatrixTierAppearBeforePlay() {
+        val model = model()
+        model.chooseRewardThresholds(15, 25)
+        model.chooseMatrixRewardTier(RewardTier.TIER_1)
+        model.openRewardsGame()
+        compose.setContent { MathAppContent(model) }
+        compose.onNodeWithText("• Tier 1: 15–24 questions").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("• Tier 2: 25 or more questions").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("25–49 questions", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("Cancel").performScrollTo().performClick()
+        compose.onNodeWithTag("multiplication-matrix-game").performScrollTo().performClick()
+        compose.onNodeWithText("Eligible for enabled Tier 1 prize fragments.").performScrollTo().assertIsDisplayed()
+        compose.runOnIdle {
+            RewardType.entries.filter { it.tier == RewardTier.TIER_1 }.forEach { model.chooseRewardEnabled(it, false) }
+        }
+        compose.onNodeWithText("Unavailable: no rewards enabled in this tier.").performScrollTo().assertIsDisplayed()
+        compose.runOnIdle { model.chooseMatrixRewardTier(RewardTier.TIER_2) }
+        compose.onNodeWithText("Eligible for enabled Tier 2 prize fragments.").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Unavailable: no rewards enabled in this tier.").assertDoesNotExist()
     }
 
     @Test fun rewardsLaunchExplainsThresholdsAndShowsIndependentAvailabilityWarnings() {

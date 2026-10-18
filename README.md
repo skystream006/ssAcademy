@@ -40,15 +40,22 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    **Cancel** or Android Back closes either game dialog.
    **Multiplication Matrix Rewards Game** has a fixed **121 questions**, covering every pair
    from **1 × 1 through 11 × 11** in row order: 1 × 1, 1 × 2, …, 1 × 11, then
-   2 × 1, and so on. It does not change your other games' saved number limits or question counts.
+   2 × 1, and so on by default. Enable **Randomize matrix question order** in
+   **Settings > Admin Menu > Game Settings > Math Settings** to shuffle all 121 questions
+   once per new matrix game, with every pair appearing exactly once. The option is off by
+   default, is remembered for next time, and does not change a game already in progress.
+   It does not change your other games' saved number limits or question counts.
    The same rewards rules apply: finish all questions with **more than 90% correct** for an
-   enabled **Tier 2** prize fragment, with Math Rewards System enabled at start and finish.
+   enabled prize fragment, with Math Rewards System enabled at start and finish.
+   **Matrix reward tier** in **Math Settings** chooses **Tier 1** or **Tier 2** (the default),
+   independently of the usual minimum-question thresholds. The selected tier is used when
+   the game finishes; no prize is awarded if all rewards in that tier are disabled.
    The configured time limit per 5 questions scales to all 121 questions, and the game stops
    at **13 wrong answers** or when time runs out. Completing the matrix also unlocks the
    **Mega Pokémons** celebration pool, exclusive to this game; ordinary multiplication
    games (even with 121 questions), Practice Game, and reading cannot award this tier.
 2. **Press Start when Ready** – press **Start** to begin. The timer starts now.
-3. **Play** – except for the ordered matrix game, addition, subtraction and multiplication use two random numbers
+3. **Play** – except for the matrix game, addition, subtraction and multiplication use two random numbers
    between the minimum and maximum, inclusive. Subtraction never goes below zero.
    Division always has a whole-number answer, using a first number from 1 to its first maximum
    and a second number from 1 to its second maximum, choosing only exactly divisible pairs.
@@ -94,7 +101,7 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    Practice Game uses only the five Other scenes, regardless of question count,
    without awarding prizes or Pokémon.
    Matrix completions award **two animations**: one of **95 Mega Pokémon forms** and
-   one standard **Pokémon or Other** scene, shown in that order before any Tier 2 gift. Mega forms include
+   one standard **Pokémon or Other** scene, shown in that order before any prize gift. Mega forms include
    the separate X/Y/Z variants and three Tatsugiri entries. Each shows **Mega Pokémon**,
    its name and its supplied Ndex (including form suffixes) followed by `-M`
    (for example, `#0154-M` or `#0026x-M`) and appears in the separate
@@ -138,7 +145,11 @@ configured), create and confirm a **4–8 digit PIN**. Enter that PIN each time 
 Admin Menu; cancelling keeps it locked. The PIN is stored only as a salted password
 hash on this device. Five incorrect attempts pause access for 30 seconds.
 Closing the menu, leaving Settings, or recreating the screen locks it again.
-Admin Menu contains **Game Settings**, **My Rewards** (removal controls), and
+Use **Change PIN** inside Admin Menu to enter your current PIN and confirm a new
+**4–8 digit PIN**, then press **Save PIN**. Successful changes close and lock Admin Menu;
+the next entry requires the new PIN. Cancelling keeps the existing PIN. Incorrect current
+PINs share the same five-attempt, 30-second lockout.
+Admin Menu contains **Game Settings**, **My Rewards** (add/remove controls), and
 **Available Rewards**; every section starts collapsed. Settings subsections have
 darker backgrounds, including nested subject settings.
 **Math Settings** contains **Math Rewards System**,
@@ -208,27 +219,34 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   Rewards Game question counts are no longer used. Editing defaults during a game
   leaves its active questions unchanged and its timer paused until you leave Settings.
 - **Math Rewards System** – under Math Settings, on by default. In **Rewards Game**, earn
-  prizes for completing **25 or more questions** with **more than 90% correct**.
+  prizes for completing the configured minimum questions with **more than 90% correct**.
   This setting never enables prizes in Practice Game.
   After the celebration, tap the hopping gift box to open it and release confetti.
-  **Tier 1** rewards are for sessions of **25–49 questions**: a random Lollipop,
+  By default, **Tier 1** rewards are for sessions of **25–49 questions**: a random Lollipop,
   Ice Cream Cone, Gummi Bear, Ramen, or Bed Time Fragment. **Tier 2** rewards are for sessions
   of **50 or more questions**: a random Video Game or Restaurant Fragment.
   Bed Time features a sleeping child, floating Zs, and twinkling stars; Restaurant
   features a swaying striped awning and a steaming meal. Their artwork animates
   when revealed and in My Rewards and Use rewards.
   Individual rewards can be enabled or disabled in **Settings > Admin Menu > Available Rewards**.
+  In the same section, set **Tier 1 minimum questions** and **Tier 2 minimum questions**, then
+  choose **Save minimum questions**. Both must be whole numbers from **1 to 1,000**, and Tier 2
+  must be higher than Tier 1. Defaults are **25** and **50**. These saved thresholds apply to
+  both Math and Reading when a game finishes: Tier 2 at or above its minimum, Tier 1 from its
+  minimum to below Tier 2's minimum, and no prize below Tier 1's minimum. Matrix games use their
+  separately selected tier instead. Changing these settings never changes saved prizes or claims.
   Only enabled rewards from the qualifying tier are selected; if none are enabled in
   that tier, no prize is awarded. Existing prizes and fragments remain available.
-  Fewer than 25 questions and exactly 90% correct do not qualify.
+  Fewer than the configured Tier 1 minimum (except matrix games) and exactly 90% correct do not qualify.
   Every 3 fragments of the same type automatically become 1 whole prize, with the
   fragment counter returning to 0. Prizes and their cumulative totals are saved
   with the result; deleting a result removes its claimed fragment from your available rewards.
   A gift dismissed before opening can still be claimed from its history entry.
   All reward illustrations and animations are drawn in the app and work offline.
 - **Reading Rewards System** – under Reading Settings, enables the same prize fragments
-  as Math Rewards Game, using the shared Rewards inventory. Complete at least 25 activities
-  with **more than 90% correct** to qualify; rewards must be on at both start and finish.
+  as Math Rewards Game, using the shared minimum-question settings and Rewards inventory.
+  Complete all selected activities and meet a tier's minimum with **more than 90% correct**
+  to qualify; rewards must be on at both start and finish.
   Disabled reward types are excluded from new prizes. Existing gifts remain claimable.
   Reading checkpoint points have been removed; checkpoints still track activity progress.
 - **Show timer** – off by default. Show or hide the timer while practicing. The timer pauses while
@@ -574,12 +592,14 @@ Expand **My Pokémons**, then press **Add all animations** to add all celebratio
 duplicating ones already collected or changing history and rewards. This debug action
 unlocks every animation; earning Mega Pokémons through gameplay still requires the math matrix game.
 
-In **Settings > Admin Menu**, expand **My Rewards**, then press **Remove rewards** to view available balances by tier. Choose **Remove 1 fragment**
-or **Remove 1 whole reward** for a reward, then confirm **Remove**; **Cancel** leaves it
-unchanged. Each action removes one of the selected units, without breaking whole rewards
-into fragments or changing the other units, practice history, or My Pokémons. Empty balances
-cannot be removed. Changes are saved on this device and cannot be undone; claimed gifts
-cannot be claimed again. **Back to Admin Menu** returns to the unlocked Admin Menu.
+In **Settings > Admin Menu**, expand **My Rewards**, then press **Add/Remove Rewards** to
+view balances by tier. Choose **Add 1 fragment**, **Add 1 whole reward**, **Remove 1 fragment**,
+or **Remove 1 whole reward**, then confirm **Add** or **Remove**; **Cancel** leaves the balance
+unchanged. Additions work even with reward earning disabled or an empty inventory.
+Every 3 matching fragments become 1 whole reward; adding a whole reward keeps existing
+fragments. Removing a fragment never breaks a whole reward, and unavailable units cannot
+be removed. Adjustments are saved on this device without changing practice history,
+My Pokémons, or existing gift claims. **Back to Admin Menu** returns to the unlocked Admin Menu.
 
 In **Debug Menu**, expand **Reading activities**, then press **View reading activities database** to browse the installed activity library,
 filter by game and level, and inspect activity IDs, passages, questions, correct

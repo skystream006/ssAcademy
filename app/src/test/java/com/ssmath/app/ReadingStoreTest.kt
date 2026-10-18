@@ -82,6 +82,57 @@ class ReadingStoreTest {
         settings.edit().clear().commit()
     }
 
+    @Test fun readingReadsNewThresholdsAtFinishAndReloadsTheRuleSnapshot() {
+        for (count in listOf(15, 25)) for (completion in listOf("submit", "wrong-submit", "finish")) {
+            settings.edit().clear().putBoolean("rewards_enabled", false).commit()
+            var data = readingSessionFixture(count = count)
+            repeat(count - 1) { data = ReadingEngine.nextSessionActivity(readingSolve(data)) }
+            data = if (completion == "finish") readingAnswer(data, readingCorrect(data))
+            else ReadingEngine.field(data, "answer",
+                (if (completion == "wrong-submit") readingWrong(data) else readingCorrect(data)).toString())
+            val store = ReadingStore(file)
+            store.load()
+            store.save(data)
+            val model = ReadingViewModel(application, store)
+            await { model.data != null }
+            settings.edit().putInt("reward_tier_1_minimum", 15).putInt("reward_tier_2_minimum", 25).commit()
+            if (completion == "finish") model.finishActivity() else model.submit("answer")
+            await { model.data?.activeSession?.finishedAt != null && !model.saving }
+            val session = requireNotNull(model.data?.activeSession)
+            assertEquals(RewardThresholds(15, 25), session.rewardThresholds)
+            assertEquals(if (count == 15) RewardTier.TIER_1 else RewardTier.TIER_2, session.prizeType?.tier)
+            settings.edit().putInt("reward_tier_1_minimum", 200).putInt("reward_tier_2_minimum", 300)
+                .putBoolean("reading_rewards_enabled", false).commit()
+            val restored = ReadingStore(file).load()
+            assertEquals(session, restored.activeSession)
+            ReadingEngine.validate(restored)
+            model.finishActivity()
+            await { !model.saving }
+            assertEquals(session, model.data?.activeSession)
+            assertFalse(settings.getBoolean("rewards_enabled", true))
+        }
+    }
+
+    @Test fun invalidReadingThresholdPreferenceFallsBackWithoutRetroactiveRewards() {
+        var data = readingSessionFixture()
+        repeat(14) { data = ReadingEngine.nextSessionActivity(readingSolve(data)) }
+        data = ReadingEngine.field(data, "answer", readingCorrect(data).toString())
+        val storage = RecordingStorage(data)
+        settings.edit().putInt("reward_tier_1_minimum", 15).putInt("reward_tier_2_minimum", 10).commit()
+        val model = ReadingViewModel(application, storage)
+        await { model.data != null }
+        model.submit("answer")
+        await { model.data?.activeSession?.finishedAt != null && !model.saving }
+        val finished = requireNotNull(model.data)
+        assertEquals(RewardThresholds(), finished.activeSession?.rewardThresholds)
+        assertNull(finished.activeSession?.prizeType)
+        settings.edit().putInt("reward_tier_2_minimum", 25).commit()
+        model.submit("answer")
+        model.finishActivity()
+        await { !model.saving }
+        assertEquals(finished, storage.saved)
+    }
+
     @Test fun retiredGamesArePurgedBeforeLegacyDecodingWithoutChangingOtherReadersOrStories() {
         val original = readingSolve(readingFixture(
             ReadingContent.forGame(ReadingGame.STUDIO, ReadingLevel.SPROUT).first()))

@@ -165,7 +165,9 @@ data class GameState(
     val questionCount: Int = DEFAULT_QUESTION_COUNT,
     val minimum: Int = MIN_MAXIMUM,
     val maximumSecond: Int = maximum,
-    val isMultiplicationMatrix: Boolean = false
+    val isMultiplicationMatrix: Boolean = false,
+    private val matrixQuestionOrder: List<Int> = if (isMultiplicationMatrix)
+        (0 until MultiplicationMatrix.QUESTION_COUNT).toList() else emptyList()
 ) {
     init {
         require(minimum in MIN_MAXIMUM..maximum) { "Minimum must be between $MIN_MAXIMUM and the maximum." }
@@ -189,14 +191,20 @@ data class GameState(
         check(!finished) { "The game is over." }
         val next = copy(attempts = attempts + Attempt(problem, value))
         return if (next.finished) next else next.copy(problem =
-            if (isMultiplicationMatrix) MultiplicationMatrix.problemAt(next.attempts.size)
+            if (isMultiplicationMatrix) MultiplicationMatrix.problemAt(matrixQuestionOrder[next.attempts.size])
             else generator.next(operation, maximum, problem, minimum, maximumSecond))
     }
 
     companion object {
-        fun startMultiplicationMatrix() = GameState(
-            Operation.MULTIPLICATION, MultiplicationMatrix.SIZE, MultiplicationMatrix.problemAt(0),
-            questionCount = MultiplicationMatrix.QUESTION_COUNT, isMultiplicationMatrix = true)
+        fun startMultiplicationMatrix(randomizeQuestionOrder: Boolean = false, random: Random = Random.Default): GameState {
+            val order = (0 until MultiplicationMatrix.QUESTION_COUNT).toList().let {
+                if (randomizeQuestionOrder) it.shuffled(random) else it
+            }
+            return GameState(
+                Operation.MULTIPLICATION, MultiplicationMatrix.SIZE, MultiplicationMatrix.problemAt(order.first()),
+                questionCount = MultiplicationMatrix.QUESTION_COUNT, isMultiplicationMatrix = true,
+                matrixQuestionOrder = order)
+        }
 
         fun start(operation: Operation, maximum: Int, generator: ProblemGenerator,
             questionCount: Int = DEFAULT_QUESTION_COUNT, minimum: Int = MIN_MAXIMUM, maximumSecond: Int = maximum) =

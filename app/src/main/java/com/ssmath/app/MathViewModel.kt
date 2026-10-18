@@ -163,6 +163,10 @@ class MathViewModel(
     })
     val rewardsEnabled: Boolean get() = rewardsEnabled(Subject.MATH)
     fun rewardsEnabled(subject: Subject): Boolean = subjectRewards.getValue(subject)
+    var rewardThresholds by mutableStateOf(settings.readRewardThresholds())
+        private set
+    var matrixRewardTier by mutableStateOf(settings.readMatrixRewardTier())
+        private set
     var disabledRewards by mutableStateOf(RewardType.entries.filter {
         it.name in settings.getStringSet("disabled_rewards", emptySet()).orEmpty()
     }.toSet())
@@ -178,6 +182,8 @@ class MathViewModel(
     var showCorrectAnswers by mutableStateOf(settings.getBoolean("show_correct_answers", true))
         private set
     var verticalEquations by mutableStateOf(settings.getBoolean("vertical_equations", true))
+        private set
+    var randomizeMatrixQuestions by mutableStateOf(settings.getBoolean("randomize_matrix_questions", false))
         private set
     var textSizePercent by mutableStateOf(settings.getInt("text_size_percent", DEFAULT_TEXT_SIZE_PERCENT)
         .coerceIn(MIN_TEXT_SIZE_PERCENT, MAX_TEXT_SIZE_PERCENT))
@@ -408,7 +414,7 @@ class MathViewModel(
         val maximumSecond = if (division) parameters.second ?: return else maximum
         val questionCount = parameters.questionCount ?: return
         gameMode = ready.mode
-        game = if (ready.isMultiplicationMatrix) GameState.startMultiplicationMatrix()
+        game = if (ready.isMultiplicationMatrix) GameState.startMultiplicationMatrix(randomizeMatrixQuestions)
             else GameState.start(operation, maximum, generator, questionCount, minimum, maximumSecond)
         progressIcon = ProgressIcon.entries.random(progressIconRandom)
         answerText = ""
@@ -454,8 +460,10 @@ class MathViewModel(
             minimum = state.minimum, maximumSecond = state.maximumSecond.takeIf { state.operation == Operation.DIVISION },
             questionCount = state.questionCount, timedOut = expired, gameMode = gameMode,
             isMultiplicationMatrix = state.isMultiplicationMatrix,
+            rewardThresholds = rewardThresholds, matrixRewardTier = matrixRewardTier,
             prizeType = selectPrize(state.questionCount, state.correct, state.attempts.size,
-                rewardsEnabledAtStart, rewardsEnabled, expired, rewardRandom, disabledRewards))
+                rewardsEnabledAtStart, rewardsEnabled && gameMode == GameMode.REWARDS, expired, rewardRandom,
+                disabledRewards, rewardThresholds, matrixRewardTier.takeIf { state.isMultiplicationMatrix }))
         val pending = PendingResult(result)
         pendingResult = pending
         lastResult = result
@@ -731,7 +739,8 @@ class MathViewModel(
         if (current.abandoned || current.attemptIds.isEmpty()) return
         val result = ReadingRewardResult(current.id, current.ownerId, current.game, current.level, finishedAt,
             current.attemptIds.size, data.sessionCorrect(current), data.sessionAnswered(current),
-            current.timedOut, current.rewardsEnabledAtStart, current.prizeType)
+            current.timedOut, current.rewardsEnabledAtStart, current.prizeType,
+            rewardThresholds = current.rewardThresholds)
         val pending = PendingReadingResult(result)
         pendingReadingResult = pending
         openedReadingSessions += current.id
@@ -929,22 +938,30 @@ class MathViewModel(
         }
     }
 
-    fun removeReward(type: RewardType, fragment: Boolean) {
-        val balance = rewardBalances[type] ?: return
+    fun addReward(type: RewardType, fragment: Boolean) = adjustReward(type, fragment, add = true)
+
+    fun removeReward(type: RewardType, fragment: Boolean) = adjustReward(type, fragment, add = false)
+
+    private fun adjustReward(type: RewardType, fragment: Boolean, add: Boolean) {
+        val balance = rewardBalances[type] ?: RewardBalance()
         if (removingReward || overlay != Overlay.SETTINGS ||
-            (if (fragment) balance.fragments else balance.whole) == 0) return
+            (!add && (if (fragment) balance.fragments else balance.whole) == 0)) return
         removingReward = true
         rewardRemovalError = null
         viewModelScope.launch {
             try {
                 storeLock.withLock {
-                    applySnapshot(withContext(ioDispatcher) { store.removeReward(type, fragment) })
+                    applySnapshot(withContext(ioDispatcher) {
+                        if (add) store.addReward(type, fragment) else store.removeReward(type, fragment)
+                    })
                 }
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
                 DebugLog.event(DebugEvent.HISTORY_FAILURE, error = error)
-                rewardRemovalError = "Unable to remove this reward. Free device storage and try again."
+                rewardRemovalError = if (add)
+                    "Unable to add this reward. Check the reward balance limit and device storage, then try again."
+                else "Unable to remove this reward. Free device storage and try again."
             } finally {
                 removingReward = false
             }
@@ -1085,6 +1102,18 @@ class MathViewModel(
         settings.edit().putStringSet("disabled_rewards", disabledRewards.map { it.name }.toSet()).apply()
     }
 
+    fun chooseRewardThresholds(tier1Minimum: Int, tier2Minimum: Int) {
+        if (tier1Minimum !in 1..1000 || tier2Minimum !in 1..1000 || tier1Minimum >= tier2Minimum) return
+        rewardThresholds = RewardThresholds(tier1Minimum, tier2Minimum)
+        settings.edit().putInt("reward_tier_1_minimum", tier1Minimum)
+            .putInt("reward_tier_2_minimum", tier2Minimum).apply()
+    }
+
+    fun chooseMatrixRewardTier(tier: RewardTier) {
+        matrixRewardTier = tier
+        settings.edit().putString("matrix_reward_tier", tier.name).apply()
+    }
+
     fun chooseReadingGameEnabled(game: ReadingGame, enabled: Boolean) {
         disabledReadingGames = if (enabled) disabledReadingGames - game else disabledReadingGames + game
         settings.edit().putStringSet("disabled_reading_games", disabledReadingGames.map { it.name }.toSet()).apply()
@@ -1103,6 +1132,11 @@ class MathViewModel(
     fun chooseVerticalEquations(value: Boolean) {
         verticalEquations = value
         settings.edit().putBoolean("vertical_equations", value).apply()
+    }
+
+    fun chooseRandomizeMatrixQuestions(value: Boolean) {
+        randomizeMatrixQuestions = value
+        settings.edit().putBoolean("randomize_matrix_questions", value).apply()
     }
 
     fun chooseTextSize(value: Int) {

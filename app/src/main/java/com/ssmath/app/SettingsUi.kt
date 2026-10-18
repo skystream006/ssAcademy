@@ -19,6 +19,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -56,6 +57,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.input.KeyboardType
 import kotlin.math.roundToInt
 
 @Composable
@@ -363,14 +365,19 @@ private fun DebugDialog(model: MathViewModel, onDismiss: () -> Unit) {
 
 @Composable
 private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit) {
-    var showingRemoval by rememberSaveable { mutableStateOf(false) }
+    var showingAdjustments by rememberSaveable { mutableStateOf(false) }
+    var changingPin by remember { mutableStateOf(false) }
     var showingReadingGames by rememberSaveable { mutableStateOf(false) }
     var showingReadingLevel by rememberSaveable { mutableStateOf(false) }
     val sectionState = rememberSaveableStateHolder()
-    if (showingRemoval) {
-        RemoveRewardsDialog(
+    if (changingPin) {
+        ChangeAdminPinDialog(onChanged = onDismiss, onDismiss = { changingPin = false })
+        return
+    }
+    if (showingAdjustments) {
+        AddRemoveRewardsDialog(
             model.rewardBalances, model.removingReward, model.rewardRemovalError,
-            model::removeReward, { showingRemoval = false }
+            model::addReward, model::removeReward, { showingAdjustments = false }
         )
         return
     }
@@ -389,16 +396,20 @@ private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit) {
             sectionState.SaveableStateProvider("admin-sections") {
                 Column(Modifier.verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Button(onClick = { changingPin = true }, modifier = Modifier.fillMaxWidth().testTag("change-pin")) {
+                        Text("Change PIN", textAlign = TextAlign.Center)
+                    }
                     CollapsibleSettingsSection("My Rewards", defaultExpanded = false) {
-                        Button(onClick = { showingRemoval = true }) {
-                            Text("Remove rewards", Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+                        Button(onClick = { showingAdjustments = true }) {
+                            Text("Add/Remove Rewards", Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
                         }
                     }
                     HorizontalDivider()
                     CollapsibleSettingsSection("Available Rewards", defaultExpanded = false) {
                         Text("Choose which rewards can be awarded when a Rewards Game finishes. Existing prizes and fragments stay available.")
+                        RewardMinimumSettings(model)
                         RewardTier.entries.forEach { tier ->
-                            Text("${tier.label} · ${tier.questionCountLabel}", Modifier.fillMaxWidth(),
+                            Text("${tier.label} · ${model.rewardThresholds.questionCountLabel(tier)}", Modifier.fillMaxWidth(),
                                 style = MaterialTheme.typography.titleSmall)
                             RewardType.entries.filter { it.tier == tier }.forEach { type ->
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -423,8 +434,46 @@ private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit) {
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
-        modifier = Modifier.testTag("admin-dialog")
+        // Keep text-field remeasurement from alternating between platform dialog widths.
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+        modifier = Modifier.widthIn(max = 440.dp).fillMaxWidth().padding(16.dp).testTag("admin-dialog")
     )
+}
+
+@Composable
+private fun RewardMinimumSettings(model: MathViewModel) {
+    var tier1Text by rememberSaveable(model.rewardThresholds) {
+        mutableStateOf(model.rewardThresholds.tier1Minimum.toString())
+    }
+    var tier2Text by rememberSaveable(model.rewardThresholds) {
+        mutableStateOf(model.rewardThresholds.tier2Minimum.toString())
+    }
+    val tier1 = parseQuestionCount(tier1Text)
+    val tier2 = parseQuestionCount(tier2Text)
+    val valid = tier1 != null && tier2 != null && tier1 < tier2
+    Text("Minimum questions for Math and Reading rewards. Tier 2 must be higher than Tier 1. " +
+        "Changes apply when a game finishes; saved prizes keep their original rules.")
+    Text("Tier 1 minimum questions", style = MaterialTheme.typography.bodyMedium)
+    OutlinedTextField(tier1Text, { tier1Text = it.take(6) },
+        supportingText = { Text("Whole number from 1 to $MAX_QUESTION_COUNT") },
+        isError = tier1 == null, singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        modifier = Modifier.fillMaxWidth().testTag("reward-tier-1-minimum")
+            .semantics { contentDescription = "Tier 1 minimum questions" })
+    Text("Tier 2 minimum questions", style = MaterialTheme.typography.bodyMedium)
+    OutlinedTextField(tier2Text, { tier2Text = it.take(6) },
+        supportingText = { Text("Whole number from 1 to $MAX_QUESTION_COUNT, higher than Tier 1") },
+        isError = !valid, singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        modifier = Modifier.fillMaxWidth().testTag("reward-tier-2-minimum")
+            .semantics { contentDescription = "Tier 2 minimum questions" })
+    Button(onClick = {
+        if (tier1 != null && tier2 != null && tier1 < tier2) model.chooseRewardThresholds(tier1, tier2)
+    }, enabled = valid && (tier1 != model.rewardThresholds.tier1Minimum ||
+        tier2 != model.rewardThresholds.tier2Minimum),
+        modifier = Modifier.fillMaxWidth().testTag("save-reward-minimums")) {
+        Text("Save minimum questions", textAlign = TextAlign.Center)
+    }
 }
 
 @Composable
@@ -437,7 +486,8 @@ private fun GameSettings(
 ) {
     CollapsibleSettingsSection("Math Settings", defaultExpanded = false) {
         SubjectRewardsSetting(model, Subject.MATH,
-            "Earn prize fragments in Rewards Game by completing 25 or more questions with over 90% correct")
+            "Earn prize fragments in Rewards Game by completing ${model.rewardThresholds.tier1Minimum} " +
+                "or more questions with over 90% correct")
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Show timer")
@@ -469,6 +519,31 @@ private fun GameSettings(
             Switch(model.verticalEquations, model::chooseVerticalEquations,
                 modifier = Modifier.semantics { contentDescription = "Vertical equations" })
         }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Randomize matrix question order")
+                Text("Shuffle all 121 questions once per Multiplication Matrix Rewards Game. Applies to new games.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Switch(model.randomizeMatrixQuestions, model::chooseRandomizeMatrixQuestions,
+                modifier = Modifier.semantics { contentDescription = "Randomize matrix question order" })
+        }
+        Text("Matrix reward tier", style = MaterialTheme.typography.titleSmall)
+        Text("Use this tier instead of the question minimums for Multiplication Matrix Rewards Game. " +
+            "Changes apply when the game finishes. Accuracy, timer, and enabled-reward rules still apply.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(Modifier.selectableGroup()) {
+            RewardTier.entries.forEach { tier ->
+                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).selectable(
+                    selected = model.matrixRewardTier == tier, role = Role.RadioButton,
+                    onClick = { model.chooseMatrixRewardTier(tier) }
+                ).testTag("matrix-reward-${tier.name}"),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(selected = model.matrixRewardTier == tier, onClick = null)
+                    Text(tier.label, Modifier.padding(start = 8.dp))
+                }
+            }
+        }
         ListItem(headlineContent = { Text("Default Math Reward Game Settings") },
             supportingContent = { Text("Default number limits for each math type") },
             leadingContent = { Icon(Icons.Rounded.Settings, null) },
@@ -480,7 +555,8 @@ private fun GameSettings(
     CollapsibleSettingsSection("Reading Settings", defaultExpanded = false) {
         ReadingPackSettings()
         SubjectRewardsSetting(model, Subject.READING,
-            "Earn prize fragments by completing 25 or more questions with over 90% correct.")
+            "Earn prize fragments by completing ${model.rewardThresholds.tier1Minimum} " +
+                "or more questions with over 90% correct.")
         ListItem(headlineContent = { Text("Reading Progress") },
             supportingContent = { Text("Private progress and saved stories") },
             leadingContent = { Icon(Icons.Rounded.History, null) },
@@ -511,31 +587,41 @@ private fun GameSettings(
 }
 
 @Composable
-internal fun RemoveRewardsDialog(
+internal fun AddRemoveRewardsDialog(
     balances: Map<RewardType, RewardBalance>,
-    removingReward: Boolean,
+    updatingReward: Boolean,
     error: String?,
+    onAdd: (RewardType, Boolean) -> Unit,
     onRemove: (RewardType, Boolean) -> Unit,
     onDismiss: () -> Unit
 ) {
     var selected by rememberSaveable { mutableStateOf<RewardType?>(null) }
     var fragment by rememberSaveable { mutableStateOf(false) }
+    var adding by rememberSaveable { mutableStateOf(false) }
     val choice = selected
     val balance = balances[choice] ?: RewardBalance()
+    val canConfirm = if (adding) {
+        if (fragment) balance.canAddFragment else balance.canAddWhole
+    } else (if (fragment) balance.fragments else balance.whole) > 0
     AlertDialog(
         onDismissRequest = { if (choice != null) selected = null else onDismiss() },
-        title = { Text(if (choice == null) "Remove rewards" else "Remove reward?") },
+        title = { Text(if (choice == null) "Add/Remove Rewards" else if (adding) "Add reward?" else "Remove reward?") },
         text = {
             if (choice != null) {
                 Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(if (fragment) "Permanently remove 1 ${choice.label} fragment?"
-                        else "Permanently remove 1 whole ${choice.label} reward?")
-                    Text("Practice history and My Pokémons will not change. This cannot be undone.")
+                    Text(if (adding) {
+                        if (fragment) "Add 1 ${choice.label} fragment?" else "Add 1 whole ${choice.label} reward?"
+                    } else {
+                        if (fragment) "Permanently remove 1 ${choice.label} fragment?"
+                        else "Permanently remove 1 whole ${choice.label} reward?"
+                    })
+                    if (adding && fragment) Text("Every 3 matching fragments become 1 whole reward.")
+                    Text("Practice history and My Pokémons will not change.")
                 }
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    if (removingReward) {
-                        Text("Removing reward…", modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+                    if (updatingReward) {
+                        Text("Updating reward…", modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                     }
                     if (error != null) {
                         Text(error, color = MaterialTheme.colorScheme.error,
@@ -543,7 +629,8 @@ internal fun RemoveRewardsDialog(
                     }
                     Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("Remove one fragment or whole reward at a time. Removing a fragment does not break a whole reward.")
+                        Text("Add or remove one fragment or whole reward at a time. " +
+                            "3 matching fragments become 1 whole reward. Removing a fragment does not break a whole reward.")
                         if (balances.values.none { it.totalFragments > 0 }) {
                             Text("No rewards or fragments available.")
                         }
@@ -551,20 +638,34 @@ internal fun RemoveRewardsDialog(
                             Text(tier.label, style = MaterialTheme.typography.titleMedium)
                             RewardType.entries.filter { it.tier == tier }.forEach { type ->
                                 val available = balances[type] ?: RewardBalance()
-                                Column(Modifier.fillMaxWidth().testTag("remove-reward-${type.name}"),
+                                Column(Modifier.fillMaxWidth().testTag("adjust-reward-${type.name}"),
                                     verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     Text(type.label, style = MaterialTheme.typography.titleSmall)
                                     Text("Whole: ${available.whole} · Fragments: ${available.fragments}/3")
                                     OutlinedButton(
-                                        onClick = { selected = type; fragment = true },
-                                        enabled = !removingReward && available.fragments > 0,
+                                        onClick = { selected = type; fragment = true; adding = true },
+                                        enabled = !updatingReward && available.canAddFragment,
+                                        modifier = Modifier.fillMaxWidth().semantics {
+                                            contentDescription = "Add 1 ${type.label} fragment"
+                                        }
+                                    ) { Text("Add 1 fragment", textAlign = TextAlign.Center) }
+                                    OutlinedButton(
+                                        onClick = { selected = type; fragment = false; adding = true },
+                                        enabled = !updatingReward && available.canAddWhole,
+                                        modifier = Modifier.fillMaxWidth().semantics {
+                                            contentDescription = "Add 1 whole ${type.label} reward"
+                                        }
+                                    ) { Text("Add 1 whole reward", textAlign = TextAlign.Center) }
+                                    OutlinedButton(
+                                        onClick = { selected = type; fragment = true; adding = false },
+                                        enabled = !updatingReward && available.fragments > 0,
                                         modifier = Modifier.fillMaxWidth().semantics {
                                             contentDescription = "Remove 1 ${type.label} fragment"
                                         }
                                     ) { Text("Remove 1 fragment", textAlign = TextAlign.Center) }
                                     OutlinedButton(
-                                        onClick = { selected = type; fragment = false },
-                                        enabled = !removingReward && available.whole > 0,
+                                        onClick = { selected = type; fragment = false; adding = false },
+                                        enabled = !updatingReward && available.whole > 0,
                                         modifier = Modifier.fillMaxWidth().semantics {
                                             contentDescription = "Remove 1 whole ${type.label} reward"
                                         }
@@ -579,14 +680,14 @@ internal fun RemoveRewardsDialog(
         confirmButton = {
             if (choice != null) {
                 TextButton(
-                    enabled = !removingReward && (if (fragment) balance.fragments else balance.whole) > 0,
+                    enabled = !updatingReward && canConfirm,
                     onClick = {
                         if (selected == choice) {
                             selected = null
-                            onRemove(choice, fragment)
+                            if (adding) onAdd(choice, fragment) else onRemove(choice, fragment)
                         }
                     }
-                ) { Text("Remove") }
+                ) { Text(if (adding) "Add" else "Remove") }
             } else {
                 TextButton(onClick = onDismiss) { Text("Back to Admin Menu") }
             }
@@ -595,7 +696,9 @@ internal fun RemoveRewardsDialog(
             if (choice != null) {
                 TextButton(onClick = { selected = null }) { Text("Cancel") }
             }
-        }
+        },
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+        modifier = Modifier.widthIn(max = 440.dp).fillMaxWidth().padding(16.dp).testTag("adjust-rewards-dialog")
     )
 }
 
@@ -653,12 +756,12 @@ fun RewardsScreen(model: MathViewModel) {
     ScreenScaffold("My Rewards", model::closeOverlay, actions = {
         TextButton(onClick = { usingRewards = true }) { Text("Use rewards") }
     }) {
-        RewardInventory(model.rewardBalances)
+        RewardInventory(model.rewardBalances, thresholds = model.rewardThresholds)
     }
     if (usingRewards) {
         UseRewardsDialog(
             model.rewardBalances, model.usingReward, model.rewardUseError,
-            model::useReward, { usingRewards = false }
+            model::useReward, { usingRewards = false }, thresholds = model.rewardThresholds
         )
     }
 }

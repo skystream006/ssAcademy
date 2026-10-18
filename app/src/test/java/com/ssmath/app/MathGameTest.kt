@@ -34,6 +34,40 @@ class MathGameTest {
         assertEquals(13, game.wrong)
     }
 
+    @Test fun randomizedMatrixVisitsEveryPairOnceAndShufflesEachNewGame() {
+        val rowOrder = (0 until MultiplicationMatrix.QUESTION_COUNT).map(MultiplicationMatrix::problemAt)
+        val random = Random(42)
+        val orders = (1..3).map {
+            var game = GameState.startMultiplicationMatrix(randomizeQuestionOrder = true, random = random)
+            repeat(121) { index ->
+                assertFalse(game.finished)
+                assertTrue(game.isMultiplicationMatrix)
+                assertEquals(121, game.questionCount)
+                game = game.answer(if (index < 12) 0 else game.problem.answer, generator)
+            }
+            assertTrue(game.finished)
+            assertEquals(109, game.correct)
+            assertEquals(12, game.wrong)
+            val order = game.attempts.map { it.problem }
+            assertEquals(rowOrder.toSet(), order.toSet())
+            assertNotEquals(rowOrder, order)
+            assertThrows(IllegalStateException::class.java) { game.answer(0, generator) }
+            order
+        }
+        assertEquals(3, orders.toSet().size)
+    }
+
+    @Test fun randomizedMatrixStopsAt13WrongAnswersWithoutRepeatingQuestions() {
+        var game = GameState.startMultiplicationMatrix(randomizeQuestionOrder = true, random = Random(7))
+        repeat(13) {
+            assertFalse(game.finished)
+            game = game.answer(0, generator)
+        }
+        assertTrue(game.finished)
+        assertEquals(13, game.wrong)
+        assertEquals(13, game.attempts.map { it.problem }.toSet().size)
+    }
+
     @Test fun everyOperationKeepsBothNumbersWithinTheMaximum() {
         listOf(1, 2, 7, 12, 100).forEach { maximum ->
             Operation.entries.forEach { operation ->

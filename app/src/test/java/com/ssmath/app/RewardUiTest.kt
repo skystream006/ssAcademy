@@ -24,6 +24,7 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
+import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Rule
@@ -435,6 +436,26 @@ class RewardUiTest {
                 .filterToOne(hasText("Whole: 0")).assertIsDisplayed()
             compose.onNodeWithTag("inventory-fragments-${type.name}").onChildren()
                 .filterToOne(hasText("Fragments: 0/3")).assertIsDisplayed()
+        }
+    }
+
+    @Test fun inventoryAndUsePickerDisplayConfiguredRewardMinimums() {
+        compose.mainClock.autoAdvance = true
+        val application = ApplicationProvider.getApplicationContext<Application>()
+        application.getSharedPreferences("settings", 0).edit().clear().commit()
+        val model = MathViewModel(application)
+        model.chooseRewardThresholds(15, 25)
+        compose.setContent { MathTheme { RewardsScreen(model) } }
+        RewardTier.entries.forEach { tier ->
+            compose.onNodeWithTag("reward-inventory").performScrollToKey(tier.name)
+            compose.onNodeWithText(tier.label).assertIsDisplayed()
+                .assert(hasText(model.rewardThresholds.questionCountLabel(tier)))
+        }
+        compose.onNodeWithText("Use rewards").performClick()
+        RewardTier.entries.forEach { tier ->
+            compose.onNodeWithTag("use-rewards-grid").performScrollToKey(tier.name)
+            compose.onNode(hasText(tier.label) and hasAnyAncestor(hasTestTag("use-rewards-grid"))).assertIsDisplayed()
+                .assert(hasText(model.rewardThresholds.questionCountLabel(tier)))
         }
     }
 

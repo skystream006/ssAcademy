@@ -3,16 +3,44 @@ package com.ssmath.app
 import kotlin.random.Random
 import kotlinx.serialization.Serializable
 
-enum class RewardTier(val label: String, val questionCountLabel: String) {
-    TIER_1("Tier 1", "25–49 questions"),
-    TIER_2("Tier 2", "50 or more questions")
+@Serializable
+enum class RewardTier(val label: String) {
+    TIER_1("Tier 1"),
+    TIER_2("Tier 2");
+
+    val questionCountLabel: String get() = RewardThresholds().questionCountLabel(this)
 }
 
-internal fun rewardTierForQuestionCount(questionCount: Int): RewardTier? = when {
-    questionCount >= 50 -> RewardTier.TIER_2
-    questionCount >= 25 -> RewardTier.TIER_1
-    else -> null
+@Serializable
+data class RewardThresholds(val tier1Minimum: Int = 25, val tier2Minimum: Int = 50) {
+    init {
+        require(tier1Minimum in 1..1000 && tier2Minimum in 1..1000 && tier1Minimum < tier2Minimum)
+    }
+
+    fun minimum(tier: RewardTier): Int = when (tier) {
+        RewardTier.TIER_1 -> tier1Minimum
+        RewardTier.TIER_2 -> tier2Minimum
+    }
+
+    fun questionCountLabel(tier: RewardTier): String = when (tier) {
+        RewardTier.TIER_1 -> "$tier1Minimum–${tier2Minimum - 1} questions"
+        RewardTier.TIER_2 -> "$tier2Minimum or more questions"
+    }
+
+    fun tierForQuestionCount(count: Int): RewardTier? = when {
+        count >= tier2Minimum -> RewardTier.TIER_2
+        count >= tier1Minimum -> RewardTier.TIER_1
+        else -> null
+    }
 }
+
+internal fun rewardTierForQuestionCount(questionCount: Int): RewardTier? =
+    RewardThresholds().tierForQuestionCount(questionCount)
+
+internal fun rewardTierForGame(questionCount: Int, rewardThresholds: RewardThresholds,
+                               matrixRewardTier: RewardTier?): RewardTier? =
+    if (matrixRewardTier == null) rewardThresholds.tierForQuestionCount(questionCount)
+    else matrixRewardTier.takeIf { questionCount == MultiplicationMatrix.QUESTION_COUNT }
 
 @Serializable
 enum class RewardType(val label: String, val pluralLabel: String, val fragmentLabel: String, val tier: RewardTier) {
@@ -32,10 +60,18 @@ data class RewardBalance(val whole: Int = 0, val fragments: Int = 0) {
     }
 
     val totalFragments: Int get() = whole * 3 + fragments
+    val canAddWhole: Boolean get() = whole < (Int.MAX_VALUE - 2) / 3
+    val canAddFragment: Boolean get() = canAddWhole || fragments < 2
 
     fun addFragment(): RewardBalance {
+        require(canAddFragment) { "The reward balance limit has been reached." }
         val total = Math.addExact(totalFragments, 1)
         return RewardBalance(total / 3, total % 3)
+    }
+
+    fun addWhole(): RewardBalance {
+        require(canAddWhole) { "The reward balance limit has been reached." }
+        return copy(whole = whole + 1)
     }
 
     fun removeFragments(count: Int): RewardBalance {
@@ -49,8 +85,11 @@ data class RewardBalance(val whole: Int = 0, val fragments: Int = 0) {
 @Serializable
 data class PrizeAward(val type: RewardType, val balance: RewardBalance)
 
-internal fun qualifiesForReward(questionCount: Int, correct: Int, answered: Int, timedOut: Boolean): Boolean =
-    !timedOut && rewardTierForQuestionCount(questionCount) != null &&
+internal fun qualifiesForReward(questionCount: Int, correct: Int, answered: Int, timedOut: Boolean,
+                                rewardThresholds: RewardThresholds = RewardThresholds(),
+                                matrixRewardTier: RewardTier? = null): Boolean =
+    !timedOut && rewardTierForGame(questionCount, rewardThresholds, matrixRewardTier) != null &&
+        correct in 0..answered &&
         answered == questionCount && correct.toLong() * 100 > questionCount.toLong() * 90
 
 fun selectPrize(
@@ -61,10 +100,13 @@ fun selectPrize(
     enabledAtFinish: Boolean,
     timedOut: Boolean = false,
     random: Random = Random.Default,
-    disabledRewards: Set<RewardType> = emptySet()
+    disabledRewards: Set<RewardType> = emptySet(),
+    rewardThresholds: RewardThresholds = RewardThresholds(),
+    matrixRewardTier: RewardTier? = null
 ): RewardType? {
-    if (!enabledAtStart || !enabledAtFinish || !qualifiesForReward(questionCount, correct, answered, timedOut)) return null
-    val tier = rewardTierForQuestionCount(questionCount) ?: return null
+    if (!enabledAtStart || !enabledAtFinish ||
+        !qualifiesForReward(questionCount, correct, answered, timedOut, rewardThresholds, matrixRewardTier)) return null
+    val tier = rewardTierForGame(questionCount, rewardThresholds, matrixRewardTier) ?: return null
     val prizes = RewardType.entries.filter { it.tier == tier && it !in disabledRewards }
     return prizes.singleOrNull() ?: prizes.randomOrNull(random)
 }

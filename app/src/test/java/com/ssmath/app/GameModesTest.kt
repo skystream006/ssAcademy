@@ -66,6 +66,78 @@ class GameModesTest {
         shadowOf(Looper.getMainLooper()).idle()
     }
 
+    @Test fun matrixUsesFinishTierRegardlessOfMinimaAndClaimsStoredTierAfterSettingsChange() {
+        val model = model()
+        for (thresholds in listOf(RewardThresholds(15, 25), RewardThresholds(200, 300))) {
+            for (tier in RewardTier.entries) {
+                model.chooseRewardThresholds(thresholds.tier1Minimum, thresholds.tier2Minimum)
+                model.chooseMatrixRewardTier(RewardTier.entries.first { it != tier })
+                model.openMultiplicationMatrixGame()
+                model.start()
+                repeat(120) { answer(model, correct = it >= 12) }
+                model.chooseMatrixRewardTier(tier)
+                answer(model)
+                val result = requireNotNull(model.lastResult)
+                assertEquals(109, result.correct)
+                assertEquals(tier, result.prizeType?.tier)
+                assertEquals(tier, result.matrixRewardTier)
+                assertEquals(thresholds, result.rewardThresholds)
+                assertNotNull(model.celebration)
+                model.dismissCelebration()
+                assertNotNull(model.celebration)
+                model.dismissCelebration()
+                model.chooseMatrixRewardTier(RewardTier.entries.first { it != tier })
+                model.chooseRewardThresholds(999, 1000)
+                model.claimReward()
+                shadowOf(Looper.getMainLooper()).idle()
+                val claimed = requireNotNull(model.lastResult)
+                assertNotNull(claimed.prize)
+                assertEquals(result.prizeType, claimed.prize?.type)
+                assertEquals(claimed, model().history.first { it.id == result.id })
+                model.done()
+            }
+        }
+    }
+
+    @Test fun disabledSelectedMatrixTierDoesNotFallBackOrRemoveCelebrations() {
+        val model = model()
+        for (tier in RewardTier.entries) {
+            model.chooseRewardThresholds(200, 300)
+            model.chooseMatrixRewardTier(tier)
+            RewardType.entries.forEach { model.chooseRewardEnabled(it, it.tier != tier) }
+            model.openMultiplicationMatrixGame()
+            model.start()
+            repeat(121) { answer(model) }
+            assertNull(model.lastResult?.prizeType)
+            assertNotNull(model.celebration)
+            assertTrue(model.hasNextCelebration)
+            assertTrue(model.rewardBalances.isEmpty())
+            model.done()
+        }
+    }
+
+    @Test fun lowThresholdsAndMatrixTierDoNotChangePracticeOrOrdinaryMultiplication() {
+        val model = model()
+        model.chooseRewardThresholds(1, 2)
+        model.chooseMatrixRewardTier(RewardTier.TIER_1)
+        val defaults = model.rewardsDefaults
+        readyPractice(model, count = 25, operation = Operation.MULTIPLICATION)
+        model.start()
+        repeat(25) { answer(model) }
+        assertNull(model.lastResult?.prizeType)
+        assertEquals(GameMode.PRACTICE, model.lastResult?.gameMode)
+        assertEquals(CelebrationCategory.OTHER, model.celebration?.category)
+        model.done()
+        readyRewards(model, count = 25, operation = Operation.MULTIPLICATION)
+        model.start()
+        repeat(25) { answer(model) }
+        assertEquals(RewardTier.TIER_2, model.lastResult?.prizeType?.tier)
+        assertFalse(requireNotNull(model.lastResult).isMultiplicationMatrix)
+        assertEquals(CelebrationCategory.POKEMONS, model.celebration?.category)
+        assertEquals(defaults, model.rewardsDefaults)
+        assertEquals("25", model.questionCountText)
+    }
+
     @Test fun multiplicationMatrixHasFixedSettingsAndReturnsToMathWithoutChangingOtherGames() {
         val model = model()
         val defaults = model.rewardsDefaults
@@ -122,6 +194,77 @@ class GameModesTest {
         assertEquals(model.lastResult, restored.history.single())
         assertTrue(restored.history.single().isMultiplicationMatrix)
         assertEquals(model.rewardBalances, restored.rewardBalances)
+    }
+
+    @Test fun matrixRandomizationDefaultsOffAndPersistsBothChoices() {
+        val model = model()
+        assertFalse(model.randomizeMatrixQuestions)
+        model.chooseRandomizeMatrixQuestions(true)
+        val restored = model()
+        assertTrue(restored.randomizeMatrixQuestions)
+        restored.chooseRandomizeMatrixQuestions(false)
+        assertFalse(model().randomizeMatrixQuestions)
+    }
+
+    @Test fun matrixOrderIsFixedAtStartAndRandomizedAnswersKeepRewardsAndHistory() {
+        val model = model()
+        val rowOrder = (0 until MultiplicationMatrix.QUESTION_COUNT).map(MultiplicationMatrix::problemAt)
+        model.openMultiplicationMatrixGame()
+        model.start()
+        model.chooseRandomizeMatrixQuestions(true)
+        repeat(121) { answer(model) }
+        assertEquals(rowOrder, model.lastResult!!.attempts.map { it.problem })
+        model.backToSetup()
+
+        model.openMultiplicationMatrixGame()
+        model.start()
+        var expected = model.game!!
+        model.openSettings()
+        model.chooseRandomizeMatrixQuestions(false)
+        model.closeOverlay()
+        repeat(121) { index ->
+            assertEquals(expected.problem, model.game!!.problem)
+            expected = expected.answer(expected.problem.answer + if (index < 12) 1 else 0,
+                ProblemGenerator(Random(1)))
+            answer(model, correct = index >= 12)
+        }
+        val result = model.lastResult!!
+        assertEquals(Screen.RESULTS, model.screen)
+        assertTrue(result.isMultiplicationMatrix)
+        assertEquals(GameMode.REWARDS, result.gameMode)
+        assertEquals(expected.attempts, result.attempts)
+        val order = result.attempts.map { it.problem }
+        assertEquals(121, order.size)
+        assertEquals(rowOrder.toSet(), order.toSet())
+        assertNotEquals(rowOrder, order)
+        assertEquals(109, result.correct)
+        assertEquals(RewardTier.TIER_2, result.prizeType!!.tier)
+        assertEquals(result, model().history.first { it.id == result.id })
+
+        model.backToSetup()
+        model.openMultiplicationMatrixGame()
+        model.start()
+        repeat(121) { answer(model) }
+        assertEquals(rowOrder, model.lastResult!!.attempts.map { it.problem })
+    }
+
+    @Test fun matrixRandomizationDoesNotChangePracticeOrOrdinaryRewardsQuestions() {
+        GameMode.entries.forEach { mode ->
+            val model = model()
+            model.chooseRandomizeMatrixQuestions(true)
+            if (mode == GameMode.PRACTICE) readyPractice(model, 25, Operation.MULTIPLICATION)
+            else readyRewards(model, 25, Operation.MULTIPLICATION)
+            val generator = ProblemGenerator(Random(7))
+            var expected = GameState.start(Operation.MULTIPLICATION, 10, generator, questionCount = 25)
+            model.start()
+            repeat(25) {
+                assertFalse(model.game!!.isMultiplicationMatrix)
+                assertEquals(expected.problem, model.game!!.problem)
+                expected = expected.answer(expected.problem.answer, generator)
+                answer(model)
+            }
+            assertEquals(expected.attempts, model.lastResult!!.attempts)
+        }
     }
 
     @Test fun multiplicationMatrixStopsAt13WrongWithoutRewards() {

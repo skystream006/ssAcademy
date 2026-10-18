@@ -29,6 +29,50 @@ internal class AdminPinStore(
     }
 
     fun verify(pin: String): Result = synchronized(lock) {
+        val result = checkPin(pin)
+        if (result == Result.UNLOCKED) {
+            check(preferences.edit().putInt("admin_pin_failures", 0).putLong("admin_pin_locked_until", 0).commit())
+        }
+        result
+    }
+
+    fun change(currentPin: String, newPin: String): Result = synchronized(lock) {
+        require(isValid(newPin))
+        val result = checkPin(currentPin)
+        if (result != Result.UNLOCKED) return@synchronized result
+
+        val previousSalt = requireNotNull(preferences.getString("admin_pin_salt", null))
+        val previousHash = requireNotNull(preferences.getString("admin_pin_hash", null))
+        val previousFailures = preferences.getInt("admin_pin_failures", 0)
+        val previousLock = preferences.getLong("admin_pin_locked_until", 0)
+        val salt = ByteArray(16).also { SecureRandom().nextBytes(it) }
+        val hash = derive(newPin, salt)
+        try {
+            check(preferences.edit()
+                .putString("admin_pin_salt", encode(salt))
+                .putString("admin_pin_hash", encode(hash))
+                .putInt("admin_pin_failures", 0)
+                .putLong("admin_pin_locked_until", 0)
+                .commit())
+        } catch (failure: Exception) {
+            // A failed commit can still replace SharedPreferences' in-memory values.
+            // Restore only PIN state, including its protection against repeated guesses.
+            try {
+                check(preferences.edit()
+                    .putString("admin_pin_salt", previousSalt)
+                    .putString("admin_pin_hash", previousHash)
+                    .putInt("admin_pin_failures", previousFailures)
+                    .putLong("admin_pin_locked_until", previousLock)
+                    .commit())
+            } catch (restoreFailure: Exception) {
+                failure.addSuppressed(restoreFailure)
+            }
+            throw failure
+        }
+        Result.UNLOCKED
+    }
+
+    private fun checkPin(pin: String): Result {
         check(hasPin)
         val lockedUntil = preferences.getLong("admin_pin_locked_until", 0)
         if (now() < lockedUntil) return Result.LOCKED
@@ -36,7 +80,6 @@ internal class AdminPinStore(
         val expected = Base64.decode(requireNotNull(preferences.getString("admin_pin_hash", null)), Base64.NO_WRAP)
         check(salt.size == 16 && expected.size == 32)
         if (isValid(pin) && MessageDigest.isEqual(expected, derive(pin, salt))) {
-            check(preferences.edit().putInt("admin_pin_failures", 0).putLong("admin_pin_locked_until", 0).commit())
             return Result.UNLOCKED
         }
         val failures = (if (lockedUntil > 0) 0 else preferences.getInt("admin_pin_failures", 0)) + 1

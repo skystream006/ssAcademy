@@ -38,7 +38,9 @@ data class PracticeResult(
     val pokemonReward: Celebration? = null,
     val gameMode: GameMode = GameMode.REWARDS,
     val isMultiplicationMatrix: Boolean = false,
-    val megaPokemonReward: Celebration? = null
+    val megaPokemonReward: Celebration? = null,
+    val rewardThresholds: RewardThresholds = RewardThresholds(),
+    val matrixRewardTier: RewardTier = RewardTier.TIER_2
 ) {
     val pokemonRewards: Set<Celebration> get() = setOfNotNull(pokemonReward, megaPokemonReward)
     val gameLabel: String get() = if (isMultiplicationMatrix) "Multiplication Matrix" else operation.label
@@ -73,7 +75,8 @@ data class ReadingRewardResult(
     val prizeType: RewardType? = null,
     val prize: PrizeAward? = null,
     val celebration: Celebration? = null,
-    val pokemonReward: Celebration? = null
+    val pokemonReward: Celebration? = null,
+    val rewardThresholds: RewardThresholds = RewardThresholds()
 ) {
     val percentCorrectText: String
         get() {
@@ -179,9 +182,12 @@ class HistoryStore(private val file: File) {
         val snapshot = loadSnapshot()
         val result = snapshot.history.find { it.id == id } ?: return snapshot
         if (result.gameMode != GameMode.REWARDS) return snapshot
+        // Keep the awarded type even if its tier assignment changed after this game.
         val type = result.prizeType ?: return snapshot
+        val matrixTier = result.matrixRewardTier.takeIf { result.isMultiplicationMatrix }
         if (result.prize != null || id in snapshot.claimedResultIds ||
-            !qualifiesForReward(result.questionCount, result.correct, result.attempts.size, result.timedOut)) return snapshot
+            !qualifiesForReward(result.questionCount, result.correct, result.attempts.size, result.timedOut,
+                result.rewardThresholds, matrixTier)) return snapshot
         val balance = (snapshot.rewards[type] ?: RewardBalance()).addFragment()
         val claimed = result.copy(prize = PrizeAward(type, balance))
         return save(snapshot.copy(
@@ -199,9 +205,11 @@ class HistoryStore(private val file: File) {
             result.answered in 0..result.questionCount && result.correct in 0..result.answered)
         require(result.prize == null && result.pokemonReward == null)
         val eligible = result.rewardsEnabledAtStart &&
-            qualifiesForReward(result.questionCount, result.correct, result.answered, result.timedOut)
+            qualifiesForReward(result.questionCount, result.correct, result.answered, result.timedOut, result.rewardThresholds)
         val saved = result.copy(
-            prizeType = result.prizeType?.takeIf { eligible && it.tier == rewardTierForQuestionCount(result.questionCount) },
+            prizeType = result.prizeType?.takeIf {
+                eligible && it.tier == result.rewardThresholds.tierForQuestionCount(result.questionCount)
+            },
             celebration = result.celebration?.takeIf {
                 result.completed && it.isEligibleFor(result.questionCount)
             }
@@ -219,8 +227,9 @@ class HistoryStore(private val file: File) {
         val result = snapshot.readingResults.find { it.sessionId == sessionId } ?: return snapshot
         val type = result.prizeType ?: return snapshot
         if (result.prize != null || !result.rewardsEnabledAtStart ||
-            type.tier != rewardTierForQuestionCount(result.questionCount) ||
-            !qualifiesForReward(result.questionCount, result.correct, result.answered, result.timedOut)) return snapshot
+            type.tier != result.rewardThresholds.tierForQuestionCount(result.questionCount) ||
+            !qualifiesForReward(result.questionCount, result.correct, result.answered, result.timedOut,
+                result.rewardThresholds)) return snapshot
         val balance = (snapshot.rewards[type] ?: RewardBalance()).addFragment()
         return save(snapshot.copy(
             readingResults = snapshot.readingResults.map {
@@ -244,6 +253,15 @@ class HistoryStore(private val file: File) {
     }
 
     fun useReward(type: RewardType): PracticeSnapshot = removeReward(type, fragment = false)
+
+    fun addReward(type: RewardType, fragment: Boolean): PracticeSnapshot {
+        val snapshot = loadSnapshot()
+        val balance = snapshot.rewards[type] ?: RewardBalance()
+        val added = if (fragment) balance.addFragment() else balance.addWhole()
+        return save(snapshot.copy(
+            rewards = snapshot.rewards + (type to added)
+        ))
+    }
 
     fun removeReward(type: RewardType, fragment: Boolean): PracticeSnapshot {
         val snapshot = loadSnapshot()
