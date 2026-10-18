@@ -328,11 +328,11 @@ private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit) {
         ReadingLevelDialog(rememberReadingViewModel(), onDismiss = { showingReadingLevel = false })
         return
     }
-    sectionState.SaveableStateProvider("admin-sections") {
-        AlertDialog(
-            onDismissRequest = onDismiss,
-            title = { Text("Admin", Modifier.fillMaxWidth()) },
-            text = {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Admin", Modifier.fillMaxWidth()) },
+        text = {
+            sectionState.SaveableStateProvider("admin-sections") {
                 Column(Modifier.verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     CollapsibleSettingsSection("My Pokémons", defaultExpanded = false) {
@@ -383,11 +383,11 @@ private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit) {
                             onReadingGames = { showingReadingGames = true })
                     }
                 }
-            },
-            confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
-            modifier = Modifier.testTag("admin-dialog")
-        )
-    }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        modifier = Modifier.testTag("admin-dialog")
+    )
 }
 
 @Composable

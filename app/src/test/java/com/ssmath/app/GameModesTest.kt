@@ -113,6 +113,8 @@ class GameModesTest {
         assertEquals("90.08", result.percentCorrectText)
         assertEquals(RewardTier.TIER_2, result.prizeType!!.tier)
         model.dismissCelebration()
+        assertNotNull(model.celebration)
+        model.dismissCelebration()
         model.claimReward()
         shadowOf(Looper.getMainLooper()).idle()
         assertNotNull(model.lastResult!!.prize)
