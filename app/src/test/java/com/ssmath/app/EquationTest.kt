@@ -45,17 +45,16 @@ class EquationTest {
 
     private fun model() = MathViewModel(application, ProblemGenerator(Random(7)))
 
-    @Test fun verticalEquationsSettingAppearsBetweenShowCorrectAnswersAndAppearance() {
+    @Test fun verticalEquationsSettingFollowsShowCorrectAnswersInsideAdminMathSettings() {
         val model = model()
         compose.setContent { MathTheme { SettingsScreen(model) } }
-        compose.onNodeWithText("Math Settings").performScrollTo().performClick()
-        compose.onNodeWithText("Appearance").performScrollTo()
+        compose.openGameSettings()
+        compose.onNodeWithText("Vertical equations").performScrollTo()
 
         val answers = compose.onNodeWithText("Show correct answers").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
         val vertical = compose.onNodeWithText("Vertical equations").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
-        val appearance = compose.onNodeWithText("Appearance").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
         assertTrue("Vertical equations must follow Show correct answers", answers.bottom <= vertical.top)
-        assertTrue("Vertical equations must precede Appearance", vertical.bottom <= appearance.top)
+        compose.onNodeWithText("Vertical equations").assert(hasAnyAncestor(hasTestTag("admin-dialog")))
     }
 
     @Test fun settingDefaultsToVerticalAndSwitchesLiveWithoutChangingPractice() {
@@ -72,12 +71,13 @@ class EquationTest {
 
         listOf(false, true).forEach { vertical ->
             compose.onNodeWithContentDescription("Settings").performClick()
-            compose.onNodeWithText("Math Settings").performScrollTo().performClick()
+            compose.openGameSettings()
             val toggle = compose.onNodeWithContentDescription("Vertical equations").performScrollTo()
             if (vertical) toggle.assertIsOff() else toggle.assertIsOn()
             toggle.performClick()
             assertEquals(vertical, model.verticalEquations)
             assertEquals(vertical, model().verticalEquations)
+            compose.onNodeWithText("Close").performClick()
             compose.onNodeWithContentDescription("Back").performClick()
             if (vertical) compose.onNodeWithTag("problem").assertContentDescriptionEquals(description)
             else compose.onNodeWithTag("problem").assertTextEquals(description)
@@ -118,7 +118,7 @@ class EquationTest {
 
         compose.onNodeWithTag("done-button").performClick()
         compose.onNodeWithContentDescription("Settings").performClick()
-        compose.onNodeWithText("Math Settings").performScrollTo().performClick()
+        compose.onNodeWithText("Result Histories").performScrollTo().performClick()
         compose.onNodeWithTag("practice-history").performClick()
         compose.onNodeWithText("Multiplication · 1 to 10").performClick()
         compose.onNodeWithContentDescription(description).performScrollTo().assertIsDisplayed()

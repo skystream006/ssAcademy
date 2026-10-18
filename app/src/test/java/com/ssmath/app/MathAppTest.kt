@@ -349,7 +349,7 @@ class MathAppTest {
         model.updateQuestionCount("3")
         compose.setContent { MathAppContent(model) }
         compose.onNodeWithContentDescription("Settings").performClick()
-        compose.onNodeWithText("Math Settings").performScrollTo().performClick()
+        compose.openGameSettings()
         compose.onNodeWithTag("rewards-setup").performScrollTo().assert(hasText("Default Math Reward Game Settings"))
         compose.onNodeWithTag("rewards-setup").performScrollTo().performClick()
         compose.onNode(isDialog()).assertDoesNotExist()
@@ -409,7 +409,7 @@ class MathAppTest {
         val defaults = model.rewardsDefaults
         compose.setContent { MathAppContent(model) }
         compose.onNodeWithContentDescription("Settings").performClick()
-        compose.onNodeWithText("Math Settings").performScrollTo().performClick()
+        compose.openGameSettings()
         compose.onNodeWithTag("rewards-setup").performScrollTo().performClick()
         compose.onNodeWithTag("rewards-ADDITION-first").performScrollTo().performTextReplacement("11")
         compose.onNodeWithTag("save-rewards-setup").performScrollTo().assertIsNotEnabled()
@@ -421,7 +421,7 @@ class MathAppTest {
         compose.onNodeWithText("Settings").assertIsDisplayed()
         assertEquals(Overlay.SETTINGS, model.overlay)
         assertEquals(defaults, model.rewardsDefaults)
-        compose.onNodeWithText("Math Settings").performScrollTo().performClick()
+        compose.openGameSettings()
         compose.onNodeWithTag("rewards-setup").performScrollTo().performClick()
         compose.onNodeWithTag("rewards-ADDITION-first").performScrollTo().assertTextContains("1")
         compose.onNodeWithText("Back").performScrollTo().performClick()
@@ -468,7 +468,7 @@ class MathAppTest {
         }
         compose.onNodeWithText("Cancel").performScrollTo().performClick()
         compose.onNodeWithContentDescription("Settings").performClick()
-        compose.onNodeWithText("Math Settings").performScrollTo().performClick()
+        compose.openGameSettings()
         compose.onNodeWithTag("rewards-setup").performScrollTo().assertIsDisplayed()
         val setupLabel = "Default Math Reward Game Settings"
         assertFalse(textLayout(setupLabel).didOverflowWidth)
@@ -682,7 +682,7 @@ class MathAppTest {
         compose.onNodeWithTag("practice-game").assertIsDisplayed()
         compose.onNode(isDialog()).assertDoesNotExist()
         compose.onNodeWithContentDescription("Settings").performClick()
-        compose.onNodeWithText("Math Settings").performScrollTo().performClick()
+        compose.onNodeWithText("Result Histories").performScrollTo().performClick()
         compose.onNodeWithTag("practice-history").performClick()
         compose.onNodeWithText("Multiplication · 4 to 6").performClick()
         compose.onNodeWithText("Multiplication · numbers 4 to 6").assertIsDisplayed()
@@ -766,7 +766,7 @@ class MathAppTest {
         val check = compose.onNodeWithText("Check for updates").assertIsDisplayed().assertHasClickAction()
             .assertIsEnabled().fetchSemanticsNode().boundsInRoot
         val message = compose.onNodeWithText(UpdateState().message).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
-        val history = compose.onNodeWithText("Math Settings").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val history = compose.onNodeWithText("Result Histories").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
 
         assertTrue(heading.right <= check.left)
         assertTrue(installed.right <= check.left)
@@ -810,11 +810,13 @@ class MathAppTest {
         val model = model()
         compose.setContent { MathAppContent(model) }
         compose.onNodeWithContentDescription("Settings").assertIsDisplayed().performClick()
-        compose.onNodeWithText("Math Settings").performScrollTo().performClick()
+        compose.openGameSettings()
         compose.onNodeWithContentDescription("Show timer").performScrollTo().assertIsOff().performClick()
         assertTrue(model.showTimer)
         compose.onNodeWithContentDescription("Show timer").assertIsOn().performClick().assertIsOff()
         assertFalse(model.showTimer)
+        compose.onNodeWithText("Close").performClick()
+        compose.onNodeWithText("Result Histories").performScrollTo().performClick()
         compose.onNodeWithTag("practice-history").performScrollTo().performClick()
         compose.onNodeWithText("No practice results yet", substring = true).assertIsDisplayed()
         compose.onNodeWithContentDescription("Back").performClick()
@@ -1322,13 +1324,15 @@ class MathAppTest {
         assertEquals(Feedback("Not quite!", false), model.feedback)
 
         compose.onNodeWithContentDescription("Settings").performClick()
-        compose.onNodeWithText("Math Settings").performScrollTo().performClick()
+        compose.openGameSettings()
         compose.onNodeWithContentDescription("Show correct answers").performScrollTo().assertIsOff().performClick().assertIsOn()
+        compose.onNodeWithText("Close").performClick()
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithText(revealedFeedback).assertIsDisplayed()
         compose.onNodeWithContentDescription("Settings").performClick()
-        compose.onNodeWithText("Math Settings").performScrollTo().performClick()
+        compose.openGameSettings()
         compose.onNodeWithContentDescription("Show correct answers").performScrollTo().performClick().assertIsOff()
+        compose.onNodeWithText("Close").performClick()
         compose.onNodeWithContentDescription("Back").performClick()
 
         val second = model.game!!.problem
@@ -1384,28 +1388,32 @@ class MathAppTest {
         assertEquals(1, saved.wrong)
 
         compose.onNodeWithContentDescription("Settings").performClick()
-        compose.onNodeWithText("Math Settings").performScrollTo().performClick()
+        compose.openGameSettings()
         compose.onNodeWithContentDescription("Show correct answers").performScrollTo().performClick()
+        compose.onNodeWithText("Close").performClick()
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithText("Correct answer: ${problem.answer}").assertIsDisplayed()
         compose.onNodeWithContentDescription("Settings").performClick()
-        compose.onNodeWithText("Math Settings").performScrollTo().performClick()
+        compose.openGameSettings()
         compose.onNodeWithContentDescription("Show correct answers").performScrollTo().performClick()
+        compose.onNodeWithText("Close").performClick()
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithText("Correct answer:", substring = true).assertDoesNotExist()
         compose.onNodeWithTag("done-button").performClick()
         assertNull(model.feedback)
 
         compose.onNodeWithContentDescription("Settings").performClick()
-        compose.onNodeWithText("Math Settings").performScrollTo().performClick()
+        compose.onNodeWithText("Result Histories").performScrollTo().performClick()
         compose.onNodeWithTag("practice-history").performClick()
         compose.onNodeWithText("Addition · 1 to 10").performClick()
         compose.onNodeWithText("${problem.text} = $given").assertIsDisplayed()
         compose.onNodeWithText("Correct answer:", substring = true).assertDoesNotExist()
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithContentDescription("Back").performClick()
-        compose.onNodeWithText("Math Settings").performScrollTo().performClick()
+        compose.openGameSettings()
         compose.onNodeWithContentDescription("Show correct answers").performScrollTo().performClick()
+        compose.onNodeWithText("Close").performClick()
+        compose.onNodeWithText("Result Histories").performScrollTo().performClick()
         compose.onNodeWithTag("practice-history").performScrollTo().performClick()
         compose.onNodeWithText("Addition · 1 to 10").performClick()
         compose.onNodeWithText("Correct answer: ${problem.answer}").assertIsDisplayed()
@@ -1457,7 +1465,7 @@ class MathAppTest {
         assertTrue(result.attempts.all { it.problem.left in 1..100 && it.problem.right in 1..7 })
         compose.onNodeWithTag("done-button").performClick()
         compose.onNodeWithContentDescription("Settings").performClick()
-        compose.onNodeWithText("Math Settings").performScrollTo().performClick()
+        compose.onNodeWithText("Result Histories").performScrollTo().performClick()
         compose.onNodeWithTag("practice-history").performClick()
         compose.onNodeWithText("Division · first up to 100 · second up to 7").assertIsDisplayed()
     }

@@ -347,7 +347,7 @@ enum class Celebration(
         ): Celebration? {
             val pool = when {
                 gameMode == GameMode.PRACTICE -> entries.filter { it.category == CelebrationCategory.OTHER }
-                isMultiplicationMatrix && questionCount == MultiplicationMatrix.QUESTION_COUNT -> entries
+                isMultiplicationMatrix && questionCount == MultiplicationMatrix.QUESTION_COUNT -> megaPokemons
                 else -> standardCelebrations
             }
             val eligible = pool.filter { it.isEligibleFor(questionCount, gameMode, isMultiplicationMatrix) }
@@ -375,6 +375,7 @@ internal fun CelebrationDialog(
     celebration: Celebration,
     replay: Boolean = false,
     onPresented: () -> Unit = {},
+    hasNextCelebration: Boolean = false,
     onFinished: () -> Unit
 ) {
     val progress = remember(celebration) { Animatable(0f) }
@@ -410,7 +411,7 @@ internal fun CelebrationDialog(
         },
         confirmButton = {
             TextButton(onClick = onFinished, modifier = Modifier.testTag(if (replay) "close-celebration" else "view-results")) {
-                Text(if (replay) "Close" else "View results")
+                Text(if (replay) "Close" else if (hasNextCelebration) "Next celebration" else "View results")
             }
         }
     )

@@ -103,6 +103,8 @@ class MathViewModel(
         private set
     var celebration by mutableStateOf<Celebration?>(null)
         private set
+    private var queuedCelebrations: List<Celebration> = emptyList()
+    val hasNextCelebration: Boolean get() = queuedCelebrations.isNotEmpty()
     var selectingCelebration by mutableStateOf(false)
         private set
     var earlyFinishMessage by mutableStateOf<String?>(null)
@@ -380,6 +382,7 @@ class MathViewModel(
         game = null
         answerText = ""
         celebration = null
+        queuedCelebrations = emptyList()
         selectingCelebration = false
         earlyFinishMessage = null
         lastResult = null
@@ -408,6 +411,7 @@ class MathViewModel(
         progressIcon = ProgressIcon.entries.random(progressIconRandom)
         answerText = ""
         celebration = null
+        queuedCelebrations = emptyList()
         selectingCelebration = false
         earlyFinishMessage = null
         lastResult = null
@@ -455,6 +459,7 @@ class MathViewModel(
         lastResult = result
         val answeredAllQuestions = !expired && state.attempts.size == state.questionCount
         celebration = null
+        queuedCelebrations = emptyList()
         selectingCelebration = answeredAllQuestions
         earlyFinishMessage = if (expired) "Time's up! You got ${state.correct} right out of ${state.questionCount}"
             else if (answeredAllQuestions) null
@@ -466,9 +471,16 @@ class MathViewModel(
             try {
                 storeLock.withLock {
                     if (pendingResult === pending) {
-                        celebration = if (selectingCelebration && collectionLoaded)
+                        val selected = if (selectingCelebration && collectionLoaded) buildList {
                             Celebration.select(state.questionCount, celebrationRandom, pokemons, result.gameMode,
-                                isMultiplicationMatrix = result.isMultiplicationMatrix) else null
+                                isMultiplicationMatrix = result.isMultiplicationMatrix)?.let { add(it) }
+                            if (result.isMultiplicationMatrix) {
+                                Celebration.select(state.questionCount, celebrationRandom, pokemons, result.gameMode)
+                                    ?.let { add(it) }
+                            }
+                        } else emptyList()
+                        celebration = selected.firstOrNull()
+                        queuedCelebrations = selected.drop(1)
                         selectingCelebration = false
                     }
                     persistResult(pending)
@@ -493,6 +505,7 @@ class MathViewModel(
         game = null
         answerText = ""
         celebration = null
+        queuedCelebrations = emptyList()
         selectingCelebration = false
         earlyFinishMessage = null
         pendingResult = null
@@ -505,13 +518,14 @@ class MathViewModel(
     }
 
     fun dismissCelebration() {
-        celebration = null
+        celebration = queuedCelebrations.firstOrNull()
+        queuedCelebrations = queuedCelebrations.drop(1)
         selectingCelebration = false
     }
 
     fun collectPresentedCelebration(presented: Celebration) {
         val pending = pendingResult ?: return
-        if (celebration != presented || overlay != null || pending.result.pokemonReward != null) return
+        if (celebration != presented || overlay != null || presented in pending.result.pokemonRewards) return
         if (!presented.isEligibleFor(pending.result.questionCount, pending.result.gameMode,
                 pending.result.isMultiplicationMatrix)) return
         collectCelebrations(listOf(presented), pending)
@@ -1016,11 +1030,12 @@ class MathViewModel(
 
     private fun removeDeletedResultReward(id: Long) {
         if (lastResult?.id == id) {
-            lastResult = lastResult?.copy(prizeType = null, prize = null, pokemonReward = null)
+            lastResult = lastResult?.copy(prizeType = null, prize = null, pokemonReward = null, megaPokemonReward = null)
+            queuedCelebrations = emptyList()
             dismissCelebration()
         }
         pendingResult?.takeIf { it.saved && it.result.id == id }?.let {
-            it.result = it.result.copy(prizeType = null, prize = null, pokemonReward = null)
+            it.result = it.result.copy(prizeType = null, prize = null, pokemonReward = null, megaPokemonReward = null)
         }
         if (rewardResult?.id == id) dismissReward()
     }

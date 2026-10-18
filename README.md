@@ -36,7 +36,7 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    reward types; unavailable prizes are indicated when rewards are disabled.
    Question counts are chosen per game, not saved in Rewards Game defaults, and
    do not change your Practice Game choices. Change the number limits in
-   **Settings > Math Settings > Default Math Reward Game Settings**.
+   **Settings > Admin > Game Settings > Math Settings > Default Math Reward Game Settings**.
    **Cancel** or Android Back closes either game dialog.
    **Multiplication Matrix Rewards Game** has a fixed **121 questions**, covering every pair
    from **1 × 1 through 11 × 11** in row order: 1 × 1, 1 × 2, …, 1 × 11, then
@@ -93,12 +93,14 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    Rewards Games below 15 questions go straight to results without an animation.
    Practice Game uses only the five Other scenes, regardless of question count,
    without awarding prizes or Pokémon.
-   Matrix completions can additionally select from **95 Mega Pokémon forms**, including
+   Matrix completions award **two animations**: one of **95 Mega Pokémon forms** and
+   one standard **Pokémon or Other** scene, shown in that order before any Tier 2 gift. Mega forms include
    the separate X/Y/Z variants and three Tatsugiri entries. Each shows **Mega Pokémon**,
    its name and its supplied Ndex (including suffixes) and appears in the separate
    **Mega Pokémons** collection section, with an offline preview and replay.
-   Matrix games prefer uncollected scenes across all three categories, allowing repeats
-   once that complete pool has been collected. Mega celebrations, like other animations,
+   Matrix games prefer uncollected scenes independently in the Mega and standard pools,
+   allowing repeats in each pool once it is complete. Both celebrations are saved with the result.
+   Mega celebrations, like other animations,
    are collected on live presentation, never by replay, and do not require prize fragments
    to be enabled. Early exits and timeouts do not award celebrations.
    Each animation shows its name alongside the scene, which says **Hurray!!**. These animations
@@ -121,14 +123,17 @@ were used instead. The drawings are simplified original renditions, not copies o
 The semi-transparent (50% opacity) settings button in the bottom-right corner opens
 **Settings**:
 
-**Rewards** and each subject's settings are collapsed by default; tap a heading to
+**Rewards**, **Result Histories**, and each subject's settings are collapsed by default; tap a heading to
 expand or collapse it without changing your choices. **Rewards** contains
-**My Rewards** and **My Pokémons**. **Math Settings** contains
-**Math Rewards System**, **Math Practice History**,
+**My Rewards** and **My Pokémons**. **Result Histories** contains all four subjects'
+practice histories, accessible without opening Admin.
+Subject settings are under **Admin > Game Settings** (see [Debug logging](#debug-logging)
+for opening Admin); every Admin section starts collapsed.
+**Math Settings** contains **Math Rewards System**,
 **Show timer** (and its conditional **Time limit per 5 questions**), **Show correct answers**,
 **Vertical equations**, and **Default Math Reward Game Settings**.
 **Reading Settings** contains **Reading Progress**, **Set Reading Level**, **Active Reading Games**,
-**Reading Rewards System**, **Reading Practice History**, and **Import / Update Reading Activities**.
+**Reading Rewards System**, and **Import / Update Reading Activities**.
 The import button shows the installed pack version, counts by game/level, and download progress.
 **Set Reading Level** opens a dialog
 with **Sprout**, **Trail**, and **Summit**, in increasing difficulty; existing drafts keep their original level.
@@ -146,8 +151,8 @@ Linked celebrations are removed unless another saved result also
 earned them. Other readers' unrelated history, Math history, and imported activities are kept.
 Rewards whose ownership records were already discarded by older app versions cannot be
 linked back to deleted games and are kept.
-**Science Settings** and **Advanced Subject Settings** each have their own rewards switch
-and practice history; these show an empty state until their activities are available.
+**Science Settings** and **Advanced Subject Settings** each have their own rewards switch.
+Their practice histories in **Result Histories** show an empty state until their activities are available.
 All four reward switches are independent and on by default. Existing Math reward
 preferences are preserved, and disabling a subject's rewards never removes earned rewards.
 Saved preferences are preserved; the defaults below apply when no choice has been saved.
@@ -174,7 +179,7 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   Tap an image to replay its animation; close it or wait for it to finish to return to your collection.
   The collection is saved on this device. Each presented celebration is also recorded
   with its practice result, including repeat celebrations; replaying an image does not award it again.
-- **Math Practice History** – under Math Settings, review any previously saved math result, delete one, or clear all.
+- **Math Practice History** – under Result Histories, review any previously saved math result, delete one, or clear all.
   Rewards Game entries have a translucent theme-colored background to distinguish
   them from Practice Game entries, even when no prize was earned.
   Deleting results also removes their claimed reward fragments from the available
@@ -259,7 +264,7 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
 On first startup, **Welcome to the Academy! What is your name?** asks for one local
 name (a nickname is enough) to use across the app. An existing saved reader name is
 reused; there is no add-reader or switch-reader screen.
-On a new installation, open **Settings → Reading Settings → Import / Update Reading Activities**
+On a new installation, open **Settings → Admin → Game Settings → Reading Settings → Import / Update Reading Activities**
 to install the repository's reading library. Internet is required for import/update only;
 installed activities and saved drafts work offline. Empty games explain where to import.
 **Summit**, above Trail, adds more complex sentences, vocabulary in context, inference,
@@ -268,7 +273,7 @@ get Summit content; merely selecting a level does not download anything.
 Open **Reading** on the home screen to choose from illustrated square game buttons.
 **Rewards** and **Pokémon** shortcuts stay at the top, as on the Math page.
 Reading history is separate from math history; prizes and Pokémon use the shared collections.
-Open **Settings → Reading Settings → Reading Practice History**, then **Review questions and answers**
+Open **Settings → Result Histories → Reading Practice History**, then **Review questions and answers**
 on a game or activity to review it without changing your current draft. The same review is
 available from Results. Use **Previous** and **Next** to see each assigned question, its
 original passage, choices, saved response, and correct answer or accepted orders. Evidence
@@ -277,7 +282,7 @@ Unsubmitted drafts and unfinished questions are labeled separately from incorrec
 Games and responses are saved automatically on this device and remain reviewable offline after
 restarting or updating the activity library, using the activity revision assigned at launch.
 Older single-activity results show their latest saved response, not every earlier retry.
-Use **Settings → Reading Settings →
+Use **Settings → Admin → Game Settings → Reading Settings →
 Set Reading Level** to choose a level, and **Reading Progress** to view the private dashboard.
 Select **15**, **25**, or **50** under **How many questions would you like?**, using
 the same Poké Ball, blue gift, and purple gift buttons as Math. Then tap a game to
@@ -548,18 +553,20 @@ the device and can be viewed, shared or cleared from Settings.
 
 Tap the description beginning **Off by default** below **Enable debug logging**
 seven times to open the **Admin** dialog. Opening or closing it does not add animations.
-Press **Add all animations** to add all standard celebrations to **My Pokémons**, without
+All sections start collapsed: **Game Settings** (with separate collapsed subject settings),
+**My Pokémons**, **My Rewards**, **Reading activities**, and **Available rewards**.
+Expand **My Pokémons**, then press **Add all animations** to add all standard celebrations to **My Pokémons**, without
 duplicating ones already collected or changing history and rewards. This admin action
 does not unlock Mega Pokémons: they can only be earned in the math matrix game.
 
-Press **Remove rewards** to view available balances by tier. Choose **Remove 1 fragment**
+Expand **My Rewards**, then press **Remove rewards** to view available balances by tier. Choose **Remove 1 fragment**
 or **Remove 1 whole reward** for a reward, then confirm **Remove**; **Cancel** leaves it
 unchanged. Each action removes one of the selected units, without breaking whole rewards
 into fragments or changing the other units, practice history, or My Pokémons. Empty balances
 cannot be removed. Changes are saved on this device and cannot be undone; claimed gifts
 cannot be claimed again. **Back to admin** returns to the Admin dialog.
 
-Press **View reading activities database** to browse the installed activity library,
+Expand **Reading activities**, then press **View reading activities database** to browse the installed activity library,
 filter by game and level, and inspect activity IDs, passages, questions, correct
 answers, orders, and story prompts. The browser is read-only and works offline.
 

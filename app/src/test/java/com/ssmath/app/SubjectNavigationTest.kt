@@ -70,10 +70,9 @@ class SubjectNavigationTest {
         model.openSettings()
         compose.setContent { MathAppContent(model) }
         Subject.entries.forEach { subject ->
-            compose.onNodeWithText(
-                if (subject == Subject.ADVANCED) "Advanced Subject Settings" else "${subject.label} Settings")
-                .performScrollTo().performClick()
+            compose.onNodeWithText("Result Histories").performScrollTo().performClick()
             compose.onNodeWithText("${subject.label} Practice History").performScrollTo().performClick()
+            compose.onNodeWithTag("admin-dialog").assertDoesNotExist()
             compose.onNodeWithText("${subject.label} Practice History").assertIsDisplayed()
             if (subject == Subject.READING) {
                 compose.waitUntil(5_000) {
@@ -193,10 +192,12 @@ class SubjectNavigationTest {
         val model = model()
         model.openSettings()
         compose.setContent { MathAppContent(model) }
-        compose.onNodeWithText("Reading Settings").performScrollTo().performClick()
+        compose.openGameSettings(Subject.READING)
         compose.onNodeWithTag("active-reading-games").performScrollTo().performClick()
         compose.onNodeWithContentDescription(ReadingGame.MISSING.title).performScrollTo()
             .assertIsOn().performClick().assertIsOff()
+        compose.onNodeWithText("Close").performClick()
+        compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
         compose.onNodeWithText("Close").performClick()
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithTag("subject-Reading").performScrollTo().performClick()
@@ -228,7 +229,7 @@ class SubjectNavigationTest {
             compose.onNodeWithTag("reading-menu").assertIsDisplayed()
         }
         compose.onNodeWithTag("settings-button").performClick()
-        compose.onNodeWithText("Reading Settings").performScrollTo().performClick()
+        compose.openGameSettings(Subject.READING)
         compose.onNodeWithTag("set-reading-level").performScrollTo().performClick()
         compose.onNodeWithTag("reading-level-SPROUT").assertIsSelected()
         compose.onNodeWithTag("reading-level-TRAIL").performScrollTo().performClick()
@@ -238,13 +239,16 @@ class SubjectNavigationTest {
         }
         compose.onNodeWithTag("reading-level-TRAIL").assertIsSelected()
         compose.onNodeWithText("Done").performClick()
+        compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
         val persisted = ReadingSqliteStore(application).load().withoutCatalogueRefs()
         assertEquals(data.attempts, persisted.attempts)
         assertEquals(ReadingLevel.TRAIL, persisted.profile?.level)
         compose.onNodeWithTag("reading-progress").performScrollTo().performClick()
+        compose.onNodeWithTag("admin-dialog").assertDoesNotExist()
         compose.onNodeWithTag("reading-dashboard").assertIsDisplayed()
         compose.onNodeWithTag("reading-back").performScrollTo().performClick()
         assertEquals(Overlay.SETTINGS, model.overlay)
+        compose.onNodeWithTag("admin-dialog").assertDoesNotExist()
         compose.onNodeWithContentDescription("Back").performClick()
         assertEquals(Overlay.READING, model.overlay)
         compose.onNodeWithTag("reading-menu").assertIsDisplayed()

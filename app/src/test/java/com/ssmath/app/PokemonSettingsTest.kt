@@ -53,7 +53,7 @@ class PokemonSettingsTest {
         compose.onNodeWithText("Rewards").performClick()
         val rewards = compose.onNodeWithTag("my-rewards").fetchSemanticsNode().boundsInRoot
         val pokemons = compose.onNodeWithTag("my-pokemons").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
-        val history = compose.onNodeWithText("Math Settings").fetchSemanticsNode().boundsInRoot
+        val history = compose.onNodeWithText("Result Histories").fetchSemanticsNode().boundsInRoot
         assertTrue(rewards.bottom <= pokemons.top)
         assertTrue(pokemons.bottom <= history.top)
         compose.onNodeWithTag("my-pokemons").performClick()
@@ -135,10 +135,27 @@ class PokemonSettingsTest {
         assertEquals(CelebrationCategory.MEGA_POKEMONS, mega.category)
         compose.onNodeWithTag("celebration-${mega.name}").assertIsDisplayed()
         compose.onNodeWithText("Mega Pokémon").assertIsDisplayed()
-        compose.waitUntil(5_000) { model.lastResult?.pokemonReward == mega }
+        compose.waitUntil(5_000) { model.lastResult?.megaPokemonReward == mega }
         compose.onNodeWithTag("view-results").performClick()
+        compose.mainClock.advanceTimeBy(64)
+        val standard = requireNotNull(model.celebration)
+        assertTrue(standard in Celebration.standardCelebrations)
+        compose.onNodeWithTag("celebration-${standard.name}").assertIsDisplayed()
+        compose.waitUntil(5_000) { model.lastResult?.pokemonReward == standard }
+        compose.onNodeWithTag("view-results").performClick()
+        compose.mainClock.advanceTimeBy(64)
+        compose.onNodeWithText("My Pokémons: ${mega.collectionLabel}").assertIsDisplayed()
+        compose.onNodeWithText("My Pokémons: ${standard.collectionLabel}").assertIsDisplayed()
         compose.runOnIdle {
             model.done()
+            model.openHistory()
+        }
+        compose.mainClock.advanceTimeBy(64)
+        compose.onNodeWithText("My Pokémons: ${mega.collectionLabel}").assertIsDisplayed()
+        compose.onNodeWithText("My Pokémons: ${standard.collectionLabel}").assertIsDisplayed()
+        compose.runOnIdle {
+            model.closeOverlay()
+            model.closeOverlay()
             model.openPokemons()
         }
         compose.mainClock.advanceTimeBy(64)
@@ -311,11 +328,14 @@ class PokemonSettingsTest {
         compose.onNodeWithText("Admin").assertDoesNotExist()
         description.performClick()
         compose.onNodeWithText("Admin").assertIsDisplayed()
+        compose.onNodeWithText("Add all animations").assertDoesNotExist()
+        compose.onNodeWithText("My Pokémons").performScrollTo().performClick()
         compose.onNodeWithText("Add all animations").assertIsDisplayed()
         assertEquals(before, store.loadSnapshot())
         compose.onNodeWithText("Close").performClick()
         assertEquals(before.pokemons, model.pokemons)
         repeat(7) { description.performClick() }
+        compose.onNodeWithText("My Pokémons").performScrollTo().performClick()
         compose.onNodeWithText("Add all animations").performClick()
         val expected = before.copy(pokemons = Celebration.standardCelebrations.toSet())
         assertEquals(expected.pokemons, model.pokemons)
@@ -324,6 +344,7 @@ class PokemonSettingsTest {
         compose.onNodeWithText("162/162 animations collected").assertIsDisplayed()
         compose.onNodeWithText("Close").performClick()
         repeat(7) { description.performClick() }
+        compose.onNodeWithText("My Pokémons").performScrollTo().performClick()
         compose.onNodeWithText("Add all animations").assertIsNotEnabled()
         assertEquals(expected, store.loadSnapshot())
         compose.onNodeWithText("Close").performClick()
@@ -347,8 +368,10 @@ class PokemonSettingsTest {
         val description = compose.onNodeWithTag("debug-logging-description").performScrollTo()
         repeat(7) { description.performClick() }
         assertTextFits("Admin")
+        compose.onNodeWithText("My Pokémons").performScrollTo().performClick()
         compose.onNodeWithText("Add all animations").performScrollTo()
         assertTextFits("Add all animations")
+        compose.onNodeWithText("Available rewards").performScrollTo().performClick()
         RewardTier.entries.forEach { tier ->
             val heading = "${tier.label} · ${tier.questionCountLabel}"
             compose.onNodeWithText(heading).performScrollTo()

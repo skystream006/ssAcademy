@@ -102,7 +102,7 @@ class ReadingPackSettingsTest {
     @Test fun emptyMenuGuidesImportAndRapidStartsAssignOnlyOneActivity() {
         val model = model(readingTestImporter(store.catalog, application.cacheDir, pool))
         compose.setContent { ReadingModule(model, {}, 100, {}) }
-        compose.onNodeWithText("Import reading activities in Settings > Reading Settings to begin. Saved drafts can still be resumed.")
+        compose.onNodeWithText("Import reading activities in Settings > Admin > Game Settings > Reading Settings to begin. Saved drafts can still be resumed.")
             .performScrollTo().assertIsDisplayed()
         compose.runOnIdle { model.start(ReadingGame.MISSING) }
         await { model.message?.contains("Import reading activities") == true }

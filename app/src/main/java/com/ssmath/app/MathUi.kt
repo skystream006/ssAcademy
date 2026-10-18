@@ -236,6 +236,7 @@ private fun MainContent(model: MathViewModel) {
             }
             model.celebration?.let { celebration ->
                 CelebrationDialog(celebration, onFinished = model::dismissCelebration,
+                    hasNextCelebration = model.hasNextCelebration,
                     onPresented = { model.collectPresentedCelebration(celebration) })
             }
             model.earlyFinishMessage?.let { message ->
@@ -604,7 +605,7 @@ private fun ReadyDialog(model: MathViewModel) {
             Text("Answer each row in order: 1 × 1 to 1 × 11, then 2 × 1 to 2 × 11, up to 11 × 11.")
             Text("The same Rewards Game rules apply: finish all 121 questions with more than 90% correct " +
                 "before the time limit, if enabled. The game ends at 13 wrong answers.")
-            Text("Exclusive celebration tier: Mega Pokémons. Complete the matrix for a chance to collect a Mega Pokémon.")
+            Text("Complete the matrix to collect both a Mega Pokémon and a Pokémon or Other animation.")
             if (model.rewardsEnabled) Text("Eligible for enabled Tier 2 prize fragments.")
             else Text("Prize fragments are unavailable while Math Rewards System is OFF.")
         }
@@ -792,7 +793,7 @@ internal fun ResultsContent(result: PracticeResult, title: String?, showCorrectA
                         Text("Answered: ${result.attempts.size} of ${result.questionCount} · ${result.percentCorrectText}% correct")
                     }
                     if (result.timedOut) Text("Time's up!", color = WrongRed)
-                    result.pokemonReward?.let {
+                    result.pokemonRewards.forEach {
                         Text("My Pokémons: ${it.collectionLabel}", style = MaterialTheme.typography.titleMedium)
                     }
                     result.prize?.let { prize ->

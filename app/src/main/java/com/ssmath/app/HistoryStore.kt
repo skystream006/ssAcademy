@@ -37,8 +37,10 @@ data class PracticeResult(
     val maximumSecond: Int? = null,
     val pokemonReward: Celebration? = null,
     val gameMode: GameMode = GameMode.REWARDS,
-    val isMultiplicationMatrix: Boolean = false
+    val isMultiplicationMatrix: Boolean = false,
+    val megaPokemonReward: Celebration? = null
 ) {
+    val pokemonRewards: Set<Celebration> get() = setOfNotNull(pokemonReward, megaPokemonReward)
     val gameLabel: String get() = if (isMultiplicationMatrix) "Multiplication Matrix" else operation.label
     val numberDescription: String get() =
         if (operation == Operation.DIVISION && maximumSecond != null) "first up to $maximum · second up to $maximumSecond"
@@ -153,7 +155,7 @@ class HistoryStore(private val file: File) {
         val snapshot = loadSnapshot()
         val existing = snapshot.history.find { it.id == result.id }
         if (existing == null && result.id in snapshot.claimedResultIds) return snapshot.history
-        return save(withResult(snapshot, existing?.takeIf { it.prize != null || it.pokemonReward != null } ?: result)).history
+        return save(withResult(snapshot, existing?.takeIf { it.prize != null || it.pokemonRewards.isNotEmpty() } ?: result)).history
     }
 
     /** Allocate the ID and save in the same caller-held lock, including after a clock rollback. */
@@ -263,13 +265,18 @@ class HistoryStore(private val file: File) {
     fun collectPokemon(id: Long, celebration: Celebration): PracticeSnapshot {
         val snapshot = loadSnapshot()
         val result = snapshot.history.find { it.id == id } ?: return snapshot
-        if (result.pokemonReward != null) return snapshot
+        val mega = celebration.category == CelebrationCategory.MEGA_POKEMONS
+        if (result.pokemonRewards.any { (it.category == CelebrationCategory.MEGA_POKEMONS) == mega }) return snapshot
         if (result.gameMode == GameMode.PRACTICE && celebration.category != CelebrationCategory.OTHER) return snapshot
-        if (celebration.category == CelebrationCategory.MEGA_POKEMONS &&
-            (!celebration.isEligibleFor(result.questionCount, result.gameMode, result.isMultiplicationMatrix) ||
-                result.timedOut || result.attempts.size != result.questionCount)) return snapshot
+        if (mega && !celebration.isEligibleFor(result.questionCount, result.gameMode, result.isMultiplicationMatrix)) return snapshot
+        if ((mega || result.isMultiplicationMatrix) &&
+            (result.timedOut || result.attempts.size != result.questionCount)) return snapshot
+        val collected = if (mega) result.copy(megaPokemonReward = celebration)
+            else result.copy(pokemonReward = celebration,
+                megaPokemonReward = result.megaPokemonReward ?:
+                    result.pokemonReward?.takeIf { it.category == CelebrationCategory.MEGA_POKEMONS })
         return save(snapshot.copy(
-            history = snapshot.history.map { if (it.id == id) it.copy(pokemonReward = celebration) else it },
+            history = snapshot.history.map { if (it.id == id) collected else it },
             pokemons = snapshot.pokemons + celebration
         ))
     }
@@ -312,7 +319,7 @@ class HistoryStore(private val file: File) {
         val remaining = snapshot.readingResults.filterNot { it.sessionId in sessionIds }
         val pokemonsToRemove = collected -
             remaining.mapNotNull { it.pokemonReward }.toSet() -
-            snapshot.history.mapNotNull { it.pokemonReward }.toSet()
+            snapshot.history.flatMap { it.pokemonRewards }.toSet()
         return snapshot.copy(
             readingResults = remaining,
             recordedReadingSessionIds = snapshot.recordedReadingSessionIds + sessionIds,
@@ -325,8 +332,8 @@ class HistoryStore(private val file: File) {
         val ids = removed.map { it.id }.toSet()
         val fragments = removed.mapNotNull { it.prize?.type }.groupingBy { it }.eachCount()
         val remaining = snapshot.history.filterNot { it.id in ids }
-        val pokemonsToRemove = removed.mapNotNull { it.pokemonReward }.toSet() -
-            remaining.mapNotNull { it.pokemonReward }.toSet() -
+        val pokemonsToRemove = removed.flatMap { it.pokemonRewards }.toSet() -
+            remaining.flatMap { it.pokemonRewards }.toSet() -
             snapshot.readingResults.mapNotNull { it.pokemonReward }.toSet()
         // Keep claimed IDs to prevent a stale save from restoring a deleted prize.
         return snapshot.copy(
