@@ -39,6 +39,15 @@ class AdminMenuTest {
         DebugLog.initialize(application)
     }
 
+    @Test fun adminMenuAppearsBelowAppearance() {
+        val model = MathViewModel(application)
+        compose.setContent { MathTheme { SettingsScreen(model) } }
+        compose.onNodeWithTag("admin-menu").performScrollTo().assertIsDisplayed()
+        val appearance = compose.onNodeWithText("Appearance").fetchSemanticsNode().boundsInRoot
+        val admin = compose.onNodeWithTag("admin-menu").fetchSemanticsNode().boundsInRoot
+        assertTrue("Admin Menu should follow Appearance", admin.top >= appearance.bottom)
+    }
+
     @Test fun firstEntryRequiresValidMatchingPinAndEachReopeningRequiresVerification() {
         val model = MathViewModel(application)
         compose.setContent { MathTheme { SettingsScreen(model) } }
