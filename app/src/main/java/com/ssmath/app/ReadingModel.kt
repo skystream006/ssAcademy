@@ -96,7 +96,8 @@ data class ReadingSession(
     val prizeType: RewardType? = null,
     val timedOut: Boolean = false,
     val timeLimitMs: Long? = null,
-    val elapsedMs: Long = 0
+    val elapsedMs: Long = 0,
+    val rewardThresholds: RewardThresholds = RewardThresholds()
 ) {
     val questionCount: Int get() = attemptIds.size
 }
@@ -382,13 +383,14 @@ object ReadingEngine {
 
     fun submit(data: ReadingData, key: String, now: Long = System.currentTimeMillis(),
                rewardsEnabled: Boolean = true,
-               disabledRewards: Set<RewardType> = emptySet(), random: Random = Random.Default): ReadingData {
+               disabledRewards: Set<RewardType> = emptySet(), random: Random = Random.Default,
+               rewardThresholds: RewardThresholds = RewardThresholds()): ReadingData {
         val session = data.activeSession
         if (session != null && key == "bonus") return data
         val updated = submitCheckpoint(data, key, now)
         if (session == null || updated == data || updated.active?.let(::wrong) != true) return updated
         val finished = edit(updated) { it.copy(finishedAt = now) }
-        return completeSessionIfNeeded(finished, now, rewardsEnabled, disabledRewards, random)
+        return completeSessionIfNeeded(finished, now, rewardsEnabled, disabledRewards, random, rewardThresholds)
     }
 
     private fun submitCheckpoint(data: ReadingData, key: String, now: Long): ReadingData = edit(data) { a ->
@@ -431,16 +433,17 @@ object ReadingEngine {
         "In the end, this character ${a.fields["ending"].orEmpty()}."
 
     fun finish(data: ReadingData, now: Long = System.currentTimeMillis(), rewardsEnabled: Boolean = true,
-               disabledRewards: Set<RewardType> = emptySet(), random: Random = Random.Default): ReadingData {
+               disabledRewards: Set<RewardType> = emptySet(), random: Random = Random.Default,
+               rewardThresholds: RewardThresholds = RewardThresholds()): ReadingData {
         val a = data.active ?: return data
         if (!a.open || !ready(a)) return data
         val updated = edit(data) { it.copy(finishedAt = now) }
         if (updated == data) return data
         if (a.game != ReadingGame.STUDIO)
-            return completeSessionIfNeeded(updated, now, rewardsEnabled, disabledRewards, random)
+            return completeSessionIfNeeded(updated, now, rewardsEnabled, disabledRewards, random, rewardThresholds)
         val story = ReadingStory(a.id, a.content.title, storyText(a), a.content.picture.symbol, listOf(a.ownerId), now)
         return completeSessionIfNeeded(updated.copy(stories = updated.stories.filterNot { it.attemptId == a.id } + story),
-            now, rewardsEnabled, disabledRewards, random)
+            now, rewardsEnabled, disabledRewards, random, rewardThresholds)
     }
 
     fun nextSessionActivity(data: ReadingData): ReadingData {
@@ -454,27 +457,31 @@ object ReadingEngine {
     }
 
     private fun completeSessionIfNeeded(data: ReadingData, now: Long, rewardsEnabled: Boolean,
-                                       disabledRewards: Set<RewardType>, random: Random): ReadingData {
+                                       disabledRewards: Set<RewardType>, random: Random,
+                                       rewardThresholds: RewardThresholds): ReadingData {
         val session = data.activeSession ?: return data
         return if (data.sessionWrong(session) * 10 > session.questionCount ||
             data.sessionAnswered(session) == session.questionCount)
             endSession(data, session.id, now, rewardsEnabled = rewardsEnabled,
-                disabledRewards = disabledRewards, random = random)
+                disabledRewards = disabledRewards, random = random, rewardThresholds = rewardThresholds)
         else data
     }
 
     fun endSession(data: ReadingData, id: String, now: Long = System.currentTimeMillis(),
                    abandoned: Boolean = false, timedOut: Boolean = false, rewardsEnabled: Boolean = false,
-                   disabledRewards: Set<RewardType> = emptySet(), random: Random = Random.Default): ReadingData {
+                   disabledRewards: Set<RewardType> = emptySet(), random: Random = Random.Default,
+                   rewardThresholds: RewardThresholds = RewardThresholds()): ReadingData {
         val session = data.sessions.first { it.id == id }
         if (session.finishedAt != null) return data
         require(!timedOut || (session.timeLimitMs != null && session.elapsedMs >= session.timeLimitMs))
         require(abandoned || timedOut || data.sessionAnswered(session) == session.questionCount ||
             data.sessionWrong(session) * 10 > session.questionCount)
         val prize = if (abandoned) null else selectPrize(session.questionCount, data.sessionCorrect(session),
-            data.sessionAnswered(session), session.rewardsEnabledAtStart, rewardsEnabled, timedOut, random, disabledRewards)
+            data.sessionAnswered(session), session.rewardsEnabledAtStart, rewardsEnabled, timedOut, random, disabledRewards,
+            rewardThresholds)
         return data.copy(sessions = data.sessions.map {
-            if (it.id == id) it.copy(finishedAt = now, abandoned = abandoned, timedOut = timedOut, prizeType = prize) else it
+            if (it.id == id) it.copy(finishedAt = now, abandoned = abandoned, timedOut = timedOut, prizeType = prize,
+                rewardThresholds = rewardThresholds) else it
         }, attempts = data.attempts.map {
             if (it.id in session.attemptIds && it.open) it.copy(abandoned = true) else it
         })
@@ -529,8 +536,9 @@ object ReadingEngine {
             }
             session.prizeType?.let {
                 require(session.finishedAt != null && !session.abandoned && session.rewardsEnabledAtStart)
-                require(qualifiesForReward(session.questionCount, data.sessionCorrect(session), answered, session.timedOut))
-                require(it.tier == rewardTierForQuestionCount(session.questionCount))
+                require(qualifiesForReward(session.questionCount, data.sessionCorrect(session), answered, session.timedOut,
+                    session.rewardThresholds))
+                require(it.tier == session.rewardThresholds.tierForQuestionCount(session.questionCount))
             }
         }
         data.attempts.forEach { stored ->

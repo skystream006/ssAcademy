@@ -76,6 +76,107 @@ class RewardsModelTest {
         shadowOf(Looper.getMainLooper()).idle()
     }
 
+    @Test fun rewardRuleSettingsPersistIndependentlyAndInvalidEditsAreIgnored() {
+        val model = model()
+        assertEquals(RewardThresholds(), model.rewardThresholds)
+        assertEquals(RewardTier.TIER_2, model.matrixRewardTier)
+        model.chooseSubjectRewardsEnabled(Subject.READING, false)
+        model.updateQuestionCount("7")
+        model.selectOperation(Operation.ADDITION)
+        model.submitSetup()
+        val defaults = model.rewardsDefaults
+        model.chooseRewardEnabled(RewardType.RAMEN, false)
+        model.chooseRewardThresholds(15, 25)
+        model.chooseMatrixRewardTier(RewardTier.TIER_1)
+        listOf(0 to 25, 15 to 15, 25 to 15, -1 to 25, 15 to 1001, 1000 to 1001).forEach { (first, second) ->
+            model.chooseRewardThresholds(first, second)
+            assertEquals(RewardThresholds(15, 25), model.rewardThresholds)
+        }
+        val restored = model()
+        assertEquals(RewardThresholds(15, 25), restored.rewardThresholds)
+        assertEquals(RewardTier.TIER_1, restored.matrixRewardTier)
+        assertTrue(restored.rewardsEnabled)
+        assertFalse(restored.rewardsEnabled(Subject.READING))
+        assertEquals("7", restored.questionCountText)
+        assertEquals(defaults, restored.rewardsDefaults)
+        assertEquals(setOf(RewardType.RAMEN), restored.disabledRewards)
+        restored.chooseRewardThresholds(1, 1000)
+        restored.chooseMatrixRewardTier(RewardTier.TIER_2)
+        assertEquals(RewardThresholds(1, 1000), model().rewardThresholds)
+        assertEquals(RewardTier.TIER_2, model().matrixRewardTier)
+        val settings = application.getSharedPreferences("settings", 0)
+        assertEquals(1, settings.getInt("reward_tier_1_minimum", -1))
+        assertEquals(1000, settings.getInt("reward_tier_2_minimum", -1))
+        assertEquals("TIER_2", settings.getString("matrix_reward_tier", null))
+    }
+
+    @Test fun invalidStoredThresholdPairsAndUnknownMatrixTiersUseSafeDefaults() {
+        val settings = application.getSharedPreferences("settings", 0)
+        listOf(0 to 25, 15 to 15, 50 to 25, 25 to 1001, -1 to 25).forEach { (first, second) ->
+            settings.edit().putInt("reward_tier_1_minimum", first)
+                .putInt("reward_tier_2_minimum", second).putString("matrix_reward_tier", "unknown").commit()
+            assertEquals(RewardThresholds(), model().rewardThresholds)
+            assertEquals(RewardThresholds(), settings.readRewardThresholds())
+            assertEquals(RewardTier.TIER_2, model().matrixRewardTier)
+        }
+        settings.edit().putString("reward_tier_1_minimum", "15").putInt("reward_tier_2_minimum", 25)
+            .putInt("matrix_reward_tier", 1).commit()
+        assertEquals(RewardThresholds(), model().rewardThresholds)
+        assertEquals(RewardTier.TIER_2, model().matrixRewardTier)
+        settings.edit().putInt("reward_tier_1_minimum", 15).putString("reward_tier_2_minimum", "25").commit()
+        assertEquals(RewardThresholds(), settings.readRewardThresholds())
+    }
+
+    @Test fun ordinaryRewardsUseFinishThresholdsAndKeepTheirRulesThroughReloadAndClaim() {
+        val model = model()
+        listOf(15 to RewardTier.TIER_1, 25 to RewardTier.TIER_2).forEach { (count, tier) ->
+            model.chooseRewardThresholds(25, 50)
+            RewardType.entries.forEach { model.chooseRewardEnabled(it, true) }
+            start(model, count)
+            repeat(count - 1) { answer(model) }
+            model.chooseRewardThresholds(15, 25)
+            answer(model)
+            shadowOf(Looper.getMainLooper()).idle()
+            val result = requireNotNull(model.lastResult)
+            val type = requireNotNull(result.prizeType)
+            assertEquals(tier, type.tier)
+            assertEquals(RewardThresholds(15, 25), result.rewardThresholds)
+            assertTrue(requireNotNull(model.celebration).isEligibleFor(count, GameMode.REWARDS))
+            model.chooseRewardThresholds(200, 300)
+            model.chooseRewardsEnabled(false)
+            RewardType.entries.forEach { model.chooseRewardEnabled(it, false) }
+            val restored = model()
+            assertEquals(result, restored.history.first { it.id == result.id })
+            restored.showRewardForResult(result)
+            repeat(3) { restored.claimReward() }
+            shadowOf(Looper.getMainLooper()).idle()
+            val claimed = restored.history.first { it.id == result.id }
+            assertEquals(PrizeAward(type, RewardBalance(0, 1)), claimed.prize)
+            assertEquals(result.rewardThresholds, claimed.rewardThresholds)
+            assertEquals(claimed, model().history.first { it.id == result.id })
+        }
+    }
+
+    @Test fun raisingThresholdsAtFinishSuppressesPrizeAndLaterLoweringCannotGrantItRetroactively() {
+        val model = model()
+        model.chooseRewardThresholds(15, 25)
+        start(model, 25)
+        repeat(24) { answer(model) }
+        model.chooseRewardThresholds(100, 200)
+        answer(model)
+        shadowOf(Looper.getMainLooper()).idle()
+        val result = requireNotNull(model.lastResult)
+        assertNull(result.prizeType)
+        assertEquals(RewardThresholds(100, 200), result.rewardThresholds)
+        assertNotNull(model.celebration)
+        model.chooseRewardThresholds(1, 2)
+        model.dismissCelebration()
+        model.showRewardForResult(result)
+        model.claimReward()
+        assertTrue(model.rewardBalances.isEmpty())
+        assertEquals(result, model().history.single())
+    }
+
     @Test fun rewardsDefaultOnAndSettingsPersistWithValidTimeSteps() {
         val first = model()
         assertTrue(first.rewardsEnabled)

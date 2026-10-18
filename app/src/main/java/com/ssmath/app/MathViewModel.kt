@@ -163,6 +163,10 @@ class MathViewModel(
     })
     val rewardsEnabled: Boolean get() = rewardsEnabled(Subject.MATH)
     fun rewardsEnabled(subject: Subject): Boolean = subjectRewards.getValue(subject)
+    var rewardThresholds by mutableStateOf(settings.readRewardThresholds())
+        private set
+    var matrixRewardTier by mutableStateOf(settings.readMatrixRewardTier())
+        private set
     var disabledRewards by mutableStateOf(RewardType.entries.filter {
         it.name in settings.getStringSet("disabled_rewards", emptySet()).orEmpty()
     }.toSet())
@@ -456,8 +460,10 @@ class MathViewModel(
             minimum = state.minimum, maximumSecond = state.maximumSecond.takeIf { state.operation == Operation.DIVISION },
             questionCount = state.questionCount, timedOut = expired, gameMode = gameMode,
             isMultiplicationMatrix = state.isMultiplicationMatrix,
+            rewardThresholds = rewardThresholds, matrixRewardTier = matrixRewardTier,
             prizeType = selectPrize(state.questionCount, state.correct, state.attempts.size,
-                rewardsEnabledAtStart, rewardsEnabled, expired, rewardRandom, disabledRewards))
+                rewardsEnabledAtStart, rewardsEnabled && gameMode == GameMode.REWARDS, expired, rewardRandom,
+                disabledRewards, rewardThresholds, matrixRewardTier.takeIf { state.isMultiplicationMatrix }))
         val pending = PendingResult(result)
         pendingResult = pending
         lastResult = result
@@ -733,7 +739,8 @@ class MathViewModel(
         if (current.abandoned || current.attemptIds.isEmpty()) return
         val result = ReadingRewardResult(current.id, current.ownerId, current.game, current.level, finishedAt,
             current.attemptIds.size, data.sessionCorrect(current), data.sessionAnswered(current),
-            current.timedOut, current.rewardsEnabledAtStart, current.prizeType)
+            current.timedOut, current.rewardsEnabledAtStart, current.prizeType,
+            rewardThresholds = current.rewardThresholds)
         val pending = PendingReadingResult(result)
         pendingReadingResult = pending
         openedReadingSessions += current.id
@@ -1085,6 +1092,18 @@ class MathViewModel(
     fun chooseRewardEnabled(type: RewardType, enabled: Boolean) {
         disabledRewards = if (enabled) disabledRewards - type else disabledRewards + type
         settings.edit().putStringSet("disabled_rewards", disabledRewards.map { it.name }.toSet()).apply()
+    }
+
+    fun chooseRewardThresholds(tier1Minimum: Int, tier2Minimum: Int) {
+        if (tier1Minimum !in 1..1000 || tier2Minimum !in 1..1000 || tier1Minimum >= tier2Minimum) return
+        rewardThresholds = RewardThresholds(tier1Minimum, tier2Minimum)
+        settings.edit().putInt("reward_tier_1_minimum", tier1Minimum)
+            .putInt("reward_tier_2_minimum", tier2Minimum).apply()
+    }
+
+    fun chooseMatrixRewardTier(tier: RewardTier) {
+        matrixRewardTier = tier
+        settings.edit().putString("matrix_reward_tier", tier.name).apply()
     }
 
     fun chooseReadingGameEnabled(game: ReadingGame, enabled: Boolean) {

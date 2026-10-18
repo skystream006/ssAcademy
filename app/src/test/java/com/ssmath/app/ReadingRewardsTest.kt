@@ -57,7 +57,8 @@ class ReadingRewardsTest {
         timedOut: Boolean = false,
         enabledAtStart: Boolean = true,
         enabledAtFinish: Boolean = true,
-        disabled: Set<RewardType> = RewardType.entries.toSet() - RewardType.LOLLIPOP
+        disabled: Set<RewardType> = RewardType.entries.toSet() - RewardType.LOLLIPOP,
+        thresholds: RewardThresholds = RewardThresholds()
     ): ReadingData {
         val attempts = List(count) { index ->
             ReadingAttempt("$id-$index", "reader", "missing-cup", 1,
@@ -73,13 +74,40 @@ class ReadingRewardsTest {
         val data = ReadingData(profiles = listOf(ReadingProfile("reader", "Reader")),
             selectedProfileId = "reader", attempts = attempts, sessions = listOf(session))
         return ReadingEngine.endSession(data, id, 3, timedOut = timedOut, rewardsEnabled = enabledAtFinish,
-            disabledRewards = disabled, random = Random(3))
+            disabledRewards = disabled, random = Random(3), rewardThresholds = thresholds)
     }
 
     private fun open(model: MathViewModel, data: ReadingData) {
         if (model.overlay == null) model.openReading()
         model.openReadingSessionReward(data, data.sessions.single())
         shadowOf(Looper.getMainLooper()).idle()
+    }
+
+    @Test fun readingReceiptsUseFinishedSessionThresholdsNotCurrentMathSettings() {
+        for ((count, type) in listOf(15 to RewardType.LOLLIPOP, 25 to RewardType.VIDEO_GAME)) {
+            val data = finished(id = "custom-$count", count = count, thresholds = RewardThresholds(15, 25),
+                disabled = RewardType.entries.toSet() - type)
+            val model = model()
+            model.chooseRewardThresholds(999, 1000)
+            model.chooseMatrixRewardTier(RewardTier.TIER_1)
+            model.chooseSubjectRewardsEnabled(Subject.READING, false)
+            RewardType.entries.forEach { model.chooseRewardEnabled(it, false) }
+            open(model, data)
+            assertEquals(CelebrationCategory.POKEMONS, model.readingCelebration?.category)
+            assertEquals(RewardThresholds(15, 25), model.readingRewardResult?.rewardThresholds)
+            assertEquals(type, model.readingRewardResult?.prizeType)
+            model.dismissReadingSessionReward()
+            val restored = model()
+            restored.openSubjectHistory(Subject.READING)
+            restored.showReadingRewardForSession(data, data.sessions.single())
+            shadowOf(Looper.getMainLooper()).idle()
+            repeat(3) { restored.claimReadingReward() }
+            assertEquals(RewardBalance(0, 1), restored.rewardBalances[type])
+            assertEquals(PrizeAward(type, RewardBalance(0, 1)), restored.readingRewardResult?.prize)
+            assertEquals(RewardThresholds(15, 25), restored.readingRewardResult?.rewardThresholds)
+            assertTrue(restored.history.isEmpty())
+            assertEquals(restored.readingRewardResults, HistoryStore(file).loadSnapshot().readingResults)
+        }
     }
 
     @Test fun completionCelebratesBeforeClaimAndCollectsOnlyTheActuallyPresentedScene() {

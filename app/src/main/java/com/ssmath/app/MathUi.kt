@@ -463,7 +463,8 @@ private fun RewardsCriteria(model: MathViewModel) {
         }
         RewardTier.entries.forEach { tier ->
             val available = RewardType.entries.filter { it.tier == tier && it !in model.disabledRewards }
-            Text("• ${tier.label}: ${tier.questionCountLabel}", style = MaterialTheme.typography.titleSmall)
+            Text("• ${tier.label}: ${model.rewardThresholds.questionCountLabel(tier)}",
+                style = MaterialTheme.typography.titleSmall)
             if (!model.rewardsEnabled) {
                 Text("Unavailable: Math Rewards System is OFF.")
             }
@@ -608,7 +609,12 @@ private fun ReadyDialog(model: MathViewModel) {
             Text("The same Rewards Game rules apply: finish all 121 questions with more than 90% correct " +
                 "before the time limit, if enabled. The game ends at 13 wrong answers.")
             Text("Complete the matrix to collect both a Mega Pokémon and a Pokémon or Other animation.")
-            if (model.rewardsEnabled) Text("Eligible for enabled Tier 2 prize fragments.")
+            if (model.rewardsEnabled) {
+                Text("Eligible for enabled ${model.matrixRewardTier.label} prize fragments.")
+                if (RewardType.entries.none { it.tier == model.matrixRewardTier && it !in model.disabledRewards }) {
+                    Text("Unavailable: no rewards enabled in this tier.")
+                }
+            }
             else Text("Prize fragments are unavailable while Math Rewards System is OFF.")
         }
         model.readyTimeLimitMs?.let { limit ->

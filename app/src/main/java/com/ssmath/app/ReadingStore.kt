@@ -309,7 +309,8 @@ class ReadingViewModel(
             if (current.active?.let { isDisabled(it.game) } == true) current
             else ReadingEngine.nextSessionActivity(ReadingEngine.finish(current,
                 rewardsEnabled = settings.getBoolean(Subject.READING.rewardsPreference, true),
-                disabledRewards = disabledRewards(), random = rewardRandom))
+                disabledRewards = disabledRewards(), random = rewardRandom,
+                rewardThresholds = settings.readRewardThresholds()))
         }
     }
 
@@ -372,7 +373,8 @@ class ReadingViewModel(
             if (it.id == session.id) it.copy(elapsedMs = elapsed) else it
         })
         if (expired)
-            next = ReadingEngine.endSession(next, session.id, timedOut = true)
+            next = ReadingEngine.endSession(next, session.id, timedOut = true,
+                rewardThresholds = settings.readRewardThresholds())
         // Routine clock saves must not toggle the enabled state of answer controls.
         persist(next, blockInteraction = expired)
     }
@@ -411,10 +413,13 @@ class ReadingViewModel(
             else {
                 val rewardsEnabled = settings.getBoolean(Subject.READING.rewardsPreference, true)
                 val disabled = disabledRewards()
+                val thresholds = settings.readRewardThresholds()
                 val submitted = ReadingEngine.submit(current, key,
-                    rewardsEnabled = rewardsEnabled, disabledRewards = disabled, random = rewardRandom)
+                    rewardsEnabled = rewardsEnabled, disabledRewards = disabled, random = rewardRandom,
+                    rewardThresholds = thresholds)
                 ReadingEngine.nextSessionActivity(ReadingEngine.finish(submitted,
-                    rewardsEnabled = rewardsEnabled, disabledRewards = disabled, random = rewardRandom))
+                    rewardsEnabled = rewardsEnabled, disabledRewards = disabled, random = rewardRandom,
+                    rewardThresholds = thresholds))
             }
         }
     }

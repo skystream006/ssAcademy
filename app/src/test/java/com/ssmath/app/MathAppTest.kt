@@ -638,6 +638,27 @@ class MathAppTest {
         compose.onNodeWithTag("question-count-input").performScrollTo().assertTextContains("37")
     }
 
+    @Test fun configuredRewardThresholdsAndMatrixTierAppearBeforePlay() {
+        val model = model()
+        model.chooseRewardThresholds(15, 25)
+        model.chooseMatrixRewardTier(RewardTier.TIER_1)
+        model.openRewardsGame()
+        compose.setContent { MathAppContent(model) }
+        compose.onNodeWithText("• Tier 1: 15–24 questions").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("• Tier 2: 25 or more questions").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("25–49 questions", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("Cancel").performScrollTo().performClick()
+        compose.onNodeWithTag("multiplication-matrix-game").performScrollTo().performClick()
+        compose.onNodeWithText("Eligible for enabled Tier 1 prize fragments.").performScrollTo().assertIsDisplayed()
+        compose.runOnIdle {
+            RewardType.entries.filter { it.tier == RewardTier.TIER_1 }.forEach { model.chooseRewardEnabled(it, false) }
+        }
+        compose.onNodeWithText("Unavailable: no rewards enabled in this tier.").performScrollTo().assertIsDisplayed()
+        compose.runOnIdle { model.chooseMatrixRewardTier(RewardTier.TIER_2) }
+        compose.onNodeWithText("Eligible for enabled Tier 2 prize fragments.").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Unavailable: no rewards enabled in this tier.").assertDoesNotExist()
+    }
+
     @Test fun rewardsLaunchExplainsThresholdsAndShowsIndependentAvailabilityWarnings() {
         val model = model()
         compose.setContent { MathAppContent(model) }

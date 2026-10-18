@@ -89,6 +89,8 @@ class HistoryStoreTest {
             file.writeText(legacy)
             val before = store.loadSnapshot()
             assertEquals(GameMode.REWARDS, before.history.single().gameMode)
+            assertEquals(RewardThresholds(), before.history.single().rewardThresholds)
+            assertEquals(RewardTier.TIER_2, before.history.single().matrixRewardTier)
             assertEquals(pending, before.history.single())
             val claimed = store.claimReward(1)
             val expected = (before.rewards[RewardType.LOLLIPOP] ?: RewardBalance()).addFragment()
@@ -317,6 +319,107 @@ class HistoryStoreTest {
         id, "reader", ReadingGame.MISSING, ReadingLevel.SPROUT, 100, 25, 25, 25,
         prizeType = RewardType.LOLLIPOP, celebration = Celebration.PIKACHU
     )
+
+    @Test fun customMathAndReadingRuleSnapshotsRoundTripAndClaimOnlyOnce() {
+        val thresholds = RewardThresholds(15, 25)
+        listOf(15 to RewardType.LOLLIPOP, 25 to RewardType.VIDEO_GAME).forEach { (count, type) ->
+            val math = eligible(count.toLong(), type).copy(
+                attempts = List(count) { Attempt(Problem(1, 1, Operation.ADDITION), 2) },
+                questionCount = count, rewardThresholds = thresholds)
+            store.add(math)
+            val reading = reading("reading-$count").copy(questionCount = count, correct = count, answered = count,
+                prizeType = type, rewardThresholds = thresholds)
+            store.addReadingResult(reading)
+            val restored = HistoryStore(file)
+            assertEquals(math, restored.load().first { it.id == math.id })
+            assertEquals(reading, restored.loadSnapshot().readingResults.first { it.sessionId == reading.sessionId })
+            restored.claimReward(math.id)
+            val claimed = restored.claimReadingReward(reading.sessionId)
+            assertEquals(RewardBalance(0, 2), claimed.rewards[type])
+            repeat(3) {
+                assertEquals(claimed, HistoryStore(file).claimReward(math.id))
+                assertEquals(claimed, HistoryStore(file).claimReadingReward(reading.sessionId))
+                assertEquals(claimed, HistoryStore(file).addReadingResult(reading.copy(rewardThresholds = RewardThresholds())))
+            }
+            assertEquals(RewardBalance(0, 1), claimed.history.first { it.id == math.id }.prize?.balance)
+            assertEquals(RewardBalance(0, 2),
+                claimed.readingResults.first { it.sessionId == reading.sessionId }.prize?.balance)
+        }
+        val readingResult = store.loadSnapshot().readingResults.first()
+        val deleted = store.deleteReadingResults(setOf(readingResult.sessionId))
+        assertEquals(deleted, store.addReadingResult(readingResult.copy(prize = null)))
+        assertEquals(deleted, store.claimReadingReward(readingResult.sessionId))
+    }
+
+    @Test fun matrixClaimsUseStoredTierEvenAboveQuestionMinimaAndRejectIncompleteGames() {
+        val thresholds = RewardThresholds(200, 300)
+        RewardTier.entries.forEachIndexed { index, tier ->
+            val type = RewardType.entries.first { it.tier == tier }
+            val matrix = eligible(index + 1L, type).copy(operation = Operation.MULTIPLICATION, maximum = 11,
+                questionCount = 121, isMultiplicationMatrix = true, rewardThresholds = thresholds, matrixRewardTier = tier,
+                attempts = List(121) { index -> MultiplicationMatrix.problemAt(index).let { Attempt(it, it.answer) } })
+            store.add(matrix)
+            val claimed = HistoryStore(file).claimReward(matrix.id)
+            assertEquals(type, claimed.history.first { it.id == matrix.id }.prize?.type)
+            assertEquals(RewardBalance(0, 1), claimed.rewards[type])
+            assertEquals(claimed, HistoryStore(file).claimReward(matrix.id))
+        }
+        val baseline = store.loadSnapshot()
+        val matrix = baseline.history.first().copy(prize = null)
+        listOf(
+            matrix.copy(questionCount = 120, attempts = matrix.attempts.take(120)),
+            matrix.copy(attempts = matrix.attempts.take(120)),
+            matrix.copy(timedOut = true),
+            matrix.copy(isMultiplicationMatrix = false),
+            matrix.copy(gameMode = GameMode.PRACTICE)
+        ).forEachIndexed { index, invalid ->
+            val candidate = invalid.copy(id = 10L + index)
+            store.add(candidate)
+            assertEquals(baseline.rewards, store.claimReward(candidate.id).rewards)
+        }
+    }
+
+    @Test fun legacyMathAwardsRemainClaimableAfterTheirRewardTypeChangesTier() {
+        for (count in listOf(50, 121)) {
+            val matrix = count == 121
+            val old = PracticeResult(count.toLong(), count.toLong(),
+                if (matrix) Operation.MULTIPLICATION else Operation.ADDITION, 11, 1000,
+                List(count) { index ->
+                    val problem = if (matrix) MultiplicationMatrix.problemAt(index) else Problem(1, 1, Operation.ADDITION)
+                    Attempt(problem, problem.answer)
+                }, isMultiplicationMatrix = matrix, prizeType = RewardType.BED_TIME)
+            val encoded = Json.encodeToString(PracticeResult.serializer(), old)
+            assertFalse(encoded.contains("rewardThresholds"))
+            assertFalse(encoded.contains("matrixRewardTier"))
+            file.writeText("[$encoded]")
+            val claimed = HistoryStore(file).claimReward(old.id)
+            assertEquals(PrizeAward(RewardType.BED_TIME, RewardBalance(0, 1)), claimed.history.single().prize)
+            assertEquals(RewardBalance(0, 1), claimed.rewards[RewardType.BED_TIME])
+            assertEquals(claimed, HistoryStore(file).claimReward(old.id))
+        }
+    }
+
+    @Test fun legacyReadingReceiptsKeepDefaultRulesAndNewRulesDoNotCreateRetroactiveAwards() {
+        val old = reading()
+        val encoded = Json.encodeToString(ReadingRewardResult.serializer(), old)
+        assertFalse(encoded.contains("rewardThresholds"))
+        file.writeText("""{"history":[],"rewards":{},"readingResults":[$encoded]}""")
+        assertEquals(RewardThresholds(), store.loadSnapshot().readingResults.single().rewardThresholds)
+        val claimed = store.claimReadingReward(old.sessionId)
+        assertEquals(RewardBalance(0, 1), claimed.rewards[RewardType.LOLLIPOP])
+        assertEquals(claimed, HistoryStore(file).claimReadingReward(old.sessionId))
+
+        val noPrize = reading("no-prize").copy(questionCount = 15, answered = 15, correct = 15, prizeType = null)
+        store.addReadingResult(noPrize)
+        val before = store.loadSnapshot()
+        assertEquals(before, store.addReadingResult(noPrize.copy(prizeType = RewardType.LOLLIPOP,
+            rewardThresholds = RewardThresholds(15, 25))))
+        assertEquals(before, store.claimReadingReward(noPrize.sessionId))
+        val wrongTier = reading("wrong-tier").copy(questionCount = 25, answered = 25, correct = 25,
+            rewardThresholds = RewardThresholds(15, 25))
+        assertNull(store.addReadingResult(wrongTier).readingResults.first().prizeType)
+        assertEquals(before.rewards, store.claimReadingReward(wrongTier.sessionId).rewards)
+    }
 
     @Test fun retiredReadingReceiptsMigrateBeforeEnumDecodingAndPreserveUnrelatedInventory() {
         store.add(eligible(1))

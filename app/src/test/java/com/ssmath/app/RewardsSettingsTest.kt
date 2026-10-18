@@ -133,6 +133,68 @@ class RewardsSettingsTest {
         compose.onNodeWithContentDescription("Math Rewards System").assertDoesNotExist()
     }
 
+    @Test fun rewardMinimumQuestionsSaveTogetherAndUpdateTierDescriptions() {
+        val model = MathViewModel(application)
+        compose.setContent { MathTheme { SettingsScreen(model) } }
+        compose.onNodeWithTag("reward-tier-1-minimum").assertDoesNotExist()
+        compose.openAdminSettings()
+        compose.onNodeWithTag("reward-tier-1-minimum").assertDoesNotExist()
+        compose.onNodeWithText("Available Rewards").performScrollTo().performClick()
+        compose.onNodeWithTag("reward-tier-1-minimum").performScrollTo().assertTextContains("25")
+            .performTextReplacement("15")
+        compose.onNodeWithTag("reward-tier-2-minimum").performScrollTo().assertTextContains("50")
+            .performTextReplacement("25")
+        assertEquals(RewardThresholds(), model.rewardThresholds)
+        compose.onNodeWithTag("save-reward-minimums").performScrollTo().assertIsEnabled().performClick()
+            .assertIsNotEnabled()
+        compose.onNodeWithText("Tier 1 · 15–24 questions").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Tier 2 · 25 or more questions").performScrollTo().assertIsDisplayed()
+        assertEquals(RewardThresholds(15, 25), MathViewModel(application).rewardThresholds)
+        assertTrue(model.disabledRewards.isEmpty())
+        compose.onNodeWithText("Available Rewards").performScrollTo().performClick()
+        compose.onNodeWithTag("reward-tier-1-minimum").assertDoesNotExist()
+        compose.onNodeWithText("Available Rewards").performScrollTo().performClick()
+        compose.onNodeWithTag("reward-tier-1-minimum").performScrollTo().assertTextContains("15")
+        compose.onNodeWithTag("reward-tier-2-minimum").performScrollTo().assertTextContains("25")
+    }
+
+    @Test fun invalidRewardMinimumsCannotReplaceSavedChoices() {
+        val model = MathViewModel(application)
+        compose.setContent { MathTheme { SettingsScreen(model) } }
+        compose.openAdminSettings()
+        compose.onNodeWithText("Available Rewards").performScrollTo().performClick()
+        listOf("", "0", "-1", "2.5", "abc", "1001", "50", "51").forEach { invalid ->
+            compose.onNodeWithTag("reward-tier-1-minimum").performScrollTo().performTextReplacement(invalid)
+            compose.onNodeWithTag("save-reward-minimums").performScrollTo().assertIsNotEnabled()
+            assertEquals(RewardThresholds(), model.rewardThresholds)
+        }
+        compose.onNodeWithTag("reward-tier-1-minimum").performScrollTo().performTextReplacement("1")
+        compose.onNodeWithTag("reward-tier-2-minimum").performScrollTo().performTextReplacement("1")
+        compose.onNodeWithTag("save-reward-minimums").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithTag("reward-tier-2-minimum").performScrollTo().performTextReplacement("1000")
+        compose.onNodeWithTag("save-reward-minimums").performScrollTo().assertIsEnabled().performClick()
+        assertEquals(RewardThresholds(1, 1000), MathViewModel(application).rewardThresholds)
+    }
+
+    @Test fun matrixRewardTierIsSelectableAtLargeTextSizeAndPersistsIndependently() {
+        val model = MathViewModel(application)
+        compose.setContent { MathTheme(textSizePercent = 200) { SettingsScreen(model) } }
+        compose.onNodeWithTag("matrix-reward-TIER_1").assertDoesNotExist()
+        compose.openGameSettings()
+        compose.onNodeWithTag("matrix-reward-TIER_2").performScrollTo().assertIsSelected()
+        compose.onNodeWithTag("matrix-reward-TIER_1").performScrollTo()
+            .assertIsDisplayed().assertIsNotSelected().performClick().assertIsSelected()
+        assertEquals(RewardTier.TIER_1, MathViewModel(application).matrixRewardTier)
+        assertEquals(RewardThresholds(), model.rewardThresholds)
+        assertFalse(model.randomizeMatrixQuestions)
+        compose.onNodeWithText("Math Settings").performScrollTo().performClick()
+        compose.onNodeWithTag("matrix-reward-TIER_1").assertDoesNotExist()
+        compose.onNodeWithText("Math Settings").performScrollTo().performClick()
+        compose.onNodeWithTag("matrix-reward-TIER_1").performScrollTo().assertIsSelected()
+        compose.onNodeWithTag("matrix-reward-TIER_2").performScrollTo().performClick().assertIsSelected()
+        assertEquals(RewardTier.TIER_2, MathViewModel(application).matrixRewardTier)
+    }
+
     @Test fun rewardsAndHistoryExpansionSurvivesSavedStateRestorationIndependently() {
         val model = MathViewModel(application)
         val restoration = StateRestorationTester(compose)
