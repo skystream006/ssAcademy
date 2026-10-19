@@ -386,14 +386,16 @@ use non-destructive migrations. Clearing app data, like uninstalling, removes lo
 
 ### Reading packs and storage
 
-The downloadable source is `datasets/reading/reading-activities-v8-import.json`, with UTF-8 JSON Lines data
+The downloadable source is `datasets/reading/reading-activities-v10-import.json`, with UTF-8 JSON Lines data
 in `datasets/reading/activities-<sha256>.jsonl` (one `ReadingActivity` JSON object per line).
 Both `reading-activities-import.json` and `manifest.json` remain unchanged on **v7** for older
 apps whose game enums cannot decode Grammar Quest.
+`reading-activities-v8-import.json` remains pinned to **v9** for apps whose older scorer
+cannot treat identical word tiles as interchangeable.
 These files are outside Android resources/assets and are **not packaged in the APK**.
 Pack **v10** contains **18,000 activities**: **1,000 per game per difficulty**, including Grammar Quest.
 It regenerates all **3,000 Sentence Scramble activities**, keeping their IDs, and preserves
-the other 15,000 v9 activities unchanged. The existing `reading-activities-v8-import.json`
+the other 15,000 v9 activities unchanged. The new `reading-activities-v10-import.json`
 URL serves the updated pack. After updating the app, choose **Import / Update Reading Activities**
 to install the new sentences; updating the APK alone does not replace downloaded content.
 Historical v1–v4 and v8 manifests and content are merged into `datasets/reading/archive.zip`,
@@ -431,7 +433,8 @@ validated in a transactional staging table; failure rolls back and removes the t
 Allow space for the download, staging table, and SQLite transaction journal during updates.
 Grammar uses the existing `passage` and `question` fields plus a required nonblank string
 `explanation`. The explanation field is optional in the shared schema and omitted from the
-other games. Keep the two v7 entry points pinned; incompatible new games need a new entry point.
+other games. Keep the two v7 entry points and the v8 entry point pinned; content that needs
+new game enums or scoring behavior requires a new entry point.
 
 The v10 content source lives in `datasets/reading/generation/`, outside the APK. Its legacy games combine
 original vocabulary, scenes, and story prompts using difficulty-specific templates, rather

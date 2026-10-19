@@ -27,6 +27,7 @@ GENERATORS = {
 PER_POOL = 1_000
 GRAMMAR_PER_LEVEL = 1_000
 V8_ENTRY_POINT = "reading-activities-v8-import.json"
+V10_ENTRY_POINT = "reading-activities-v10-import.json"
 V9_SHA256 = "6ed22731563c3d2a2cb36b63cc076f89cc40a6dd4d0a8b0105fa45ba6e0a8fa9"
 V9_FILE = f"activities-{V9_SHA256}.jsonl"
 MAX_PACK_BYTES = 64 * 1024 * 1024
@@ -199,9 +200,15 @@ def build_v9_pack():
 
 def build_pack():
     previous, previous_manifest = build_v9_pack()
+    pinned_manifest = (
+        json.dumps(previous_manifest, ensure_ascii=False, indent=2) + "\n"
+    ).encode("utf-8")
+    # v8-era apps can decode v10 but cannot score interchangeable repeated words.
+    # Their existing URL must stay pinned to the exact v9 manifest and pack.
     if (previous_manifest["sha256"] != V9_SHA256
-            or (ROOT / V9_FILE).read_bytes() != previous):
-        raise ValueError("The immutable v9 catalogue must remain unchanged")
+            or (ROOT / V9_FILE).read_bytes() != previous
+            or (ROOT / V8_ENTRY_POINT).read_bytes() != pinned_manifest):
+        raise ValueError("The immutable v9 catalogue and v8 compatibility entry point must remain unchanged")
     replacements = {level: iter(word_scramble(level)) for level in LEVELS}
     revised = Counter()
     identities, used_answers = set(), set()
@@ -254,10 +261,10 @@ def main():
         if not destination.exists():
             destination.write_bytes(data)
     if args.check:
-        if json.loads((ROOT / V8_ENTRY_POINT).read_text(encoding="utf-8")) != manifest:
-            raise SystemExit(f"{V8_ENTRY_POINT} differs from the generated catalogue")
+        if json.loads((ROOT / V10_ENTRY_POINT).read_text(encoding="utf-8")) != manifest:
+            raise SystemExit(f"{V10_ENTRY_POINT} differs from the generated catalogue")
     else:
-        (ROOT / V8_ENTRY_POINT).write_text(
+        (ROOT / V10_ENTRY_POINT).write_text(
             json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f'{sum(manifest["counts"].values()):,} activities; {manifest["bytes"]:,} bytes; {manifest["file"]}')
 

@@ -206,7 +206,7 @@ class ReadingPackTest {
             }).importPack()
         }
         assertEquals("test-v1", status.version)
-        assertEquals("reading-activities-v8-import.json", requests.first().substringAfterLast('/'))
+        assertEquals("reading-activities-v10-import.json", requests.first().substringAfterLast('/'))
         assertEquals("activities-${current.sha256}.jsonl", requests.last().substringAfterLast('/'))
         assertEquals(first, catalog.latest(first.id)?.activity)
         assertCleanFailure {
@@ -419,6 +419,8 @@ class ReadingPackTest {
         val url = READING_PACK_MANIFEST_URL
         val root = url.substringBeforeLast('/') + "/"
         requireReadingPackUrl(url)
+        requireReadingPackUrl(root + "reading-activities-v8-import.json")
+        requireReadingPackUrl(root + "reading-activities-import.json")
         requireReadingPackUrl(root + "manifest.json")
         requireReadingPackUrl(root + "activities-${"a".repeat(64)}.jsonl")
         listOf(

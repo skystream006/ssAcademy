@@ -123,7 +123,7 @@ class GrammarGameTest {
     }
 
     @Test fun publishedGrammarHasOneThousandQuestionsPerLevelAndEveryChoiceIsScored() {
-        val pack = ReadingRepositoryPack("reading-activities-v8-import.json")
+        val pack = ReadingRepositoryPack("reading-activities-v10-import.json")
         val grammar = pack.activities.filter { it.game == ReadingGame.GRAMMAR }
         assertEquals("v10", pack.manifest.version)
         assertEquals(3000, grammar.size)
@@ -167,7 +167,7 @@ class GrammarGameTest {
         store.save(data)
         data = store.start(data, ReadingGame.MISSING, ReadingLevel.SPROUT, false)
         val oldDraft = requireNotNull(data.active)
-        val pack = ReadingRepositoryPack("reading-activities-v8-import.json")
+        val pack = ReadingRepositoryPack("reading-activities-v10-import.json")
         runBlocking { pack.importer(store.catalog, cache).importPack() }
         assertEquals(oldDraft, store.load().active)
         for (level in ReadingLevel.entries) {
@@ -210,7 +210,7 @@ class GrammarGameTest {
             requireNotNull(data.active)
         }
         val before = store.load()
-        val current = ReadingRepositoryPack("reading-activities-v8-import.json")
+        val current = ReadingRepositoryPack("reading-activities-v10-import.json")
         runBlocking { current.importer(store.catalog, cache).importPack() }
         assertEquals(before, store.load())
         drafts.values.forEach { draft ->

@@ -258,7 +258,7 @@ class ReadingBulkPackTest {
     private fun presented() = rows("SELECT * FROM reading_presented ORDER BY reader_id,game,level,activity_id")
 
     @Test fun wordScramblesMeetEveryLevelRangeAndAllPublishedSentencesCanBeCompleted() {
-        val pack = ReadingRepositoryPack("reading-activities-v8-import.json")
+        val pack = ReadingRepositoryPack("reading-activities-v10-import.json")
         assertEquals("v10", pack.manifest.version)
         val scrambles = pack.activities.filter { it.game == ReadingGame.SCRAMBLE }
         assertEquals(3000, scrambles.size)
@@ -294,11 +294,12 @@ class ReadingBulkPackTest {
             val ordered = readingOrder(data, requireNotNull(data.active).content.validOrders.first())
             return ReadingEngine.finish(ReadingEngine.submit(ordered, "order"))
         }
-        val previous = ReadingRepositoryPack()
-        val current = ReadingRepositoryPack("reading-activities-v8-import.json")
+        val previous = ReadingRepositoryPack("reading-activities-v8-import.json")
+        val current = ReadingRepositoryPack("reading-activities-v10-import.json")
+        assertEquals("v9", previous.manifest.version)
         val oldById = previous.activities.associateBy { it.id }
         val newById = current.activities.associateBy { it.id }
-        assertTrue(newById.keys.containsAll(oldById.keys))
+        assertEquals(oldById.keys, newById.keys)
         oldById.forEach { (id, old) ->
             if (old.game == ReadingGame.SCRAMBLE) assertNotEquals(old, newById.getValue(id))
             else assertEquals(old, newById.getValue(id))

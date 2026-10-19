@@ -474,7 +474,7 @@ class PublishedPackTest(unittest.TestCase):
         self.assertEqual(len(self.data), self.manifest["bytes"])
         self.assertEqual(hashlib.sha256(self.data).hexdigest(), self.manifest["sha256"])
         self.assertEqual(
-            self.manifest, json.loads((generate.ROOT / generate.V8_ENTRY_POINT).read_text(encoding="utf-8")),
+            self.manifest, json.loads((generate.ROOT / generate.V10_ENTRY_POINT).read_text(encoding="utf-8")),
         )
 
     def test_repeat_build_is_byte_identical(self):
@@ -512,6 +512,21 @@ class PublishedPackTest(unittest.TestCase):
         self.assertEqual(15_150, len(original_data.splitlines()))
         self.assertEqual(original_data, b"".join(self.previous_data.splitlines(keepends=True)[:15_150]))
 
+    def test_v8_entry_point_stays_byte_identical_and_safe_for_legacy_index_only_scoring(self):
+        data = (generate.ROOT / generate.V8_ENTRY_POINT).read_bytes()
+        self.assertEqual(
+            "f78b1bfb84001fb849aa94883c87f30829892805f4c556c82164f861e2ebb55e",
+            hashlib.sha256(data).hexdigest(),
+        )
+        manifest = json.loads(data)
+        self.assertEqual("v9", manifest["version"])
+        self.assertEqual(generate.V9_FILE, manifest["file"])
+        self.assertEqual(generate.V9_SHA256, manifest["sha256"])
+        self.assertNotEqual(generate.V8_ENTRY_POINT, generate.V10_ENTRY_POINT)
+        scrambles = [a for a in self.previous if a["game"] == "SCRAMBLE"]
+        self.assertEqual(3000, len(scrambles))
+        self.assertTrue(all(len(a["tiles"]) == len(set(a["tiles"])) for a in scrambles))
+
     def test_all_catalogues_have_only_supported_games_and_schema_fields(self):
         legacy_games = {"MISSING", "SCRAMBLE", "SEQUENCE", "DETECTIVE", "STUDIO"}
         fields = {
@@ -529,7 +544,8 @@ class PublishedPackTest(unittest.TestCase):
         )
         live_manifests = {path.name for path in generate.ROOT.glob("*.json")}
         self.assertEqual(
-            {"manifest.json", "reading-activities-import.json", generate.V8_ENTRY_POINT}, live_manifests,
+            {"manifest.json", "reading-activities-import.json",
+             generate.V8_ENTRY_POINT, generate.V10_ENTRY_POINT}, live_manifests,
         )
         referenced = {False: set(), True: set()}
         for name in sorted(live_manifests | archived_manifests):
@@ -569,10 +585,10 @@ class PublishedPackTest(unittest.TestCase):
                 self.assertEqual(expected, counts)
                 self.assertEqual(expected, manifest["counts"])
         self.assertEqual(
-            referenced[False] | {generate.V9_FILE},
+            referenced[False],
             {path.name for path in generate.ROOT.glob("activities-*.jsonl")},
         )
-        self.assertEqual(2, len(referenced[False]))
+        self.assertEqual(3, len(referenced[False]))
         self.assertEqual(archived_names, archived_manifests | referenced[True])
         self.assertFalse(archived_names.intersection(path.name for path in generate.ROOT.iterdir()))
 
