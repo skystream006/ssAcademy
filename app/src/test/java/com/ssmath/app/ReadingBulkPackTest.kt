@@ -257,6 +257,92 @@ class ReadingBulkPackTest {
     private fun cycles() = rows("SELECT * FROM reading_cycles ORDER BY reader_id,game,level")
     private fun presented() = rows("SELECT * FROM reading_presented ORDER BY reader_id,game,level,activity_id")
 
+    @Test fun wordScramblesMeetEveryLevelRangeAndAllPublishedSentencesCanBeCompleted() {
+        val pack = ReadingRepositoryPack("reading-activities-v8-import.json")
+        assertEquals("v10", pack.manifest.version)
+        val scrambles = pack.activities.filter { it.game == ReadingGame.SCRAMBLE }
+        assertEquals(3000, scrambles.size)
+        for (level in ReadingLevel.entries) {
+            val range = when (level) {
+                ReadingLevel.SPROUT -> 4..7
+                ReadingLevel.TRAIL -> 6..10
+                ReadingLevel.SUMMIT -> 8..14
+            }
+            val pool = scrambles.filter { it.level == level }
+            assertEquals(1000, pool.size)
+            assertEquals(1000, pool.map { it.id }.distinct().size)
+            val sentences = mutableSetOf<String>()
+            pool.forEach { activity ->
+                ReadingPackValidator.validate(activity)
+                assertTrue(activity.id, activity.tiles.size in range)
+                assertTrue(activity.id, activity.tiles.all { word ->
+                    word.isNotBlank() && word.none(Char::isWhitespace)
+                })
+                activity.validOrders.forEach { order ->
+                    val sentence = order.joinToString(" ") { activity.tiles[it] }
+                    assertNotEquals(activity.id, activity.tiles.joinToString(" "), sentence)
+                    sentences.add(sentence)
+                }
+                completeEveryPath(activity)
+            }
+            assertTrue("$level needs more than 50 different sentences", sentences.size > 50)
+        }
+    }
+
+    @Test fun wordScrambleUpdateKeepsLegacySessionRevisionsAndUsesNewWordsForNewGames() {
+        fun solveScramble(data: ReadingData): ReadingData {
+            val ordered = readingOrder(data, requireNotNull(data.active).content.validOrders.first())
+            return ReadingEngine.finish(ReadingEngine.submit(ordered, "order"))
+        }
+        val previous = ReadingRepositoryPack()
+        val current = ReadingRepositoryPack("reading-activities-v8-import.json")
+        val oldById = previous.activities.associateBy { it.id }
+        val newById = current.activities.associateBy { it.id }
+        assertTrue(newById.keys.containsAll(oldById.keys))
+        oldById.forEach { (id, old) ->
+            if (old.game == ReadingGame.SCRAMBLE) assertNotEquals(old, newById.getValue(id))
+            else assertEquals(old, newById.getValue(id))
+        }
+        install(previous)
+        var data = persist(ReadingEngine.addProfile(store.load(), "Ari", "reader-a"))
+        data = store.startSession(data, ReadingGame.SCRAMBLE, ReadingLevel.TRAIL, 2, true, 60_000)
+        data = persist(solveScramble(data))
+        val completed = requireNotNull(data.active)
+        data = persist(store.prepare(ReadingEngine.nextSessionActivity(data)))
+        val tile = requireNotNull(data.active).content.validOrders.first().first()
+        data = persist(ReadingEngine.placeTile(data, tile))
+        val draft = requireNotNull(data.active)
+        val before = data
+        val oldCycles = cycles()
+        val oldPresented = presented()
+
+        val status = install(current)
+        assertEquals("v10", status.version)
+        assertEquals(before, reopen())
+        assertEquals(oldCycles, cycles())
+        assertEquals(oldPresented, presented())
+        assertEquals(18_000L, scalar("SELECT COUNT(*) FROM reading_current"))
+        for (attempt in listOf(completed, draft)) {
+            assertEquals(attempt, store.review(attempt.copy(loadedContent = null)))
+            assertEquals(newById.getValue(attempt.contentId), store.catalog.latest(attempt.contentId)?.activity)
+            assertNotEquals(attempt.content, store.catalog.latest(attempt.contentId)?.activity)
+        }
+        assertEquals(status, install(current))
+        assertEquals(before, reopen())
+        data = persist(solveScramble(data))
+        assertNotNull(data.activeSession?.finishedAt)
+        for (level in ReadingLevel.entries) {
+            assertEquals(1000, store.catalog.candidates(ReadingGame.SCRAMBLE, level).size)
+            data = store.startSession(data, ReadingGame.SCRAMBLE, level, 25, false, null)
+            val assigned = data.attempts.takeLast(25)
+            assertEquals(25, assigned.map { it.contentId }.distinct().size)
+            assigned.forEach { attempt ->
+                assertEquals(newById.getValue(attempt.contentId), store.review(attempt).content)
+            }
+            assertEquals(data, reopen())
+        }
+    }
+
     @Test fun realV2ToV4ImportPreservesProgressAndExhaustsAThousandItemPoolAcrossReopening() {
         val archived = ReadingRepositoryPack("manifest-v2.json")
         assertEquals("v2", install(archived).version)

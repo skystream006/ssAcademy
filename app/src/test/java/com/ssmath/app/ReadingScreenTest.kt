@@ -572,6 +572,48 @@ class ReadingScreenTest {
         assertTrue(requireNotNull(ReadingStore(file).load().active).earned("order"))
     }
 
+    @Test fun fourteenIndividualWordsRemainPlayableAtLargeTextWithRepeatedWords() {
+        val sentence = "Although the storm had ended, the children kept their boots beside the warm fire."
+        val words = sentence.split(" ")
+        assertEquals(14, words.size)
+        val activity = ReadingContent.find("scramble-lantern").copy(
+            id = "scramble-word-tiles", level = ReadingLevel.SUMMIT,
+            tiles = words.reversed(), validOrders = listOf(words.indices.reversed().toList()),
+            hint = "Start with Although.")
+        var saved = ReadingEngine.start(
+            ReadingEngine.addProfile(ReadingData(), "Ari", "reader-a"),
+            ReadingGame.SCRAMBLE, ReadingLevel.SUMMIT, selected = activity,
+            activityRef = ReadingActivityRef("word-tiles", activity.game, activity.level, activity.title))
+        model = ReadingViewModel(application, object : ReadingStorage {
+            override fun load() = saved
+            override fun save(data: ReadingData) {
+                ReadingEngine.validate(data)
+                saved = data
+            }
+        })
+        compose.setContent {
+            MathTheme(textSizePercent = 200) { ReadingModule(model, {}, 200, {}) }
+        }
+        waitFor { it.active != null }
+        compose.onNodeWithTag("reading-submit-order").performScrollTo().assertIsNotEnabled()
+        val order = activity.validOrders.single().toMutableList().apply {
+            val firstThe = this[1]
+            this[1] = this[11]
+            this[11] = firstThe
+        }
+        order.forEachIndexed { position, tile ->
+            compose.onNodeWithTag("reading-tile-$tile").performScrollTo()
+                .assertTextContains(activity.tiles[tile]).performClick()
+            waitFor { it.active?.order?.size == position + 1 }
+            compose.onNodeWithTag("reading-placed-$position").performScrollTo()
+                .assertTextContains(words[position])
+        }
+        compose.onNodeWithTag("reading-submit-order").performScrollTo().assertIsEnabled().performClick()
+        waitFor { it.active?.earned("order") == true }
+        assertEquals(order, saved.active?.order)
+        assertTrue(requireNotNull(saved.active).earned("order"))
+    }
+
     @Test fun invalidAndCancelledSentenceDropsLeaveTheSavedOrderUnchanged() {
         val data = ReadingEngine.placeTileInSpace(readingFixture(ReadingContent.find("scramble-cats")), 1, 0)
         show(data)

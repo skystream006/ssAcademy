@@ -57,6 +57,39 @@ internal fun readingSolve(data: ReadingData, rewardsEnabled: Boolean = true): Re
 }
 
 class ReadingModelTest {
+    @Test fun identicalSentenceWordsAreInterchangeableWithoutAcceptingIncorrectOrIncompleteOrders() {
+        val words = "At the pond, the duck swims.".split(" ")
+        val activity = ReadingContent.find("scramble-lantern").copy(
+            tiles = words.reversed(),
+            validOrders = listOf(words.indices.reversed().toList())
+        )
+        val data = ReadingEngine.start(
+            ReadingEngine.addProfile(ReadingData(), "Ari", "reader-a"),
+            ReadingGame.SCRAMBLE, ReadingLevel.TRAIL, selected = activity,
+            activityRef = ReadingActivityRef("word-tiles", activity.game, activity.level, activity.title))
+        val canonical = activity.validOrders.single()
+        val swapped = canonical.toMutableList().apply {
+            val firstThe = this[1]
+            this[1] = this[3]
+            this[3] = firstThe
+        }
+        assertNotEquals(canonical, swapped)
+        for (order in listOf(canonical, swapped)) {
+            val result = ReadingEngine.submit(readingOrder(data, order), "order")
+            assertTrue(requireNotNull(result.active).earned("order"))
+            assertEquals(1, result.checkpointCount("reader-a"))
+            assertEquals(result, ReadingEngine.submit(result, "order"))
+            ReadingEngine.validate(result)
+        }
+        val incorrect = ReadingEngine.submit(readingOrder(data, canonical.reversed()), "order")
+        assertFalse(requireNotNull(incorrect.active).earned("order"))
+        val incomplete = ReadingEngine.submit(readingOrder(data, swapped.dropLast(1)), "order")
+        assertTrue(requireNotNull(incomplete.active).checkpoints.isEmpty())
+        assertEquals("Place every tile before submitting.", incomplete.active?.feedback)
+        ReadingEngine.validate(incorrect)
+        ReadingEngine.validate(incomplete)
+    }
+
     @Test fun deletingStoryHistoryRemovesStoriesAndProgressButKeepsUnrelatedDrafts() {
         val story = readingSolve(readingFixture(
             ReadingContent.forGame(ReadingGame.STUDIO, ReadingLevel.SPROUT).first()))

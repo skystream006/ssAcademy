@@ -160,7 +160,7 @@ darker backgrounds, including nested subject settings.
 **Show timer** (and its conditional **Time limit per 5 questions**), **Show correct answers**,
 **Vertical equations**, and **Default Math Reward Game Settings**.
 **Reading Settings** contains **Reading Progress**, **Set Reading Level**, **Active Reading Games**,
-**Reading Rewards System**, and **Import / Update Reading Activities**.
+**Reading Rewards System**, **Time limit per reading game**, and **Import / Update Reading Activities**.
 The import button shows the installed pack version, counts by game/level, and download progress.
 **Set Reading Level** opens a dialog
 with **Sprout**, **Trail**, and **Summit**, in increasing difficulty; existing drafts keep their original level.
@@ -268,10 +268,16 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   The selection applies to the next Rewards Game only; Practice Game has no time limit.
   The ready screen shows the total limit. A timed game shows time remaining and ends when time runs out,
   saving the partial result without a prize. Changing settings during practice does
-  not remove its active time limit. Reading games use the selected duration as a total limit
-  (without math's question-count scaling) when Reading
-  Rewards System and Show timer are enabled at launch; leaving Reading or backgrounding
-  the app pauses it. Saved reading sessions retain their elapsed time and original limit.
+  not remove its active time limit.
+- **Time limit per reading game** – under **Reading Settings**, separately saved from Math.
+  Choose **None**, **15, 30, or 45 seconds**, **1, 2, 3, or 4 minutes**, or **5, 10, or 15 minutes**.
+  Reading uses this as the total game limit, without Math's question-count scaling, when
+  Reading Rewards System is enabled at launch. Math Rewards System and Math's Show timer
+  setting do not control this limit; timed reading games always show time remaining.
+  On upgrade, the previous shared limit is copied once if Show timer was enabled;
+  otherwise Reading starts with None. Subsequent Math and Reading choices are independent.
+  Leaving Reading or backgrounding the app pauses its timer. Saved reading sessions retain
+  their elapsed time and original limit, even after changing either subject's settings.
 - **Show correct answers** – on by default. Reveal correct answers after
   mistakes during practice, in Results, and in Practice History. Wrong answers are
   still marked and counted, and saved attempts are unchanged. This choice is remembered.
@@ -348,7 +354,7 @@ including activity revisions, is saved at launch. Cycle rollover never resets dr
 | Game | Activity |
 | --- | --- |
 | Missing Word Mission | Choose the missing word. |
-| Sentence Scramble | Hold and drag word tiles into empty sentence spaces, or tap to add/remove tiles. More than one valid order is accepted where appropriate. |
+| Sentence Scramble | Arrange individual whole-word tiles, not phrase chunks. Hold and drag tiles into empty sentence spaces, or tap to add/remove them. Identical words are interchangeable. |
 | Story Sequencer | Arrange illustrated story parts and answer a comprehension question. |
 | Reading Detective | Answer a passage question and select its evidence. |
 | Story Studio | Create a story with character, setting, problem, and ending checkpoints. Use suggested tiles or type your own words. |
@@ -385,30 +391,30 @@ in `datasets/reading/activities-<sha256>.jsonl` (one `ReadingActivity` JSON obje
 Both `reading-activities-import.json` and `manifest.json` remain unchanged on **v7** for older
 apps whose game enums cannot decode Grammar Quest.
 These files are outside Android resources/assets and are **not packaged in the APK**.
-Pack **v9** contains **18,000 activities**: **1,000 per game per difficulty**, including Grammar Quest.
-It preserves all **15,150 v8 activities** unchanged and adds 950 grammar questions per difficulty.
-The existing `reading-activities-v8-import.json` URL serves this compatible expansion, so
-Grammar Quest users only need **Import / Update Reading Activities**; no APK update is needed.
+Pack **v10** contains **18,000 activities**: **1,000 per game per difficulty**, including Grammar Quest.
+It regenerates all **3,000 Sentence Scramble activities**, keeping their IDs, and preserves
+the other 15,000 v9 activities unchanged. The existing `reading-activities-v8-import.json`
+URL serves the updated pack. After updating the app, choose **Import / Update Reading Activities**
+to install the new sentences; updating the APK alone does not replace downloaded content.
 Historical v1–v4 and v8 manifests and content are merged into `datasets/reading/archive.zip`,
 with their original filenames and bytes preserved. Generation and regression tests read the archive
-directly; these historical snapshots are no longer separate download URLs. Only the two active
-checksum-named packs remain alongside the three live import manifests. The v9 pack already includes
-all v7 activities, but the separate v7 pack is required for older apps that cannot decode Grammar Quest.
-The five legacy games span Sprout, Trail, and Summit and include 45 original activities and
-14,955 template-generated activities. Their repeated correct answers from v3 were replaced with
-context-supported word or phrase choices and comprehension questions. Each correct answer
-appears only once per legacy game and difficulty; open-ended Studio stories do not have a
-single correct answer. Grammar may reuse a correct word in a different sentence or question.
-Sentence Scramble now uses **50 sentence structures per difficulty** (150 total), varying
-clause order, sentence openings, coordination, explanations, and contrasts rather than
-only substituting nouns. Structures rotate across topics and situations, with each used
-19 or 20 times among the 997 generated activities per level. The original three activities
-per level retain their content, and the other remaining games retain their v4 content.
-All remaining activity IDs are retained, so updating replaces repetitive activities rather than
-adding them alongside their predecessors. Archived packs have also been reduced to the remaining
-games and republished under new checksum filenames. The archive's `manifest-v4.json` identifies the revision
-baseline. Existing installations retain the remaining games' drafts, progress,
-and presentation cycles. Older app versions without Summit support reject the expanded pack
+directly; these historical snapshots are no longer separate download URLs. Published checksum-named
+packs are immutable. The separate v7 pack remains available for older apps that cannot decode Grammar Quest.
+Sentence Scramble provides **1,000 different sentences per level**, with more than 50 sentence
+structures per level across varied topics. Each tile contains one word with any attached punctuation:
+
+- **Sprout (Scout)**: **4–7 words**.
+- **Trail**: **6–10 words**.
+- **Summit**: **8–14 words**.
+
+The lowest level retains its existing **Sprout** name and `SPROUT` storage identifier.
+All scramble activities, including the original three per level, use the new criteria for new games.
+Existing drafts and history retain their original content revisions, including old phrase tiles;
+their progress and presentation cycles are preserved. The original in-app fallback activities
+remain unchanged for pre-database saves. Other games keep their previous content.
+Grammar and the refreshed scramble questions may reuse an answer in a different sentence context;
+open-ended Studio stories do not have a single correct answer.
+Older app versions without Summit support reject the expanded pack
 safely and retain their installed library; update the app first.
 The default HTTPS source is this repository's `main` branch on `raw.githubusercontent.com`;
 the files must be merged/published there and publicly readable before the import button works.
@@ -427,7 +433,7 @@ Grammar uses the existing `passage` and `question` fields plus a required nonbla
 `explanation`. The explanation field is optional in the shared schema and omitted from the
 other games. Keep the two v7 entry points pinned; incompatible new games need a new entry point.
 
-The v9 content source lives in `datasets/reading/generation/`, outside the APK. Its legacy games combine
+The v10 content source lives in `datasets/reading/generation/`, outside the APK. Its legacy games combine
 original vocabulary, scenes, and story prompts using difficulty-specific templates, rather
 than copying the same question under new IDs. Sprout emphasizes short concrete sentences,
 Trail adds context and cause, and Summit adds complex sentences, inference, and reasoning.
@@ -437,9 +443,9 @@ Those are reproducible template variations, not 15,000 individually hand-written
 `grammar_summit.py` modules provide 19 additional examples per concept from curated vocabulary,
 inflections, and sentence contexts, with stable `-02` through `-20` ID suffixes.
 Neutral book pictures do not reveal answers.
-Vocabulary can occur in more than one passage, but legacy correct answer choices must be distinct
-within each game and difficulty, ignoring capitalization and whitespace; grammar answer
-identities also include the sentence and question context.
+Vocabulary can occur in more than one passage. Legacy v7 correct answer choices are distinct
+within each game and difficulty, ignoring capitalization and whitespace; grammar and refreshed
+scramble task identities also include their sentence context.
 Some reading passages have separate activities for different comprehension questions.
 Structural checks and engine tests verify the catalogue; they do not replace educational
 review of the generated wording.

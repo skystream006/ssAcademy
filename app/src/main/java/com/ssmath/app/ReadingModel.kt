@@ -401,7 +401,13 @@ object ReadingEngine {
         when {
             key == "order" && game in listOf(ReadingGame.SCRAMBLE, ReadingGame.SEQUENCE) -> {
                 if (!a.orderComplete) a.copy(feedback = "Place every tile before submitting.")
-                else award(a, key, a.order in a.content.validOrders, now)
+                else {
+                    val correct = if (game == ReadingGame.SCRAMBLE) {
+                        val words = a.order.map { a.content.tiles[it] }
+                        a.content.validOrders.any { order -> order.map { a.content.tiles[it] } == words }
+                    } else a.order in a.content.validOrders
+                    award(a, key, correct, now)
+                }
             }
             (key == "answer" && game in listOf(ReadingGame.MISSING, ReadingGame.GRAMMAR,
                 ReadingGame.SEQUENCE, ReadingGame.DETECTIVE)) ||

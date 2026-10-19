@@ -393,6 +393,62 @@ class RewardsSettingsTest {
         assertEquals(300, restored.timeLimitSeconds)
     }
 
+    @Test fun readingTimeLimitIsEditableWithoutMathSettingsAndRemembersIndependentChoices() {
+        val model = MathViewModel(application)
+        model.chooseRewardsEnabled(false)
+        model.chooseTimeLimitSeconds(600)
+        compose.setContent { MathTheme { SettingsScreen(model) } }
+        compose.onNodeWithTag("reading-time-limit").assertDoesNotExist()
+        compose.openGameSettings(Subject.READING)
+        compose.onNodeWithText("Math Settings").assert(
+            SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Collapsed"))
+        compose.onNodeWithText("Time limit per reading game").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("time-limit").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Show timer").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Pause in background").assertDoesNotExist()
+        compose.onNodeWithTag("reading-time-limit").performScrollTo().assertTextEquals("None").performClick()
+        compose.onNodeWithText("30 seconds").performScrollTo().performClick()
+        assertEquals(30, model.readingTimeLimitSeconds)
+        assertEquals(30, MathViewModel(application).readingTimeLimitSeconds)
+        assertEquals(600, model.timeLimitSeconds)
+        assertFalse(model.showTimer)
+        assertFalse(model.rewardsEnabled)
+        compose.onNodeWithContentDescription("Reading Rewards System").performScrollTo().performClick().assertIsOff()
+        compose.onNodeWithTag("reading-time-limit").performScrollTo().assertIsEnabled().performClick()
+        compose.onNodeWithText("45 seconds").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Reading Rewards System").performScrollTo().performClick().assertIsOn()
+        compose.onNodeWithText("Reading Settings").performScrollTo().performClick()
+        compose.onNodeWithTag("reading-time-limit").assertDoesNotExist()
+        compose.onNodeWithText("Reading Settings").performScrollTo().performClick()
+        compose.onNodeWithTag("reading-time-limit").performScrollTo().assertTextEquals("45 seconds").performClick()
+        compose.onNodeWithText("None").performScrollTo().performClick()
+        assertEquals(0, MathViewModel(application).readingTimeLimitSeconds)
+        assertEquals(600, MathViewModel(application).timeLimitSeconds)
+    }
+
+    @Test
+    @Config(qualifiers = "w320dp-h800dp")
+    fun readingTimeLimitOffersAllMathDurationsAndNoneAtLargeTextSize() {
+        val model = MathViewModel(application)
+        compose.setContent { MathTheme(textSizePercent = 200) { SettingsScreen(model) } }
+        compose.openGameSettings(Subject.READING)
+        compose.onNodeWithText("Time limit per reading game").performScrollTo().assertIsDisplayed()
+        listOf(15 to "15 seconds", 30 to "30 seconds", 45 to "45 seconds",
+            60 to "1 minute", 120 to "2 minutes", 180 to "3 minutes", 240 to "4 minutes",
+            300 to "5 minutes", 600 to "10 minutes", 900 to "15 minutes", 0 to "None")
+            .forEach { (seconds, label) ->
+                compose.onNodeWithTag("reading-time-limit").performScrollTo().assertIsDisplayed().performClick()
+                (20..60 step 5).forEach { minutes ->
+                    compose.onNodeWithText("$minutes minutes").assertDoesNotExist()
+                }
+                compose.onNodeWithText(label).performScrollTo().performClick()
+                compose.onNodeWithTag("reading-time-limit").assertTextEquals(label)
+                assertEquals(seconds, model.readingTimeLimitSeconds)
+                assertEquals(seconds, MathViewModel(application).readingTimeLimitSeconds)
+                assertEquals(0, model.timeLimitSeconds)
+            }
+    }
+
     @Test fun backgroundPauseButtonIsBesideTimerAndRemembersBothStates() {
         val model = MathViewModel(application)
         model.chooseShowTimer(true)
