@@ -191,7 +191,8 @@ class RewardsModelTest {
         assertEquals(900, second.timeLimitSeconds)
         second.chooseRewardsEnabled(true)
         assertTrue(model().rewardsEnabled)
-        listOf(Int.MIN_VALUE to 0, -5 to 0, 0 to 0, 14 to 0, 15 to 15, 29 to 15,
+        listOf(Int.MIN_VALUE to 0, -5 to 0, 0 to 0, 4 to 0, 5 to 5, 9 to 5,
+            10 to 10, 14 to 10, 15 to 15, 19 to 15, 20 to 20, 29 to 20,
             30 to 30, 44 to 30, 45 to 45, 59 to 45,
             60 to 60, 90 to 60, 120 to 120, 180 to 180, 240 to 240, 300 to 300,
             420 to 300, 600 to 600, 900 to 900, 901 to 900, 1_200 to 900,
@@ -251,7 +252,8 @@ class RewardsModelTest {
         val settings = application.getSharedPreferences("settings", 0)
         settings.edit().putBoolean("show_timer", true).putInt("time_limit_seconds", 300).commit()
         val cases = timeLimitOptionsSeconds.map { it to it } + listOf(
-            Int.MIN_VALUE to 0, 14 to 0, 29 to 15, 44 to 30, 59 to 45, 90 to 60,
+            Int.MIN_VALUE to 0, 4 to 0, 9 to 5, 14 to 10, 19 to 15, 29 to 20,
+            44 to 30, 59 to 45, 90 to 60,
             420 to 300, 899 to 600, 901 to 900, Int.MAX_VALUE to 900)
         cases.forEach { (input, expected) ->
             settings.edit().putInt("reading_time_limit_seconds", input).commit()
@@ -293,7 +295,7 @@ class RewardsModelTest {
     @Test fun rewardsTimeLimitsScalePerFiveQuestionsIncludingShortAndLargeGames() {
         val model = model()
         model.chooseShowTimer(true)
-        listOf(15, 30, 45, 60, 120, 180, 240, 300, 600, 900).forEach { seconds ->
+        listOf(5, 10, 15, 20, 30, 45, 60, 120, 180, 240, 300, 600, 900).forEach { seconds ->
             listOf(1 to 200L, 5 to 1_000L, 15 to 3_000L, 25 to 5_000L,
                 26 to 5_200L, 50 to 10_000L, 1000 to 200_000L).forEach { (count, perSecond) ->
                 model.openRewardsGame()

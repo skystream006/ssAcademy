@@ -740,7 +740,8 @@ class ReadingStoreTest {
         val math = MathViewModel(application)
         math.chooseShowTimer(true)
         math.chooseTimeLimitSeconds(900)
-        listOf(Triple(60, true, 60_000L), Triple(0, true, null),
+        listOf(Triple(5, true, 5_000L), Triple(10, true, 10_000L), Triple(20, true, 20_000L),
+            Triple(60, true, 60_000L), Triple(0, true, null),
             Triple(30, false, null), Triple(30, true, 30_000L)).forEach { (seconds, rewards, limit) ->
             math.chooseReadingTimeLimitSeconds(seconds)
             math.chooseSubjectRewardsEnabled(Subject.READING, rewards)
