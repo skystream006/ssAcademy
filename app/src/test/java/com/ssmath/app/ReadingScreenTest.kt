@@ -108,6 +108,8 @@ class ReadingScreenTest {
     private fun waitFor(condition: (ReadingData) -> Boolean) {
         compose.waitUntil(5_000) {
             shadowOf(Looper.getMainLooper()).idle()
+            // Model updates can trigger Compose effects that must run before the condition is met.
+            compose.waitForIdle()
             model.data?.let(condition) == true && !model.saving
         }
         compose.waitForIdle()
@@ -1156,12 +1158,14 @@ class ReadingScreenTest {
         show(data)
         waitFor { it.active?.id == it.activeSession?.attemptIds?.get(1) }
         compose.onNodeWithTag("reading-question-progress").assertTextContains("Question 2 of 15")
+        assertEquals(model.data, ReadingStore(file).load())
         val ready = readingAnswer(readingFixture(), readingCorrect(readingFixture()))
         compose.runOnIdle { model.act { ready } }
         waitFor { it.active?.id == "attempt-a" }
         click("reading-submit")
         waitFor { it.active?.finishedAt != null }
         compose.onNodeWithTag("reading-summary").assertIsDisplayed()
+        assertEquals(model.data, ReadingStore(file).load())
     }
 
     @Test
