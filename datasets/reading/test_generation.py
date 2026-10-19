@@ -3,11 +3,13 @@
 from collections import Counter, defaultdict
 from copy import deepcopy
 import hashlib
+from itertools import product
 import json
 import unittest
 from zipfile import ZipFile
 
 import generate
+from generation.common import scramble_tiles
 from generation.grammar_games import LESSONS, grammar, grammar_lessons
 from generation.scramble_structures import STRUCTURES
 from generation.word_games import (
@@ -17,6 +19,7 @@ from generation.word_games import (
     missing,
     scramble,
 )
+from generation.word_scramble import SCENES, VOCABULARY, WORD_BOUNDS, _word_orders, word_scramble
 
 
 def scenes(level):
@@ -32,7 +35,7 @@ def sentence(activity):
     return " ".join(activity["tiles"][i] for i in activity["validOrders"][0])
 
 
-class SentenceStructureTest(unittest.TestCase):
+class LegacySentenceStructureTest(unittest.TestCase):
     def test_each_level_has_at_least_fifty_distinct_frames(self):
         self.assertEqual(set(generate.LEVELS), set(STRUCTURES))
         for level, frames in STRUCTURES.items():
@@ -111,9 +114,171 @@ class SentenceStructureTest(unittest.TestCase):
                 self.assertEqual([expected], activity["passage"])
 
     def test_unknown_levels_fail_explicitly(self):
-        for generator in (missing, scramble, grammar):
+        for generator in (missing, scramble, grammar, word_scramble):
             with self.assertRaisesRegex(ValueError, "Unknown reading level"):
                 list(generator("UNKNOWN"))
+
+
+class WordSentenceStructureTest(unittest.TestCase):
+    def test_sixty_distinct_frames_and_a_thousand_distinct_sentences_per_level(self):
+        self.assertEqual(60, len(SCENES))
+        self.assertEqual(60, len({scene.title for scene in SCENES}))
+        self.assertGreaterEqual(len(VOCABULARY), 10)
+        for vocabulary in VOCABULARY.values():
+            self.assertEqual(20, len(set(vocabulary)))
+            self.assertTrue(all(len(word.split()) == 1 for word in vocabulary))
+        for level_index, level in enumerate(generate.LEVELS):
+            activities = list(word_scramble(level))
+            self.assertEqual(1000, len(activities))
+            frames = {scene.sentences[level_index].casefold() for scene in SCENES}
+            self.assertEqual(60, len(frames))
+            self.assertEqual(1000, len({sentence(a).casefold() for a in activities}))
+            counts = Counter()
+            for index, activity in enumerate(activities):
+                variant, scene_index = divmod(index, len(SCENES))
+                scene = SCENES[scene_index]
+                words = VOCABULARY[scene.vocabulary]
+                item = words[(variant + scene_index * 7) % len(words)]
+                frame = scene.sentences[level_index]
+                with self.subTest(level=level, title=activity["title"]):
+                    self.assertEqual(1, frame.count("{item}"))
+                    self.assertEqual(frame.format(item=item), sentence(activity))
+                    self.assertEqual(f"{scene.title}: {item}", activity["title"])
+                counts[frame] += 1
+            self.assertEqual({16, 17}, set(counts.values()))
+            self.assertEqual(60, len(counts))
+
+    def test_every_tile_is_one_word_with_punctuation_and_a_distinct_position(self):
+        for level in generate.LEVELS:
+            low, high = WORD_BOUNDS[level]
+            repeated_labels = 0
+            for activity in word_scramble(level):
+                with self.subTest(level=level, title=activity["title"]):
+                    tiles = activity["tiles"]
+                    self.assertTrue(low <= len(tiles) <= high)
+                    self.assertTrue(activity["validOrders"])
+                    for order in activity["validOrders"]:
+                        self.assertEqual(list(range(len(tiles))), sorted(order))
+                        self.assertNotEqual(list(range(len(tiles))), order)
+                        self.assertNotEqual(tiles, [tiles[i] for i in order])
+                    for tile in tiles:
+                        self.assertRegex(tile, r"^[A-Za-z]+(?:'[A-Za-z]+)?[,!.?]?$")
+                    text = sentence(activity)
+                    self.assertTrue(text[0].isupper())
+                    self.assertIn(text[-1], ".!?")
+                    self.assertNotRegex(text, r"[{}|]")
+                    repeated_labels += len(set(tiles)) < len(tiles)
+            self.assertGreater(repeated_labels, 0)
+
+    def test_bonuses_and_hints_match_each_sentence(self):
+        for level in generate.LEVELS:
+            for index, activity in enumerate(word_scramble(level)):
+                scene = SCENES[index % len(SCENES)]
+                text = sentence(activity)
+                q = activity["question"]
+                with self.subTest(level=level, title=activity["title"]):
+                    self.assertEqual(3 if level == "SPROUT" else 4, len(q["choices"]))
+                    self.assertEqual(len(q["choices"]), len(set(q["choices"])))
+                    self.assertIn(q["choices"][q["answer"]].casefold(), text.casefold())
+                    self.assertIn(scene.hint, activity["hint"])
+                    self.assertTrue(activity["hint"].startswith(f"Start with '{text.split()[0]}'."))
+                    self.assertIn(f"End with '{text.split()[-1]}'.", activity["hint"])
+                    self.assertNotRegex(q["prompt"], r"[{}|]")
+                    self.assertNotRegex(activity["hint"], r"[{}|]")
+                    self.assertEqual(
+                        {"symbol": "📖", "description": "An open book for word-by-word reading practice."},
+                        activity["picture"],
+                    )
+
+    def test_curated_adverb_alternatives_preserve_words_punctuation_and_bonus_evidence(self):
+        counts = Counter()
+        for level_index, level in enumerate(generate.LEVELS):
+            for index, activity in enumerate(word_scramble(level)):
+                scene = SCENES[index % len(SCENES)]
+                vocabulary = VOCABULARY[scene.vocabulary]
+                item = vocabulary[(index // len(SCENES) + index % len(SCENES) * 7) % len(vocabulary)]
+                expected = [
+                    scene.sentences[level_index].format(item=item),
+                    *(text.format(item=item) for text in scene.alternatives[level_index]),
+                ]
+                rendered = [
+                    " ".join(activity["tiles"][i] for i in order)
+                    for order in activity["validOrders"]
+                ]
+                with self.subTest(level=level, title=scene.title):
+                    self.assertEqual(expected, rendered)
+                    self.assertEqual(len(rendered), len(set(rendered)))
+                    for text in rendered:
+                        self.assertEqual(Counter(expected[0].split()), Counter(text.split()))
+                        self.assertIn(scene.correct.format(item=item).casefold(), text.casefold())
+                        self.assertEqual(expected[0].split()[0], text.split()[0])
+                        self.assertEqual(expected[0].split()[-1], text.split()[-1])
+                counts[level] += len(rendered) > 1
+        self.assertGreater(counts["TRAIL"], 0)
+        self.assertGreater(counts["SUMMIT"], counts["TRAIL"])
+
+    def test_no_accepted_alternative_is_used_as_the_starting_order(self):
+        ordered = ["I", "am", "holding", "the", "shell", "carefully", "in", "both", "hands."]
+        initial, _ = scramble_tiles(ordered)
+        tiles, orders = _word_orders(ordered, [initial])
+        self.assertNotIn(tiles, [ordered, initial])
+        self.assertEqual(
+            [ordered, initial],
+            [[tiles[i] for i in order] for order in orders],
+        )
+        with self.assertRaisesRegex(ValueError, "same punctuation-attached word tiles"):
+            _word_orders(["The", "fox", "sleeps", "peacefully."],
+                         [["The", "fox", "peacefully", "sleeps."]])
+
+    def test_reproducible_generation_returns_independent_objects(self):
+        for level in generate.LEVELS:
+            first = list(word_scramble(level))
+            second = list(word_scramble(level))
+            self.assertEqual(first, second)
+            first[0]["tiles"].reverse()
+            first[0]["validOrders"][0].reverse()
+            first[0]["question"]["choices"].reverse()
+            self.assertEqual(second, list(word_scramble(level)))
+
+    def test_repeated_word_occurrences_never_start_in_a_solved_rendered_order(self):
+        for size in range(2, 8):
+            for labels in product(("the", "cat"), repeat=size):
+                if len(set(labels)) == 1:
+                    continue
+                with self.subTest(labels=labels):
+                    tiles, orders = scramble_tiles(labels)
+                    self.assertEqual(Counter(labels), Counter(tiles))
+                    self.assertNotEqual(list(labels), tiles)
+                    self.assertEqual(list(range(size)), sorted(orders[0]))
+                    self.assertEqual(list(labels), [tiles[i] for i in orders[0]])
+                    self.assertEqual((tiles, orders), scramble_tiles(labels))
+        for labels in ([], ["cat"], ["the", "the"]):
+            with self.assertRaisesRegex(ValueError, "at least two different labels"):
+                scramble_tiles(labels)
+
+    def test_scramble_answers_are_scoped_to_sentence_not_cosmetics_or_tile_indexes(self):
+        contents = list(word_scramble("SPROUT"))
+        original = {"game": "SCRAMBLE", "level": "SPROUT", **contents[0]}
+        contextual = {"game": "SCRAMBLE", "level": "SPROUT", **contents[len(SCENES)]}
+        self.assertEqual(set(original["question"]["choices"]), set(contextual["question"]["choices"]))
+        self.assertNotEqual(generate.answer_keys(original), generate.answer_keys(contextual))
+        self.assertEqual(
+            generate.answer_keys(original, contextual_scramble=False),
+            generate.answer_keys(contextual, contextual_scramble=False),
+        )
+        cosmetic = deepcopy(original)
+        cosmetic.update(id="new-id", title="New title", hint="A cosmetic hint.")
+        cosmetic["tiles"] = list(reversed(original["tiles"]))
+        cosmetic["validOrders"] = [
+            [len(original["tiles"]) - 1 - index for index in order]
+            for order in original["validOrders"]
+        ]
+        q = cosmetic["question"]
+        correct = q["choices"].pop(q["answer"])
+        q["choices"].append(f"  {correct.upper()}  ")
+        q["answer"] = len(q["choices"]) - 1
+        self.assertEqual(generate.answer_keys(original), generate.answer_keys(cosmetic))
+        self.assertEqual(4, len(generate.answer_keys(original)[0]))
 
 
 class GrammarLessonTest(unittest.TestCase):
@@ -270,7 +435,7 @@ class GrammarLessonTest(unittest.TestCase):
             first[0]["passage"].append("A changed draft.")
             self.assertEqual(second, list(grammar(level)))
 
-    def test_contextual_answer_identity_is_only_for_grammar(self):
+    def test_grammar_context_does_not_change_other_non_scramble_answer_keys(self):
         original = next(grammar("SPROUT"))
         cosmetic = deepcopy(original)
         cosmetic.update(id="different-id", title="Different title", explanation="Different feedback.")
@@ -283,7 +448,7 @@ class GrammarLessonTest(unittest.TestCase):
         contextual["passage"] = ["We thanked the baker."]
         self.assertNotEqual(generate.task_identity(original), generate.task_identity(contextual))
         self.assertNotEqual(generate.answer_keys(original), generate.answer_keys(contextual))
-        for game in ("MISSING", "SCRAMBLE", "SEQUENCE", "DETECTIVE"):
+        for game in ("MISSING", "SEQUENCE", "DETECTIVE"):
             original["game"] = contextual["game"] = game
             self.assertEqual(generate.answer_keys(original), generate.answer_keys(contextual))
             self.assertEqual(3, len(generate.answer_keys(original)[0]))
@@ -298,19 +463,18 @@ class PublishedPackTest(unittest.TestCase):
     def setUpClass(cls):
         cls.data, cls.manifest = generate.build_pack()
         cls.activities = [json.loads(line) for line in cls.data.splitlines()]
-        baseline = json.loads(generate.archived_file("manifest-v4.json"))
-        cls.previous_data = generate.archived_file(baseline["file"])
+        cls.previous_data = (generate.ROOT / generate.V9_FILE).read_bytes()
         cls.previous = [json.loads(line) for line in cls.previous_data.splitlines()]
         cls.legacy_manifest = json.loads((generate.ROOT / "manifest.json").read_text(encoding="utf-8"))
         cls.legacy_data = (generate.ROOT / cls.legacy_manifest["file"]).read_bytes()
 
     def test_published_files_reproduce_exactly(self):
-        self.assertEqual("v9", self.manifest["version"])
+        self.assertEqual("v10", self.manifest["version"])
         self.assertEqual(self.data, (generate.ROOT / self.manifest["file"]).read_bytes())
         self.assertEqual(len(self.data), self.manifest["bytes"])
         self.assertEqual(hashlib.sha256(self.data).hexdigest(), self.manifest["sha256"])
         self.assertEqual(
-            self.manifest, json.loads((generate.ROOT / generate.V8_ENTRY_POINT).read_text(encoding="utf-8")),
+            self.manifest, json.loads((generate.ROOT / generate.V10_ENTRY_POINT).read_text(encoding="utf-8")),
         )
 
     def test_repeat_build_is_byte_identical(self):
@@ -327,21 +491,41 @@ class PublishedPackTest(unittest.TestCase):
             (generate.ROOT / "reading-activities-import.json").read_bytes(),
         )
         self.assertEqual(15_000, len(self.legacy_data.splitlines()))
-        self.assertEqual(self.legacy_data, b"".join(self.data.splitlines(keepends=True)[:15_000]))
+        self.assertEqual(self.legacy_data, b"".join(self.previous_data.splitlines(keepends=True)[:15_000]))
         self.assertEqual(
             [activity for section in (slice(0, 50), slice(50, None))
              for level in generate.LEVELS for activity in list(grammar(level))[section]],
             self.activities[15_000:],
         )
 
-    def test_all_v8_questions_and_ids_remain_byte_identical(self):
+    def test_v9_reproduces_exactly_and_preserves_the_v8_prefix(self):
+        reproduced, manifest = generate.build_v9_pack()
+        self.assertEqual("v9", manifest["version"])
+        self.assertEqual(generate.V9_SHA256, manifest["sha256"])
+        self.assertEqual(21_153_420, manifest["bytes"])
+        self.assertEqual(self.previous_data, reproduced)
         archived = json.loads(generate.archived_file("manifest-v8.json"))
         self.assertEqual("v8", archived["version"])
         self.assertEqual("e69b6c094a096ca840a2a06e4bbecaceee21a2832503f186f26e205c0e5a657d",
                          archived["sha256"])
         original_data = generate.archived_file(archived["file"])
         self.assertEqual(15_150, len(original_data.splitlines()))
-        self.assertEqual(original_data, b"".join(self.data.splitlines(keepends=True)[:15_150]))
+        self.assertEqual(original_data, b"".join(self.previous_data.splitlines(keepends=True)[:15_150]))
+
+    def test_v8_entry_point_stays_byte_identical_and_safe_for_legacy_index_only_scoring(self):
+        data = (generate.ROOT / generate.V8_ENTRY_POINT).read_bytes()
+        self.assertEqual(
+            "f78b1bfb84001fb849aa94883c87f30829892805f4c556c82164f861e2ebb55e",
+            hashlib.sha256(data).hexdigest(),
+        )
+        manifest = json.loads(data)
+        self.assertEqual("v9", manifest["version"])
+        self.assertEqual(generate.V9_FILE, manifest["file"])
+        self.assertEqual(generate.V9_SHA256, manifest["sha256"])
+        self.assertNotEqual(generate.V8_ENTRY_POINT, generate.V10_ENTRY_POINT)
+        scrambles = [a for a in self.previous if a["game"] == "SCRAMBLE"]
+        self.assertEqual(3000, len(scrambles))
+        self.assertTrue(all(len(a["tiles"]) == len(set(a["tiles"])) for a in scrambles))
 
     def test_all_catalogues_have_only_supported_games_and_schema_fields(self):
         legacy_games = {"MISSING", "SCRAMBLE", "SEQUENCE", "DETECTIVE", "STUDIO"}
@@ -360,7 +544,8 @@ class PublishedPackTest(unittest.TestCase):
         )
         live_manifests = {path.name for path in generate.ROOT.glob("*.json")}
         self.assertEqual(
-            {"manifest.json", "reading-activities-import.json", generate.V8_ENTRY_POINT}, live_manifests,
+            {"manifest.json", "reading-activities-import.json",
+             generate.V8_ENTRY_POINT, generate.V10_ENTRY_POINT}, live_manifests,
         )
         referenced = {False: set(), True: set()}
         for name in sorted(live_manifests | archived_manifests):
@@ -380,7 +565,7 @@ class PublishedPackTest(unittest.TestCase):
                     len(line) + 1 <= generate.MAX_LINE_BYTES for line in data.splitlines()
                 ))
                 activities = [json.loads(line) for line in data.splitlines()]
-                games = legacy_games | ({"GRAMMAR"} if manifest["version"] in ("v8", "v9") else set())
+                games = legacy_games | ({"GRAMMAR"} if manifest["version"] in ("v8", "v9", "v10") else set())
                 self.assertEqual(games, {a["game"] for a in activities})
                 self.assertTrue(all(set(a) <= fields for a in activities))
                 for activity in activities:
@@ -393,55 +578,56 @@ class PublishedPackTest(unittest.TestCase):
                 levels = generate.LEVELS[:2] if manifest["version"] == "v1" else generate.LEVELS
                 per_pool = 3 if manifest["version"] in ("v1", "v2") else 1000
                 expected = {f"{game}:{level}": per_pool for game in legacy_games for level in levels}
-                if manifest["version"] in ("v8", "v9"):
+                if manifest["version"] in ("v8", "v9", "v10"):
                     grammar_count = 50 if manifest["version"] == "v8" else 1000
                     expected.update({f"GRAMMAR:{level}": grammar_count for level in levels})
                 counts = Counter(f'{a["game"]}:{a["level"]}' for a in activities)
                 self.assertEqual(expected, counts)
                 self.assertEqual(expected, manifest["counts"])
         self.assertEqual(
-            referenced[False], {path.name for path in generate.ROOT.glob("activities-*.jsonl")},
+            referenced[False],
+            {path.name for path in generate.ROOT.glob("activities-*.jsonl")},
         )
-        self.assertEqual(2, len(referenced[False]))
+        self.assertEqual(3, len(referenced[False]))
         self.assertEqual(archived_names, archived_manifests | referenced[True])
         self.assertFalse(archived_names.intersection(path.name for path in generate.ROOT.iterdir()))
 
-    def test_only_generated_scrambles_change_and_keep_their_ids(self):
+    def test_all_scrambles_change_with_stable_ids_and_every_other_v9_line_is_unchanged(self):
         self.assertEqual(18_000, len(self.activities))
-        self.assertEqual(len(self.previous), len(self.activities[:15_000]))
+        self.assertEqual(len(self.previous), len(self.activities))
         old_lines = self.previous_data.splitlines(keepends=True)
         new_lines = self.data.splitlines(keepends=True)
-        self.assertEqual(
-            b"".join(old_lines[:45]),
-            b"".join(new_lines[:45]),
-        )
         revised = Counter()
+        revised_originals = Counter()
         for index, (old, new) in enumerate(zip(self.previous, self.activities)):
             self.assertEqual(
                 (old["id"], old["game"], old["level"]), (new["id"], new["game"], new["level"]),
             )
-            if index >= 45 and new["game"] == "SCRAMBLE":
+            if new["game"] == "SCRAMBLE":
                 self.assertNotEqual(old, new)
                 revised[new["level"]] += 1
+                if index < 45:
+                    revised_originals[new["level"]] += 1
             else:
                 self.assertEqual(old, new)
                 self.assertEqual(old_lines[index], new_lines[index])
-        self.assertEqual(dict.fromkeys(generate.LEVELS, 997), dict(revised))
+        self.assertEqual(dict.fromkeys(generate.LEVELS, 1000), dict(revised))
+        self.assertEqual(dict.fromkeys(generate.LEVELS, 3), dict(revised_originals))
 
-    def test_legacy_catalogues_remain_exact_prefixes(self):
+    def test_legacy_catalogues_remain_exact_prefixes_of_v9(self):
         for version, count in (("v1", 30), ("v2", 45)):
             with self.subTest(version=version):
                 manifest = json.loads(generate.archived_file(f"manifest-{version}.json"))
                 data = generate.archived_file(manifest["file"])
                 self.assertEqual(count, len(data.splitlines()))
-                self.assertEqual(data, b"".join(self.data.splitlines(keepends=True)[:count]))
+                self.assertEqual(data, b"".join(self.previous_data.splitlines(keepends=True)[:count]))
 
     def test_published_scrambles_use_the_varied_generator(self):
         for level in generate.LEVELS:
             published = [
-                a for a in self.activities[45:] if a["game"] == "SCRAMBLE" and a["level"] == level
+                a for a in self.activities if a["game"] == "SCRAMBLE" and a["level"] == level
             ]
-            expected = list(scramble(level))
+            expected = list(word_scramble(level))
             self.assertEqual(len(expected), len(published))
             for content, activity in zip(expected, published):
                 self.assertEqual(content, {k: v for k, v in activity.items() if k not in ("id", "game", "level")})

@@ -18,10 +18,12 @@ def question(prompt, correct, distractors):
 
 
 def scramble_tiles(ordered_tiles):
-    if len(ordered_tiles) < 2 or len(set(ordered_tiles)) != len(ordered_tiles):
-        raise ValueError("Tiles must be distinct and contain at least two parts")
+    if len(ordered_tiles) < 2 or len(set(ordered_tiles)) < 2:
+        raise ValueError("Tiles must contain at least two different labels")
     indexes = sorted(range(len(ordered_tiles)), key=lambda i: hashlib.sha256(
         (str(i) + "\0" + ordered_tiles[i]).encode("utf-8")).digest())
-    if indexes == list(range(len(ordered_tiles))):
+    # Repeated words still have separate indexes. Moving only identical labels
+    # is not a visible scramble, even when the index permutation is nonidentity.
+    if [ordered_tiles[i] for i in indexes] == list(ordered_tiles):
         indexes = indexes[1:] + indexes[:1]
     return [ordered_tiles[i] for i in indexes], [[indexes.index(i) for i in range(len(indexes))]]

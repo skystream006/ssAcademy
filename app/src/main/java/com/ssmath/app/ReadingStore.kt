@@ -125,7 +125,9 @@ class ReadingViewModel(
     private var timerJob: Job? = null
     private var pending: ReadingData? = null
     private var pendingStart: Command.Edit? = null
-    private val settings = application.getSharedPreferences("settings", 0)
+    private val settings = application.getSharedPreferences("settings", 0).also {
+        it.readReadingTimeLimitSeconds()
+    }
     private val commands = Channel<Command>(Channel.UNLIMITED)
     private val deferred = ArrayDeque<Command.Edit>()
     private sealed interface Command {
@@ -291,8 +293,8 @@ class ReadingViewModel(
         val current = data ?: return
         if (storageError != null || importing) return
         val enabled = settings.getBoolean(Subject.READING.rewardsPreference, true)
-        val seconds = settings.readTimeLimitSeconds()
-        val limit = (seconds * 1_000L).takeIf { enabled && settings.getBoolean("show_timer", false) && it > 0 }
+        val seconds = settings.readReadingTimeLimitSeconds()
+        val limit = (seconds * 1_000L).takeIf { enabled && it > 0 }
         commands.trySend(Command.Edit(current.selectedProfileId, current.profile?.activeAttemptId, { it },
             Command.Start(game, null, true, count, enabled, limit)))
     }

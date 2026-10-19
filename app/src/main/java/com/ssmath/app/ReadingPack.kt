@@ -108,7 +108,7 @@ fun interface ReadingPackTransport {
 
 private const val READING_PACK_ROOT =
     "https://raw.githubusercontent.com/skystream006/ssAcademy/main/datasets/reading/"
-const val READING_PACK_MANIFEST_URL = "${READING_PACK_ROOT}reading-activities-v8-import.json"
+const val READING_PACK_MANIFEST_URL = "${READING_PACK_ROOT}reading-activities-v10-import.json"
 
 internal fun requireReadingPackUrl(url: String) {
     val parsed = url.toHttpUrl()
@@ -116,7 +116,8 @@ internal fun requireReadingPackUrl(url: String) {
         parsed.username.isEmpty() && parsed.password.isEmpty() && parsed.query == null && parsed.fragment == null &&
         url.startsWith(READING_PACK_ROOT) && parsed.toString() == url) { "Reading pack URL is not allowed" }
     val filename = url.removePrefix(READING_PACK_ROOT)
-    require(filename in setOf("reading-activities-v8-import.json", "reading-activities-import.json", "manifest.json") ||
+    require(filename in setOf("reading-activities-v10-import.json", "reading-activities-v8-import.json",
+        "reading-activities-import.json", "manifest.json") ||
         filename.matches(Regex("activities-[a-f0-9]{64}\\.jsonl"))) {
         "Only the configured repository's reading pack files are allowed"
     }

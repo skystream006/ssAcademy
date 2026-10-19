@@ -182,6 +182,7 @@ class RewardsModelTest {
         val first = model()
         assertTrue(first.rewardsEnabled)
         assertEquals(0, first.timeLimitSeconds)
+        assertEquals(0, first.readingTimeLimitSeconds)
         assertNull(first.activeTimeLimitMs)
         first.chooseRewardsEnabled(false)
         first.chooseTimeLimitSeconds(900)
@@ -224,6 +225,69 @@ class RewardsModelTest {
                 .putInt("time_limit_minutes", 1).commit()
             assertEquals(900, model().timeLimitSeconds)
         }
+    }
+
+    @Test fun mathStartupSnapshotsLegacyReadingLimitBeforeAnyMathChanges() {
+        val settings = application.getSharedPreferences("settings", 0)
+        for (showTimer in listOf(false, true)) {
+            listOf("time_limit_minutes" to 3, "time_limit_seconds" to 45).forEach { (key, value) ->
+                settings.edit().clear().putBoolean("show_timer", showTimer)
+                    .putBoolean("rewards_enabled", false).putInt(key, value).commit()
+                val expected = if (!showTimer) 0 else if (key == "time_limit_minutes") 180 else 45
+                val model = model()
+                assertEquals(expected, model.readingTimeLimitSeconds)
+                assertEquals(expected, settings.getInt("reading_time_limit_seconds", -1))
+                model.chooseShowTimer(!showTimer)
+                model.chooseTimeLimitSeconds(600)
+                model.chooseRewardsEnabled(true)
+                assertEquals(expected, model.readingTimeLimitSeconds)
+                assertEquals(expected, model().readingTimeLimitSeconds)
+                assertEquals(expected, settings.readReadingTimeLimitSeconds())
+            }
+        }
+    }
+
+    @Test fun readingLimitUsesTheSameNormalizationAndPersistsIndependentlyIncludingNone() {
+        val settings = application.getSharedPreferences("settings", 0)
+        settings.edit().putBoolean("show_timer", true).putInt("time_limit_seconds", 300).commit()
+        val cases = timeLimitOptionsSeconds.map { it to it } + listOf(
+            Int.MIN_VALUE to 0, 14 to 0, 29 to 15, 44 to 30, 59 to 45, 90 to 60,
+            420 to 300, 899 to 600, 901 to 900, Int.MAX_VALUE to 900)
+        cases.forEach { (input, expected) ->
+            settings.edit().putInt("reading_time_limit_seconds", input).commit()
+            val model = model()
+            assertEquals(expected, model.readingTimeLimitSeconds)
+            assertEquals(expected, settings.readReadingTimeLimitSeconds())
+            model.chooseReadingTimeLimitSeconds(input)
+            assertEquals(expected, model.readingTimeLimitSeconds)
+            assertEquals(expected, settings.getInt("reading_time_limit_seconds", -1))
+            val restored = model()
+            assertEquals(expected, restored.readingTimeLimitSeconds)
+            assertEquals(300, model.timeLimitSeconds)
+            assertEquals(300, restored.timeLimitSeconds)
+            assertTrue(restored.showTimer)
+            assertTrue(restored.rewardsEnabled)
+        }
+    }
+
+    @Test fun readingChoicesDoNotChangeMathReadyOrActiveTimeLimits() {
+        val model = model()
+        model.chooseShowTimer(true)
+        model.chooseTimeLimitSeconds(60)
+        model.openRewardsGame()
+        model.updateRewardsQuestionCount("25")
+        model.selectRewardsGame(Operation.ADDITION)
+        listOf(30, 900, 0).forEach { seconds ->
+            model.chooseReadingTimeLimitSeconds(seconds)
+            assertEquals(300_000L, model.readyTimeLimitMs)
+        }
+        model.start()
+        model.chooseReadingTimeLimitSeconds(15)
+        model.chooseSubjectRewardsEnabled(Subject.READING, false)
+        assertEquals(300_000L, model.activeTimeLimitMs)
+        assertEquals(60, model.timeLimitSeconds)
+        assertTrue(model.showTimer)
+        assertTrue(model.rewardsEnabled)
     }
 
     @Test fun rewardsTimeLimitsScalePerFiveQuestionsIncludingShortAndLargeGames() {

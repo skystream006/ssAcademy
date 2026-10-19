@@ -554,6 +554,14 @@ private fun GameSettings(
         SubjectRewardsSetting(model, Subject.READING,
             "Earn prize fragments by completing ${model.rewardThresholds.tier1Minimum} " +
                 "or more questions with over 90% correct.")
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Time limit per reading game", style = MaterialTheme.typography.titleSmall)
+            TimeLimitDropdown(model.readingTimeLimitSeconds, model::chooseReadingTimeLimitSeconds,
+                tag = "reading-time-limit")
+            Text("Total time, regardless of question count. Requires Reading Rewards System. " +
+                "None disables the limit. Saved games keep their original limit.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         ListItem(headlineContent = { Text("Reading Progress") },
             supportingContent = { Text("Private progress and saved stories") },
             leadingContent = { Icon(Icons.Rounded.History, null) },
@@ -725,30 +733,10 @@ private fun TimeLimitSetting(
     pauseInBackground: Boolean,
     onPauseInBackgroundChange: (Boolean) -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    fun label(value: Int) = when (value) {
-        0 -> "None"
-        in 1..59 -> "$value seconds"
-        60 -> "1 minute"
-        else -> "${value / 60} minutes"
-    }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text("Time limit per 5 questions", style = MaterialTheme.typography.titleSmall)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box {
-                OutlinedButton(onClick = { expanded = true }, modifier = Modifier.testTag("time-limit")) {
-                    Text(label(seconds))
-                    Icon(Icons.Rounded.ExpandMore, null)
-                }
-                DropdownMenu(expanded, onDismissRequest = { expanded = false }) {
-                    timeLimitOptionsSeconds.forEach { option ->
-                        DropdownMenuItem(
-                            text = { Text(label(option)) },
-                            onClick = { onChange(option); expanded = false },
-                            modifier = Modifier.semantics { selected = seconds == option })
-                    }
-                }
-            }
+            TimeLimitDropdown(seconds, onChange, tag = "time-limit")
             OutlinedIconToggleButton(checked = pauseInBackground, onCheckedChange = onPauseInBackgroundChange,
                 modifier = Modifier.semantics {
                     contentDescription = "Pause in background"
@@ -763,6 +751,31 @@ private fun TimeLimitSetting(
         Text("Rewards Game only, not Practice Game. 1 minute per 5 questions gives 5 minutes for 25 questions. " +
             "Time always pauses in settings.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun TimeLimitDropdown(seconds: Int, onChange: (Int) -> Unit, tag: String) {
+    var expanded by remember { mutableStateOf(false) }
+    fun label(value: Int) = when (value) {
+        0 -> "None"
+        in 1..59 -> "$value seconds"
+        60 -> "1 minute"
+        else -> "${value / 60} minutes"
+    }
+    Box {
+        OutlinedButton(onClick = { expanded = true }, modifier = Modifier.testTag(tag)) {
+            Text(label(seconds))
+            Icon(Icons.Rounded.ExpandMore, null)
+        }
+        DropdownMenu(expanded, onDismissRequest = { expanded = false }) {
+            timeLimitOptionsSeconds.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(label(option)) },
+                    onClick = { onChange(option); expanded = false },
+                    modifier = Modifier.semantics { selected = seconds == option })
+            }
+        }
     }
 }
 

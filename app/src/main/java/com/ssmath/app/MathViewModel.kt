@@ -177,6 +177,8 @@ class MathViewModel(
         private set
     var timeLimitSeconds by mutableStateOf(settings.readTimeLimitSeconds())
         private set
+    var readingTimeLimitSeconds by mutableStateOf(settings.readReadingTimeLimitSeconds())
+        private set
     var activeTimeLimitMs by mutableStateOf<Long?>(null)
         private set
     var showCorrectAnswers by mutableStateOf(settings.getBoolean("show_correct_answers", true))
@@ -1123,6 +1125,11 @@ class MathViewModel(
     fun chooseTimeLimitSeconds(value: Int) {
         timeLimitSeconds = normalizeTimeLimitSeconds(value)
         settings.edit().putInt("time_limit_seconds", timeLimitSeconds).apply()
+    }
+
+    fun chooseReadingTimeLimitSeconds(value: Int) {
+        readingTimeLimitSeconds = normalizeTimeLimitSeconds(value)
+        settings.edit().putInt("reading_time_limit_seconds", readingTimeLimitSeconds).apply()
     }
 
     fun chooseShowCorrectAnswers(value: Boolean) {

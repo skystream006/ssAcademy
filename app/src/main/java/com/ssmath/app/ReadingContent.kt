@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 enum class ReadingGame(val title: String, val guidance: String) {
     MISSING("Missing Word Mission", "Read the sentence. Choose the word that fits."),
-    SCRAMBLE("Sentence Scramble", "Hold and drag tiles into empty spaces. Drag them back out to Available tiles. You can also tap to add or remove tiles."),
+    SCRAMBLE("Sentence Scramble", "Arrange individual word tiles to build a sentence. Hold and drag tiles into empty spaces. Drag them back out to Available tiles. You can also tap to add or remove tiles."),
     SEQUENCE("Story Sequencer", "Put the illustrated events in order, then answer a question."),
     DETECTIVE("Reading Detective", "Answer the question, then tap the exact sentence that proves it."),
     STUDIO("Story Studio", "Create a character, a setting, a problem, and an ending. Save each part."),

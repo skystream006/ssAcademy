@@ -123,16 +123,18 @@ class GrammarGameTest {
     }
 
     @Test fun publishedGrammarHasOneThousandQuestionsPerLevelAndEveryChoiceIsScored() {
-        val pack = ReadingRepositoryPack("reading-activities-v8-import.json")
+        val pack = ReadingRepositoryPack("reading-activities-v10-import.json")
         val grammar = pack.activities.filter { it.game == ReadingGame.GRAMMAR }
-        assertEquals("v9", pack.manifest.version)
+        assertEquals("v10", pack.manifest.version)
         assertEquals(3000, grammar.size)
         assertEquals(3000, grammar.map { it.id }.distinct().size)
         assertEquals(18_000, pack.activities.size)
         val legacy = ReadingRepositoryPack()
-        assertEquals(legacy.activities, pack.activities.filter { it.game != ReadingGame.GRAMMAR })
+        assertEquals(legacy.activities.filter { it.game != ReadingGame.SCRAMBLE },
+            pack.activities.filter { it.game !in setOf(ReadingGame.GRAMMAR, ReadingGame.SCRAMBLE) })
         val original = ReadingRepositoryPack("manifest-v8.json")
-        assertEquals(original.activities, pack.activities.take(original.activities.size))
+        assertEquals(original.activities.filter { it.game != ReadingGame.SCRAMBLE },
+            pack.activities.take(original.activities.size).filter { it.game != ReadingGame.SCRAMBLE })
         for (level in ReadingLevel.entries) {
             val pool = grammar.filter { it.level == level }
             assertEquals(1000, pool.size)
@@ -165,7 +167,7 @@ class GrammarGameTest {
         store.save(data)
         data = store.start(data, ReadingGame.MISSING, ReadingLevel.SPROUT, false)
         val oldDraft = requireNotNull(data.active)
-        val pack = ReadingRepositoryPack("reading-activities-v8-import.json")
+        val pack = ReadingRepositoryPack("reading-activities-v10-import.json")
         runBlocking { pack.importer(store.catalog, cache).importPack() }
         assertEquals(oldDraft, store.load().active)
         for (level in ReadingLevel.entries) {
@@ -208,7 +210,7 @@ class GrammarGameTest {
             requireNotNull(data.active)
         }
         val before = store.load()
-        val current = ReadingRepositoryPack("reading-activities-v8-import.json")
+        val current = ReadingRepositoryPack("reading-activities-v10-import.json")
         runBlocking { current.importer(store.catalog, cache).importPack() }
         assertEquals(before, store.load())
         drafts.values.forEach { draft ->
