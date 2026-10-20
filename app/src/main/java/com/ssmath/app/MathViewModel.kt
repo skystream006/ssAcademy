@@ -21,7 +21,7 @@ import kotlinx.coroutines.withContext
 
 enum class Screen { SETUP, READY, PLAYING, RESULTS }
 
-enum class SetupDialog { PRACTICE, REWARDS }
+enum class SetupDialog { PRACTICE, REWARDS, LOGIC }
 
 enum class Overlay { SETTINGS, REWARDS_SETUP, HISTORY, SUBJECT_HISTORY, REWARDS, POKEMONS, READING, READING_PROGRESS }
 
@@ -59,11 +59,12 @@ class MathViewModel(
     var gameMode by mutableStateOf(GameMode.PRACTICE)
         private set
     private data class ReadyGame(val mode: GameMode, val operation: Operation, val parameters: GameParameters,
-        val isMultiplicationMatrix: Boolean = false)
+        val isMultiplicationMatrix: Boolean = false, val isLogicMath: Boolean = false)
     private var readyGame by mutableStateOf<ReadyGame?>(null)
     val readyOperation: Operation? get() = readyGame?.operation
     val readyParameters: GameParameters? get() = readyGame?.parameters
     val readyMultiplicationMatrix: Boolean get() = readyGame?.isMultiplicationMatrix == true
+    val readyLogicMath: Boolean get() = readyGame?.isLogicMath == true
     val readyTimeLimitMs: Long?
         get() {
             val ready = readyGame ?: return null
@@ -187,6 +188,8 @@ class MathViewModel(
         private set
     var randomizeMatrixQuestions by mutableStateOf(settings.getBoolean("randomize_matrix_questions", false))
         private set
+    var logicMathSettings by mutableStateOf(loadLogicMathSettings())
+        private set
     var textSizePercent by mutableStateOf(settings.getInt("text_size_percent", DEFAULT_TEXT_SIZE_PERCENT)
         .coerceIn(MIN_TEXT_SIZE_PERCENT, MAX_TEXT_SIZE_PERCENT))
         private set
@@ -268,6 +271,28 @@ class MathViewModel(
         edit.apply()
     }
 
+    private fun loadLogicMathSettings(): LogicMathSettings = try {
+        val defaults = LogicMathSettings()
+        LogicMathSettings(
+            settings.getInt("logic_minimum_pictures", defaults.minimumPictures),
+            settings.getInt("logic_maximum_pictures", defaults.maximumPictures),
+            settings.getInt("logic_minimum_length", defaults.minimumLength),
+            settings.getInt("logic_maximum_length", defaults.maximumLength)
+        ).takeIf { it.isValid } ?: defaults
+    } catch (_: ClassCastException) {
+        LogicMathSettings()
+    }
+
+    fun chooseLogicMathSettings(value: LogicMathSettings) {
+        if (!value.isValid) return
+        logicMathSettings = value
+        settings.edit()
+            .putInt("logic_minimum_pictures", value.minimumPictures)
+            .putInt("logic_maximum_pictures", value.maximumPictures)
+            .putInt("logic_minimum_length", value.minimumLength)
+            .putInt("logic_maximum_length", value.maximumLength).apply()
+    }
+
     fun openMathGames() {
         if (screen == Screen.SETUP && overlay == null) mathGamesOpen = true
     }
@@ -293,6 +318,13 @@ class MathViewModel(
         mathGamesOpen = true
         rewardsQuestionCountText = ""
         setupDialog = SetupDialog.REWARDS
+    }
+
+    fun openLogicMathGame() {
+        if (screen != Screen.SETUP || overlay != null || setupDialog != null) return
+        mathGamesOpen = true
+        rewardsQuestionCountText = ""
+        setupDialog = SetupDialog.LOGIC
     }
 
     fun openMultiplicationMatrixGame() {
@@ -333,17 +365,19 @@ class MathViewModel(
     }
 
     fun selectRewardsGame(operation: Operation) {
-        if (screen != Screen.SETUP || overlay != null || setupDialog != SetupDialog.REWARDS) return
+        if (screen != Screen.SETUP || overlay != null ||
+            (setupDialog != SetupDialog.REWARDS && setupDialog != SetupDialog.LOGIC)) return
         val parameters = rewardsDefaults[operation]?.takeIf { it.isValid(operation) } ?: return
         val count = rewardsQuestionCount ?: return
-        ready(GameMode.REWARDS, operation, GameParameters(parameters.firstText, parameters.secondText, count.toString()))
+        ready(GameMode.REWARDS, operation, GameParameters(parameters.firstText, parameters.secondText, count.toString()),
+            isLogicMath = setupDialog == SetupDialog.LOGIC)
     }
 
     private fun ready(mode: GameMode, operation: Operation, parameters: GameParameters,
-        isMultiplicationMatrix: Boolean = false) {
+        isMultiplicationMatrix: Boolean = false, isLogicMath: Boolean = false) {
         mathGamesOpen = true
         gameMode = mode
-        readyGame = ReadyGame(mode, operation, parameters, isMultiplicationMatrix)
+        readyGame = ReadyGame(mode, operation, parameters, isMultiplicationMatrix, isLogicMath)
         setupDialog = null
         screen = Screen.READY
     }
@@ -363,7 +397,8 @@ class MathViewModel(
     fun updateRewardsQuestionCount(text: String) { rewardsQuestionCountText = text.take(6) }
 
     fun submitSetup() {
-        if (screen != Screen.SETUP || overlay != null || setupDialog == SetupDialog.REWARDS || !canSubmitSetup) return
+        if (screen != Screen.SETUP || overlay != null ||
+            (setupDialog != null && setupDialog != SetupDialog.PRACTICE) || !canSubmitSetup) return
         val operation = selectedOperation ?: return
         val questionCount = questionCount ?: return
         val edit = settings.edit().putString("operation", operation.name).putInt("question_count", questionCount)
@@ -386,7 +421,8 @@ class MathViewModel(
             return
         }
         val returnDialog = if (screen == Screen.READY && !readyMultiplicationMatrix)
-            if (gameMode == GameMode.PRACTICE) SetupDialog.PRACTICE else SetupDialog.REWARDS
+            if (readyLogicMath) SetupDialog.LOGIC
+            else if (gameMode == GameMode.PRACTICE) SetupDialog.PRACTICE else SetupDialog.REWARDS
         else null
         if (screen == Screen.PLAYING) DebugLog.event(DebugEvent.GAME_ABANDONED)
         game = null
@@ -417,7 +453,8 @@ class MathViewModel(
         val questionCount = parameters.questionCount ?: return
         gameMode = ready.mode
         game = if (ready.isMultiplicationMatrix) GameState.startMultiplicationMatrix(randomizeMatrixQuestions)
-            else GameState.start(operation, maximum, generator, questionCount, minimum, maximumSecond)
+            else GameState.start(operation, maximum, generator, questionCount, minimum, maximumSecond,
+                logicSettings = logicMathSettings.takeIf { ready.isLogicMath })
         progressIcon = ProgressIcon.entries.random(progressIconRandom)
         answerText = ""
         celebration = null
@@ -462,6 +499,7 @@ class MathViewModel(
             minimum = state.minimum, maximumSecond = state.maximumSecond.takeIf { state.operation == Operation.DIVISION },
             questionCount = state.questionCount, timedOut = expired, gameMode = gameMode,
             isMultiplicationMatrix = state.isMultiplicationMatrix,
+            isLogicMath = state.logicSettings != null,
             rewardThresholds = rewardThresholds, matrixRewardTier = matrixRewardTier,
             prizeType = selectPrize(state.questionCount, state.correct, state.attempts.size,
                 rewardsEnabledAtStart, rewardsEnabled && gameMode == GameMode.REWARDS, expired, rewardRandom,

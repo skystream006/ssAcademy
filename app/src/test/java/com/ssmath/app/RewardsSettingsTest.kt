@@ -103,8 +103,18 @@ class RewardsSettingsTest {
             .assertIsOn().performClick().assertIsOff()
         compose.onNodeWithContentDescription("Vertical equations").performScrollTo()
             .assertIsOn().performClick().assertIsOff()
+        val matrix = compose.onNodeWithText("Multiplication Matrix Settings")
+        val logic = compose.onNodeWithText("Logic Math Settings")
+        matrix.performScrollTo().assertHasClickAction().assert(collapsed)
+        logic.performScrollTo().assertHasClickAction().assert(collapsed)
+        compose.onNodeWithContentDescription("Randomize matrix question order").assertDoesNotExist()
+        compose.onNodeWithText("Matrix Reward Tier").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Minimum Number of Different Pictures").assertDoesNotExist()
+        matrix.performScrollTo().performClick().assert(expanded)
         compose.onNodeWithContentDescription("Randomize matrix question order").performScrollTo()
             .assertIsOff().performClick().assertIsOn()
+        compose.onNodeWithText("Matrix Reward Tier").performScrollTo().assertIsDisplayed()
+        logic.assert(collapsed)
         compose.onNodeWithTag("rewards-setup").performScrollTo()
             .assert(hasText("Default Math Reward Game Settings"))
         compose.onNodeWithText("Rewards Game Setup").assertDoesNotExist()
@@ -122,6 +132,8 @@ class RewardsSettingsTest {
         compose.onNodeWithContentDescription("Math Rewards System").performScrollTo().assertIsOff()
         compose.onNodeWithContentDescription("Show correct answers").performScrollTo().assertIsOff()
         compose.onNodeWithContentDescription("Vertical equations").performScrollTo().assertIsOff()
+        matrix.performScrollTo().assert(expanded)
+        logic.performScrollTo().assert(collapsed)
         compose.onNodeWithContentDescription("Randomize matrix question order").performScrollTo().assertIsOn()
         val restored = MathViewModel(application)
         assertFalse(restored.rewardsEnabled)
@@ -182,18 +194,123 @@ class RewardsSettingsTest {
         compose.setContent { MathTheme(textSizePercent = 200) { SettingsScreen(model) } }
         compose.onNodeWithTag("matrix-reward-TIER_1").assertDoesNotExist()
         compose.openGameSettings()
+        val collapsed = SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Collapsed")
+        val expanded = SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Expanded")
+        val matrix = compose.onNodeWithText("Multiplication Matrix Settings")
+        matrix.performScrollTo().assert(collapsed)
+        compose.onNodeWithTag("matrix-reward-TIER_2").assertDoesNotExist()
+        matrix.performClick().assert(expanded)
         compose.onNodeWithTag("matrix-reward-TIER_2").performScrollTo().assertIsSelected()
         compose.onNodeWithTag("matrix-reward-TIER_1").performScrollTo()
             .assertIsDisplayed().assertIsNotSelected().performClick().assertIsSelected()
         assertEquals(RewardTier.TIER_1, MathViewModel(application).matrixRewardTier)
         assertEquals(RewardThresholds(), model.rewardThresholds)
         assertFalse(model.randomizeMatrixQuestions)
+        matrix.performScrollTo().performClick().assert(collapsed)
+        compose.onNodeWithText("Matrix Reward Tier").assertDoesNotExist()
+        compose.onNodeWithTag("matrix-reward-TIER_1").assertDoesNotExist()
+        matrix.performScrollTo().performClick().assert(expanded)
+        compose.onNodeWithTag("matrix-reward-TIER_1").performScrollTo().assertIsSelected()
         compose.onNodeWithText("Math Settings").performScrollTo().performClick()
         compose.onNodeWithTag("matrix-reward-TIER_1").assertDoesNotExist()
         compose.onNodeWithText("Math Settings").performScrollTo().performClick()
         compose.onNodeWithTag("matrix-reward-TIER_1").performScrollTo().assertIsSelected()
         compose.onNodeWithTag("matrix-reward-TIER_2").performScrollTo().performClick().assertIsSelected()
         assertEquals(RewardTier.TIER_2, MathViewModel(application).matrixRewardTier)
+    }
+
+    @Test
+    @Config(qualifiers = "w320dp-h800dp")
+    fun logicMathLimitsAreAccessibleAtLargeTextSizeAndSaveTogetherAfterCollapsing() {
+        val model = MathViewModel(application)
+        compose.setContent { MathTheme(textSizePercent = 200) { SettingsScreen(model) } }
+        compose.openGameSettings()
+        val collapsed = SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Collapsed")
+        val expanded = SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Expanded")
+        val logic = compose.onNodeWithText("Logic Math Settings")
+        logic.performScrollTo().assertHasClickAction().assert(collapsed)
+        compose.onNodeWithTag("save-logic-math-settings").assertDoesNotExist()
+        logic.performClick().assert(expanded)
+        compose.onNodeWithText("Different pictures are counted across the whole puzzle.", substring = true)
+            .performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Saved limits apply to new games only.").performScrollTo().assertIsDisplayed()
+        val fields = listOf(
+            "Minimum Number of Different Pictures" to ("2" to "3"),
+            "Maximum Number of Different Pictures" to ("3" to "4"),
+            "Minimum Equation Length" to ("3" to "4"),
+            "Maximum Equation Length" to ("4" to "6")
+        )
+        val save = compose.onNodeWithText("Save logic math settings")
+        save.performScrollTo().assertIsNotEnabled()
+        fields.forEach { (label, values) ->
+            compose.onNodeWithText(label).performScrollTo().assertIsDisplayed()
+            compose.onNodeWithContentDescription(label).performScrollTo().assertIsDisplayed()
+                .assertTextContains(values.first).performTextReplacement(values.second)
+        }
+        assertEquals(LogicMathSettings(), model.logicMathSettings)
+        save.performScrollTo().assertIsEnabled()
+        logic.performScrollTo().performClick().assert(collapsed)
+        save.assertDoesNotExist()
+        logic.performScrollTo().performClick().assert(expanded)
+        compose.onNodeWithText("Math Settings").performScrollTo().performClick()
+        logic.assertDoesNotExist()
+        compose.onNodeWithText("Math Settings").performScrollTo().performClick()
+        logic.performScrollTo().assert(expanded)
+        compose.onNodeWithText("Multiplication Matrix Settings").performScrollTo().assert(collapsed)
+        fields.forEach { (label, values) ->
+            compose.onNodeWithContentDescription(label).performScrollTo().assertTextContains(values.second)
+        }
+        assertEquals(LogicMathSettings(), MathViewModel(application).logicMathSettings)
+        save.performScrollTo().assertIsEnabled().performClick().assertIsNotEnabled()
+        val expected = LogicMathSettings(3, 4, 4, 6)
+        assertEquals(expected, model.logicMathSettings)
+        assertEquals(expected, MathViewModel(application).logicMathSettings)
+        compose.onNodeWithText("Close").performClick()
+        compose.openGameSettings()
+        logic.performScrollTo().assert(collapsed).performClick()
+        fields.forEach { (label, values) ->
+            compose.onNodeWithContentDescription(label).performScrollTo().assertTextContains(values.second)
+        }
+        save.performScrollTo().assertIsNotEnabled()
+    }
+
+    @Test fun invalidLogicMathLimitsCannotReplaceSavedChoicesAndBoundaryLimitsCanBeSaved() {
+        val model = MathViewModel(application)
+        compose.setContent { MathTheme { SettingsScreen(model) } }
+        compose.openGameSettings()
+        compose.onNodeWithText("Logic Math Settings").performScrollTo().performClick()
+        val tags = listOf("logic-math-minimum-pictures", "logic-math-maximum-pictures",
+            "logic-math-minimum-length", "logic-math-maximum-length")
+        val save = compose.onNodeWithTag("save-logic-math-settings")
+        listOf("", "-1", "abc", "2.5", "999999").forEach { invalid ->
+            compose.onNodeWithTag(tags.first()).performScrollTo().performTextReplacement(invalid)
+            save.performScrollTo().assertIsNotEnabled()
+            compose.onNodeWithText("Correct the highlighted limits before saving.").performScrollTo().assertIsDisplayed()
+            assertEquals(LogicMathSettings(), model.logicMathSettings)
+        }
+        listOf(
+            listOf(1, 3, 3, 4),
+            listOf(2, 7, 3, 8),
+            listOf(2, 3, 1, 4),
+            listOf(2, 3, 3, 9),
+            listOf(4, 3, 4, 4),
+            listOf(2, 3, 5, 4),
+            listOf(3, 3, 2, 4),
+            listOf(2, 5, 3, 4)
+        ).forEach { invalid ->
+            tags.zip(invalid).forEach { (tag, value) ->
+                compose.onNodeWithTag(tag).performScrollTo().performTextReplacement(value.toString())
+            }
+            save.performScrollTo().assertIsNotEnabled()
+            assertEquals(LogicMathSettings(), model.logicMathSettings)
+            assertEquals(LogicMathSettings(), MathViewModel(application).logicMathSettings)
+        }
+        tags.zip(listOf(2, 6, 2, 8)).forEach { (tag, value) ->
+            compose.onNodeWithTag(tag).performScrollTo().performTextReplacement(value.toString())
+        }
+        compose.onNodeWithText("Correct the highlighted limits before saving.").assertDoesNotExist()
+        save.performScrollTo().assertIsEnabled().performClick().assertIsNotEnabled()
+        assertEquals(LogicMathSettings(2, 6, 2, 8), MathViewModel(application).logicMathSettings)
     }
 
     @Test fun rewardsAndHistoryExpansionSurvivesSavedStateRestorationIndependently() {
@@ -372,7 +489,7 @@ class RewardsSettingsTest {
         val model = MathViewModel(application)
         compose.setContent { MathTheme { SettingsScreen(model) } }
         compose.openGameSettings()
-        compose.onNodeWithText("Earn prize fragments in Rewards Game by completing 25 or more questions with over 90% correct")
+        compose.onNodeWithText("Earn prize fragments in math challenges by completing 25 or more questions with over 90% correct")
             .performScrollTo().assertIsDisplayed()
         compose.onNodeWithContentDescription("Math Rewards System").performScrollTo().assertIsOn()
         compose.onNodeWithContentDescription("Show correct answers").performScrollTo().assertIsOn()

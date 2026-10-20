@@ -50,6 +50,8 @@ class HistoryStoreTest {
         assertEquals(10, result.maximum)
         assertEquals(1, result.correct)
         assertFalse(result.isMultiplicationMatrix)
+        assertFalse(result.isLogicMath)
+        assertNull(result.attempts.single().problem.logicPuzzle)
     }
 
     @Test fun matrixIdentityAndAnswersRoundTripWithoutReclassifyingOrdinaryMultiplication() {

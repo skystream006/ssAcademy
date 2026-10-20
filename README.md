@@ -10,7 +10,8 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    your collections; Back returns you to the home screen without losing your setup choices.
    Below the collections, four illustrated square buttons form a 2-by-2 subject grid:
    **Math**, **Reading**, **Science**, and **Advanced**. Tap **Math** to choose
-   **Practice Game**, **Rewards Game**, or **Multiplication Matrix Rewards Game**; the filled **Back to subjects** button or Android Back returns
+   **Practice Game**, **Challenge- Basic Math**, **Challenge - Logic Math**, or
+   **Multiplication Matrix Rewards Game**; the filled **Back to subjects** button or Android Back returns
    to the subject grid. Tap **Reading** for the offline reading activities described below.
    If no activity pack has been imported, a dialog explains how to import one and offers
    **Open Settings**; **Cancel** leaves you on Home without changing saved progress.
@@ -28,27 +29,36 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    Practice Game never awards prize fragments or Pokémon; completing its questions
    gives only **Other** animations. Once all five Other scenes have been collected,
    practice can repeat them.
-   **Rewards Game** asks **How many questions would you like?** each time you open
+   **Challenge- Basic Math** (formerly Rewards Game) asks **How many questions would you like?** each time you open
    its dialog. Select **15** (Poké Ball), the saved Admin **Tier 1 minimum**
    (blue gift box, default **25**), or **Tier 2 minimum**
    (royal purple gift box, default **50**) questions, review the obtainable reward criteria,
    then choose a math type to use its saved number limits. The list explains
    Other animations, Pokémon eligibility, and both prize tiers with their enabled
    reward types; unavailable prizes are indicated when rewards are disabled.
-   Question counts are chosen per game, not saved in Rewards Game defaults, and
+   Question counts are chosen per game, not saved in challenge defaults, and
    do not change your Practice Game choices. Change the number limits in
    **Settings > Admin Menu > Game Settings > Math Settings > Default Math Reward Game Settings**.
-   **Cancel** or Android Back closes either game dialog.
+   **Challenge - Logic Math** offers the same question-count choices and four math types,
+   using the same default number limits, timer, scoring, wrong-answer limit, and reward rules.
+   Each question is a new offline picture puzzle: clue rows uniquely determine the hidden
+   picture values, then you enter the answer to the final row. The same picture keeps the
+   same value throughout that puzzle; different pictures may have equal values.
+   Clues use addition; the final row uses the selected operation and may mix it with addition
+   to keep answers non-negative whole numbers within the answer field's range.
+   Multiply and divide before adding or subtracting. Swipe sideways to view longer rows.
+   Results and history retain the original picture equations and submitted answers.
+   **Cancel** or Android Back closes a game dialog.
    **Multiplication Matrix Rewards Game** has a fixed **121 questions**, covering every pair
    from **1 × 1 through 11 × 11** in row order: 1 × 1, 1 × 2, …, 1 × 11, then
    2 × 1, and so on by default. Enable **Randomize matrix question order** in
-   **Settings > Admin Menu > Game Settings > Math Settings** to shuffle all 121 questions
+   **Settings > Admin Menu > Game Settings > Math Settings > Multiplication Matrix Settings** to shuffle all 121 questions
    once per new matrix game, with every pair appearing exactly once. The option is off by
    default, is remembered for next time, and does not change a game already in progress.
    It does not change your other games' saved number limits or question counts.
    The same rewards rules apply: finish all questions with **more than 90% correct** for an
    enabled prize fragment, with Math Rewards System enabled at start and finish.
-   **Matrix reward tier** in **Math Settings** chooses **Tier 1** or **Tier 2** (the default),
+   **Matrix Reward Tier** in the same collapsible section chooses **Tier 1** or **Tier 2** (the default),
    independently of the usual minimum-question thresholds. The selected tier is used when
    the game finishes; no prize is awarded if all rewards in that tier are disabled.
    The configured time limit per 5 questions scales to all 121 questions, and the game stops
@@ -56,7 +66,7 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    **Mega Pokémons** celebration pool, exclusive to this game; ordinary multiplication
    games (even with 121 questions), Practice Game, and reading cannot award this tier.
 2. **Press Start when Ready** – press **Start** to begin. The timer starts now.
-3. **Play** – except for the matrix game, addition, subtraction and multiplication use two random numbers
+3. **Play** – in Practice Game and Challenge- Basic Math, addition, subtraction and multiplication use two random numbers
    between the minimum and maximum, inclusive. Subtraction never goes below zero.
    Division always has a whole-number answer, using a first number from 1 to its first maximum
    and a second number from 1 to its second maximum, choosing only exactly divisible pairs.
@@ -80,7 +90,7 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    **red when wrong**; wrong cells also show the correct product when **Show correct answers**
    is enabled. Unanswered cells are marked **—** if the game ends early. Scroll horizontally
    and vertically to review the entire matrix.
-   In Rewards Game, if all the chosen questions were answered, even with mistakes, one of 162 randomly chosen
+   In math challenges, if all the chosen questions were answered, even with mistakes, one of 162 randomly chosen
    congratulations animations plays: dolphins, whales, or anchovies jumping out
    of the water, a balloon-and-confetti party, a candy shower, Pikachu running toward
    the screen and zapping lightning, Squirtle shooting water from his mouth,
@@ -96,9 +106,9 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    The remaining five scenes belong to **Other** and can appear at any game length;
    below 15 questions, only **Other** scenes appear. Only scenes not yet in **My Pokémons**
    are selected until all 162 standard animations have been collected; after that, repeats are allowed
-   in ordinary Rewards Games, without requiring any Mega Pokémons.
+   in Basic Math and Logic Math challenges, without requiring any Mega Pokémons.
    If all five **Other** scenes are collected but the full collection is incomplete,
-   Rewards Games below 15 questions go straight to results without an animation.
+   Math challenges below 15 questions go straight to results without an animation.
    Practice Game uses only the five Other scenes, regardless of question count,
    without awarding prizes or Pokémon.
    Matrix completions award **two animations**: one of **95 Mega Pokémon forms** and
@@ -158,7 +168,17 @@ Admin Menu contains **Game Settings**, **My Rewards** (add/remove controls), and
 darker backgrounds, including nested subject settings.
 **Math Settings** contains **Math Rewards System**,
 **Show timer** (and its conditional **Time limit per 5 questions**), **Show correct answers**,
-**Vertical equations**, and **Default Math Reward Game Settings**.
+**Vertical equations**, **Default Math Reward Game Settings**, and collapsed
+**Multiplication Matrix Settings** and **Logic Math Settings** sections.
+**Logic Math Settings** provides **Minimum Number of Different Pictures** (default 2),
+**Maximum Number of Different Pictures** (default 3), **Minimum Equation Length** (default 3),
+and **Maximum Equation Length** (default 4). Picture counts range from 2 to 6 per puzzle;
+the final row includes every selected picture. Equation lengths range from 2 to 8 total
+picture occurrences per row, including repeats. Each minimum must not exceed its maximum,
+and each equation-length bound must accommodate the corresponding picture-count bound.
+Use **Save logic math settings** to save valid limits on this device for new games;
+games already running keep their original limits. Picture rows remain horizontal regardless
+of the **Vertical equations** setting, which applies to numeric equations.
 **Reading Settings** contains **Reading Progress**, **Set Reading Level**, **Active Reading Games**,
 **Reading Rewards System**, **Time limit per reading game**, and **Import / Update Reading Activities**.
 The import button shows the installed pack version, counts by game/level, and download progress.
@@ -197,7 +217,7 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   fragments and practice history are unchanged.
 - **My Pokémons** – directly below My Rewards, collect a still image of each
   celebration you see after completing a game, even when rewards are disabled.
-  Practice Game contributes only to **Other**; Pokémon require Rewards Game.
+  Practice Game contributes only to **Other**; Pokémon require a math challenge or eligible reading activity.
   Each celebration is collected only once and labelled with its name, grouped under
   **Pokémons** or **Other**. Pokémon are sorted by their National Pokédex number
   (Ndex) and labelled with a four-digit number and name, such as **#0025 Pikachu**.
@@ -207,7 +227,7 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   The collection is saved on this device. Each presented celebration is also recorded
   with its practice result, including repeat celebrations; replaying an image does not award it again.
 - **Math Practice History** – under Result Histories, review any previously saved math result, delete one, or clear all.
-  Rewards Game entries have a translucent theme-colored background to distinguish
+  Math challenge entries have a translucent theme-colored background to distinguish
   them from Practice Game entries, even when no prize was earned.
   Deleting results also removes their claimed reward fragments from the available
   balance, breaking whole prizes back into fragments when necessary. Clearing history
@@ -215,14 +235,14 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   already used. The result's My Pokémons reward is also removed unless another saved
   result earned the same celebration. Older collection entries without a linked result
   are kept, as are unrelated celebrations added through Debug Menu.
-- **Default Math Reward Game Settings** – set default number limits for all four math types.
+- **Default Math Reward Game Settings** – set shared Basic Math and Logic Math default number limits for all four math types.
   **Save defaults** saves all four together; **Back** discards unsaved edits.
   Both return to Settings. Division's two maximums are independent. Limits are
   remembered on this device separately from Practice Game choices, and initially
   use your previous number limits (or 1–10 on a new install). Previously saved
   Rewards Game question counts are no longer used. Editing defaults during a game
   leaves its active questions unchanged and its timer paused until you leave Settings.
-- **Math Rewards System** – under Math Settings, on by default. In **Rewards Game**, earn
+- **Math Rewards System** – under Math Settings, on by default. In math challenges, earn
   prizes for completing the configured minimum questions with **more than 90% correct**.
   This setting never enables prizes in Practice Game.
   After the celebration, tap the hopping gift box to open it and release confetti.
@@ -248,7 +268,7 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   A gift dismissed before opening can still be claimed from its history entry.
   All reward illustrations and animations are drawn in the app and work offline.
 - **Reading Rewards System** – under Reading Settings, enables the same prize fragments
-  as Math Rewards Game, using the shared minimum-question settings and Rewards inventory.
+  as math challenges, using the shared minimum-question settings and Rewards inventory.
   Complete all selected activities and meet a tier's minimum with **more than 90% correct**
   to qualify; rewards must be on at both start and finish.
   Disabled reward types are excluded from new prizes. Existing gifts remain claimable.
@@ -265,7 +285,7 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   **2 minutes 30 seconds for 25**, and **5 minutes for 50 questions**.
   The total math limit scales with the chosen question count: **1 minute per 5 questions**
   gives **3 minutes for 15**, **5 minutes for 25**, and **10 minutes for 50 questions**.
-  The selection applies to the next Rewards Game only; Practice Game has no time limit.
+  The selection applies to the next math challenge only; Practice Game has no time limit.
   The ready screen shows the total limit. A timed game shows time remaining and ends when time runs out,
   saving the partial result without a prize. Changing settings during practice does
   not remove its active time limit.
