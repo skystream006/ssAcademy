@@ -292,7 +292,7 @@ class ReadingViewModel(
     fun startSession(game: ReadingGame, count: Int) {
         val current = data ?: return
         if (storageError != null || importing) return
-        val enabled = settings.getBoolean(Subject.READING.rewardsPreference, true)
+        val enabled = settings.readReadingRewardsEnabled(game)
         val seconds = settings.readReadingTimeLimitSeconds()
         val limit = (seconds * 1_000L).takeIf { enabled && it > 0 }
         commands.trySend(Command.Edit(current.selectedProfileId, current.profile?.activeAttemptId, { it },
@@ -310,7 +310,7 @@ class ReadingViewModel(
         act { current ->
             if (current.active?.let { isDisabled(it.game) } == true) current
             else ReadingEngine.nextSessionActivity(ReadingEngine.finish(current,
-                rewardsEnabled = settings.getBoolean(Subject.READING.rewardsPreference, true),
+                rewardsEnabled = current.active?.game?.let(settings::readReadingRewardsEnabled) == true,
                 disabledRewards = disabledRewards(), random = rewardRandom,
                 rewardThresholds = settings.readRewardThresholds()))
         }
@@ -413,7 +413,7 @@ class ReadingViewModel(
         act { current ->
             if (current.active?.let { isDisabled(it.game) } == true) current
             else {
-                val rewardsEnabled = settings.getBoolean(Subject.READING.rewardsPreference, true)
+                val rewardsEnabled = current.active?.game?.let(settings::readReadingRewardsEnabled) == true
                 val disabled = disabledRewards()
                 val thresholds = settings.readRewardThresholds()
                 val submitted = ReadingEngine.submit(current, key,

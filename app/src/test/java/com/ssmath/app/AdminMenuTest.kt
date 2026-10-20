@@ -56,6 +56,7 @@ class AdminMenuTest {
         compose.setContent { MathTheme { SettingsScreen(model) } }
         compose.onNodeWithTag("admin-menu").performScrollTo().performClick()
         compose.onNodeWithText("Create Admin PIN").assertIsDisplayed()
+        compose.onNodeWithTag("admin-pin").assertIsFocused()
         compose.onNodeWithTag("admin-dialog").assertDoesNotExist()
         compose.onNodeWithTag("admin-pin-submit").assertIsNotEnabled()
         submit("12a4", "12a4")
@@ -74,6 +75,7 @@ class AdminMenuTest {
         compose.onNodeWithText("Close").performClick()
         compose.onNodeWithTag("admin-menu").performScrollTo().performClick()
         compose.onNodeWithText("Enter Admin PIN").assertIsDisplayed()
+        compose.onNodeWithTag("admin-pin").assertIsFocused()
         compose.onNodeWithTag("admin-pin-confirm").assertDoesNotExist()
         submit("9999")
         compose.waitUntil(10_000) {
@@ -95,6 +97,7 @@ class AdminMenuTest {
         compose.onNodeWithTag("admin-dialog").assertDoesNotExist()
         compose.onNodeWithTag("admin-menu").performScrollTo().performClick()
         compose.onNodeWithText("Create Admin PIN").assertIsDisplayed()
+        compose.onNodeWithTag("admin-pin").assertIsFocused()
         compose.onNodeWithTag("admin-pin-submit").assertIsNotEnabled()
         compose.runOnIdle {
             (ShadowDialog.getLatestDialog() as ComponentDialog).onBackPressedDispatcher.onBackPressed()

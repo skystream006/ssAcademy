@@ -465,6 +465,8 @@ private fun RewardsCriteria(model: MathViewModel) {
         Text("• Pokémon: 15 or more questions.")
         if (!model.rewardsEnabled) {
             Text("Prize fragments are unavailable while Math Rewards System is OFF.")
+        } else if (!model.currentGameRewardsEnabled) {
+            Text("Prize fragments are unavailable while rewards for this game are OFF.")
         }
         RewardTier.entries.forEach { tier ->
             val available = RewardType.entries.filter { it.tier == tier && it !in model.disabledRewards }
@@ -472,6 +474,8 @@ private fun RewardsCriteria(model: MathViewModel) {
                 style = MaterialTheme.typography.titleSmall)
             if (!model.rewardsEnabled) {
                 Text("Unavailable: Math Rewards System is OFF.")
+            } else if (!model.currentGameRewardsEnabled) {
+                Text("Unavailable: rewards for this game are OFF.")
             }
             if (available.isEmpty()) {
                 Text("Unavailable: no rewards enabled in this tier.")
@@ -616,13 +620,14 @@ private fun ReadyDialog(model: MathViewModel) {
             Text("The same challenge rules apply: finish all 121 questions with more than 90% correct " +
                 "before the time limit, if enabled. The game ends at 13 wrong answers.")
             Text("Complete the matrix to collect both a Mega Pokémon and a Pokémon or Other animation.")
-            if (model.rewardsEnabled) {
+            if (model.currentGameRewardsEnabled) {
                 Text("Eligible for enabled ${model.matrixRewardTier.label} prize fragments.")
                 if (RewardType.entries.none { it.tier == model.matrixRewardTier && it !in model.disabledRewards }) {
                     Text("Unavailable: no rewards enabled in this tier.")
                 }
             }
-            else Text("Prize fragments are unavailable while Math Rewards System is OFF.")
+            else Text(if (!model.rewardsEnabled) "Prize fragments are unavailable while Math Rewards System is OFF."
+                else "Prize fragments are unavailable while rewards for this game are OFF.")
         }
         if (model.readyLogicMath) {
             Text("Each picture keeps the same hidden value within a puzzle. Use the clues, then answer the last row. " +
