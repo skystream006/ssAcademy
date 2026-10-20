@@ -7,6 +7,7 @@ import java.io.File
 import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -752,6 +753,80 @@ class ReadingStoreTest {
             assertEquals(rewards, model.data?.activeSession?.rewardsEnabledAtStart)
             ReadingEngine.validate(requireNotNull(model.data))
             assertEquals(900, math.timeLimitSeconds)
+        }
+    }
+
+    @Test fun eachReadingGameSnapshotsItsOwnRewardsAndTimerWithoutDisablingPlay() {
+        val math = MathViewModel(application)
+        math.chooseReadingTimeLimitSeconds(30)
+        application.deleteDatabase("game-rewards.db")
+        ReadingDatabase(application, "game-rewards.db").use { database ->
+            val store = ReadingSqliteStore(application, database, file)
+            runBlocking {
+                readingTestImporter(store.catalog, application.cacheDir,
+                    ReadingContent.activities + grammarExample()).importPack()
+            }
+            store.save(ReadingEngine.addProfile(store.load(), "Ari", "reader-a"))
+            val model = ReadingViewModel(application, store)
+            await { model.data != null }
+            ReadingGame.entries.forEach { game ->
+                ReadingGame.entries.forEach { math.chooseReadingGameRewardsEnabled(it, it != game) }
+                listOf(false, true).forEach { enabled ->
+                    math.chooseReadingGameRewardsEnabled(game, enabled)
+                    val previous = model.data?.activeSession?.id
+                    model.startSession(game, 1)
+                    await { model.data?.activeSession?.id != previous && !model.saving }
+                    val session = requireNotNull(model.data?.activeSession)
+                    assertEquals(game, session.game)
+                    assertEquals(enabled, session.rewardsEnabledAtStart)
+                    assertEquals(30_000L.takeIf { enabled }, session.timeLimitMs)
+                    math.chooseReadingGameRewardsEnabled(game, !enabled)
+                    assertEquals(session, model.data?.activeSession)
+                    assertEquals(session, store.load().activeSession)
+                    assertTrue(math.disabledReadingGames.isEmpty())
+                    ReadingGame.entries.filter { it != game }.forEach { assertTrue(math.rewardsEnabled(it)) }
+                }
+            }
+        }
+    }
+
+    @Test fun perGameReadingRewardsGateBothCompletionPathsAndKeepSavedEligibilityOnReload() {
+        val math = MathViewModel(application)
+        math.chooseRewardThresholds(1, 2)
+        application.deleteDatabase("game-rewards.db")
+        ReadingDatabase(application, "game-rewards.db").use { database ->
+            val store = ReadingSqliteStore(application, database, file)
+            runBlocking {
+                readingTestImporter(store.catalog, application.cacheDir,
+                    ReadingContent.activities + grammarExample()).importPack()
+            }
+            store.save(ReadingEngine.addProfile(store.load(), "Ari", "reader-a"))
+            for (game in ReadingGame.entries) for (atStart in listOf(false, true)) {
+                for (atFinish in listOf(false, true)) for (completion in listOf("submit", "finish")) {
+                    ReadingGame.entries.forEach { math.chooseReadingGameRewardsEnabled(it, false) }
+                    math.chooseReadingGameRewardsEnabled(game, atFinish)
+                    var data = store.startSession(store.load(), game, ReadingLevel.SPROUT, 1, atStart)
+                    val solved = readingSolve(data, rewardsEnabled = false)
+                    val completed = requireNotNull(solved.active)
+                    val key = ReadingEngine.requiredKeys(completed).last()
+                    data = data.copy(attempts = data.attempts.map {
+                        if (it.id == completed.id) completed.copy(finishedAt = null,
+                            checkpoints = if (completion == "submit") completed.checkpoints - key
+                                else completed.checkpoints) else it
+                    })
+                    store.save(data)
+                    val model = ReadingViewModel(application, store)
+                    await { model.data != null }
+                    if (completion == "submit") model.submit(key) else model.finishActivity()
+                    await { model.data?.activeSession?.finishedAt != null && !model.saving }
+                    val session = requireNotNull(model.data?.activeSession)
+                    assertEquals("$game $completion start=$atStart finish=$atFinish",
+                        atStart && atFinish, session.prizeType != null)
+                    assertEquals(1, requireNotNull(model.data).sessionCorrect(session))
+                    math.chooseReadingGameRewardsEnabled(game, !atFinish)
+                    assertEquals(session, store.load().activeSession)
+                }
+            }
         }
     }
 

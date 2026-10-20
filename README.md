@@ -166,7 +166,7 @@ PINs share the same five-attempt, 30-second lockout.
 Admin Menu contains **Game Settings**, **My Rewards** (add/remove controls), and
 **Available Rewards**; every section starts collapsed. Settings subsections have
 darker backgrounds, including nested subject settings.
-**Math Settings** contains **Math Rewards System**,
+**Math Settings** contains a collapsed **Math Rewards System** section,
 **Show timer** (and its conditional **Time limit per 5 questions**), **Show correct answers**,
 **Vertical equations**, **Default Math Reward Game Settings**, and collapsed
 **Multiplication Matrix Settings** and **Logic Math Settings** sections.
@@ -180,7 +180,7 @@ Use **Save logic math settings** to save valid limits on this device for new gam
 games already running keep their original limits. Picture rows remain horizontal regardless
 of the **Vertical equations** setting, which applies to numeric equations.
 **Reading Settings** contains **Reading Progress**, **Set Reading Level**, **Active Reading Games**,
-**Reading Rewards System**, **Time limit per reading game**, and **Import / Update Reading Activities**.
+a collapsed **Reading Rewards System** section, **Time limit per reading game**, and **Import / Update Reading Activities**.
 The import button shows the installed pack version, counts by game/level, and download progress.
 **Set Reading Level** opens a dialog
 with **Sprout**, **Trail**, and **Summit**, in increasing difficulty; existing drafts keep their original level.
@@ -242,7 +242,14 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   use your previous number limits (or 1–10 on a new install). Previously saved
   Rewards Game question counts are no longer used. Editing defaults during a game
   leaves its active questions unchanged and its timer paused until you leave Settings.
-- **Math Rewards System** – under Math Settings, on by default. In math challenges, earn
+- **Math Rewards System** – expand this section under Math Settings for the subject-wide
+  **Enable math rewards** switch and separate switches for **Challenge- Basic Math**,
+  **Challenge - Logic Math**, and **Multiplication Matrix Rewards Game**.
+  All game switches are on by default; existing subject-wide choices are preserved.
+  Both the subject and the game's rewards must be enabled at start and finish.
+  Each choice is saved automatically. The subject switch does not overwrite per-game choices.
+  Turning rewards off does not disable gameplay or remove earned rewards or celebrations.
+  In math challenges, earn
   prizes for completing the configured minimum questions with **more than 90% correct**.
   This setting never enables prizes in Practice Game.
   After the celebration, tap the hopping gift box to open it and release confetti.
@@ -267,7 +274,15 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   with the result; deleting a result removes its claimed fragment from your available rewards.
   A gift dismissed before opening can still be claimed from its history entry.
   All reward illustrations and animations are drawn in the app and work offline.
-- **Reading Rewards System** – under Reading Settings, enables the same prize fragments
+- **Reading Rewards System** – expand this section under Reading Settings for the subject-wide
+  **Enable reading rewards** switch and an independent rewards switch for every reading game,
+  including **Grammar Quest**. Game switches default to on and save automatically.
+  These are separate from **Active Reading Games**: turning off a game's rewards keeps it
+  playable and preserves saved drafts, history, and existing gifts.
+  Both the subject and game switches must be on at start and finish. New games only receive
+  a configured time limit when both are on; already-started games keep their original limit.
+  The same per-game timer rule applies to Math, which also requires **Show timer**.
+  Reading enables the same prize fragments
   as math challenges, using the shared minimum-question settings and Rewards inventory.
   Complete all selected activities and meet a tier's minimum with **more than 90% correct**
   to qualify; rewards must be on at both start and finish.

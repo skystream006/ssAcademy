@@ -788,6 +788,36 @@ class MathAppTest {
         compose.onNodeWithText("Unavailable: no rewards enabled in this tier.").assertDoesNotExist()
     }
 
+    @Test fun mathLaunchWarningsFollowTheSelectedGamesRewardSwitchWithoutBlockingPlay() {
+        val model = model()
+        model.chooseMathGameRewardsEnabled(MathRewardGame.BASIC, false)
+        compose.setContent { MathAppContent(model) }
+        listOf(MathRewardGame.BASIC, MathRewardGame.LOGIC).forEach { game ->
+            compose.runOnIdle {
+                if (game == MathRewardGame.BASIC) model.openRewardsGame() else model.openLogicMathGame()
+            }
+            val warning = "Prize fragments are unavailable while rewards for ${game.title} are OFF."
+            if (game == MathRewardGame.LOGIC) {
+                compose.onNodeWithText(warning).assertDoesNotExist()
+                compose.runOnIdle { model.chooseMathGameRewardsEnabled(game, false) }
+            }
+            compose.onNodeWithText(warning).performScrollTo().assertIsDisplayed()
+            compose.onAllNodesWithText("Unavailable: rewards for ${game.title} are OFF.")
+                .assertCountEquals(RewardTier.entries.size)
+            compose.onNodeWithTag("rewards-question-count-25").performScrollTo().performClick()
+            compose.onNodeWithTag("rewards-operation-ADDITION").performScrollTo().assertIsEnabled()
+            compose.onNodeWithText("Cancel").performClick()
+        }
+        compose.runOnIdle {
+            model.chooseMathGameRewardsEnabled(MathRewardGame.MATRIX, false)
+            model.openMultiplicationMatrixGame()
+        }
+        compose.onNodeWithText("Prize fragments are unavailable while rewards for ${MathRewardGame.MATRIX.title} are OFF.")
+            .performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Eligible for enabled Tier 2 prize fragments.").assertDoesNotExist()
+        compose.onNodeWithTag("start-button").performScrollTo().assertIsEnabled()
+    }
+
     @Test fun rewardsLaunchExplainsThresholdsAndShowsIndependentAvailabilityWarnings() {
         val model = model()
         compose.setContent { MathAppContent(model) }

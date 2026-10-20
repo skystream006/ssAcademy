@@ -148,6 +148,7 @@ class ReadingRewardsTest {
         assertTrue(first.pokemons.isEmpty())
         val restored = model()
         restored.chooseSubjectRewardsEnabled(Subject.READING, false)
+        restored.chooseReadingGameRewardsEnabled(ReadingGame.MISSING, false)
         RewardType.entries.forEach { restored.chooseRewardEnabled(it, false) }
         open(restored, data)
         assertNull(restored.readingCelebration)

@@ -77,6 +77,70 @@ class RewardsModelTest {
         shadowOf(Looper.getMainLooper()).idle()
     }
 
+    @Test fun perGameRewardsPreserveLegacySubjectChoicesAndIgnoreUnknownNames() {
+        val settings = application.getSharedPreferences("settings", 0)
+        settings.edit().putBoolean("rewards_enabled", false)
+            .putBoolean("reading_rewards_enabled", false).commit()
+        val legacy = model()
+        assertTrue(legacy.disabledMathGameRewards.isEmpty())
+        assertTrue(legacy.disabledReadingGameRewards.isEmpty())
+        MathRewardGame.entries.forEach { assertFalse(legacy.rewardsEnabled(it)) }
+        ReadingGame.entries.forEach { assertFalse(legacy.rewardsEnabled(it)) }
+        legacy.chooseMathGameRewardsEnabled(MathRewardGame.LOGIC, false)
+        legacy.chooseReadingGameRewardsEnabled(ReadingGame.STUDIO, false)
+        legacy.chooseRewardsEnabled(true)
+        legacy.chooseSubjectRewardsEnabled(Subject.READING, true)
+        val restored = model()
+        MathRewardGame.entries.forEach { assertEquals(it != MathRewardGame.LOGIC, restored.rewardsEnabled(it)) }
+        ReadingGame.entries.forEach { assertEquals(it != ReadingGame.STUDIO, restored.rewardsEnabled(it)) }
+        assertTrue(restored.disabledRewards.isEmpty())
+        assertTrue(restored.disabledReadingGames.isEmpty())
+        settings.edit().putStringSet("disabled_math_game_rewards", setOf("MATRIX", "UNKNOWN"))
+            .putStringSet("disabled_reading_game_rewards", setOf("GRAMMAR", "UNKNOWN")).commit()
+        assertEquals(setOf(MathRewardGame.MATRIX), model().disabledMathGameRewards)
+        assertEquals(setOf(ReadingGame.GRAMMAR), model().disabledReadingGameRewards)
+    }
+
+    @Test fun everyMathGameRequiresItsOwnRewardsAtStartAndFinishAndSnapshotsItsTimer() {
+        for (game in MathRewardGame.entries) for (atStart in listOf(false, true)) for (atFinish in listOf(false, true)) {
+            val model = model()
+            model.chooseShowTimer(true)
+            model.chooseTimeLimitSeconds(30)
+            MathRewardGame.entries.forEach { model.chooseMathGameRewardsEnabled(it, it == game) }
+            when (game) {
+                MathRewardGame.BASIC -> model.openRewardsGame()
+                MathRewardGame.LOGIC -> model.openLogicMathGame()
+                MathRewardGame.MATRIX -> model.openMultiplicationMatrixGame()
+            }
+            if (game != MathRewardGame.MATRIX) {
+                model.updateRewardsQuestionCount("25")
+                model.selectRewardsGame(Operation.ADDITION)
+            }
+            assertTrue(model.readyRewardsEnabled)
+            model.chooseMathGameRewardsEnabled(game, atStart)
+            val count = if (game == MathRewardGame.MATRIX) 121 else 25
+            val limit = (30_000L * count / 5).takeIf { atStart }
+            assertEquals(atStart, model.readyRewardsEnabled)
+            assertEquals(limit, model.readyTimeLimitMs)
+            model.start()
+            assertEquals(Screen.PLAYING, model.screen)
+            model.chooseMathGameRewardsEnabled(game, atFinish)
+            assertEquals(limit, model.activeTimeLimitMs)
+            finish(model, count)
+            val result = requireNotNull(model.lastResult)
+            assertEquals("$game start=$atStart finish=$atFinish", atStart && atFinish, result.prizeType != null)
+            assertNotNull(model.celebration)
+            model.chooseMathGameRewardsEnabled(game, false)
+            val restored = model()
+            assertEquals(result, restored.history.first { it.id == result.id })
+            restored.showRewardForResult(result)
+            restored.claimReward()
+            shadowOf(Looper.getMainLooper()).idle()
+            assertEquals(atStart && atFinish, restored.history.first { it.id == result.id }.prize != null)
+            wallTime++
+        }
+    }
+
     @Test fun rewardRuleSettingsPersistIndependentlyAndInvalidEditsAreIgnored() {
         val model = model()
         assertEquals(RewardThresholds(), model.rewardThresholds)

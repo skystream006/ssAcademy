@@ -95,6 +95,7 @@ class RewardsSettingsTest {
         }
         val math = compose.onNodeWithText("Math Settings")
         math.performScrollTo().performClick().assert(expanded)
+        compose.onNodeWithText("Math Rewards System").performScrollTo().assert(collapsed).performClick()
         compose.onNodeWithContentDescription("Math Rewards System").performScrollTo()
             .assertIsOn().performClick().assertIsOff()
         compose.onNodeWithTag("practice-history").assertDoesNotExist()
@@ -381,6 +382,9 @@ class RewardsSettingsTest {
             toggle.assertDoesNotExist()
             history.assertDoesNotExist()
             section.performScrollTo().performClick()
+            if (subject == Subject.MATH || subject == Subject.READING) {
+                compose.onNodeWithText("${subject.label} Rewards System").performScrollTo().performClick()
+            }
             toggle.performScrollTo().assertIsOn().performClick().assertIsOff()
             history.assertDoesNotExist()
             assertFalse(MathViewModel(application).rewardsEnabled(subject))
@@ -394,6 +398,59 @@ class RewardsSettingsTest {
         }
         compose.onNodeWithContentDescription("Rewards system").assertDoesNotExist()
         compose.onNodeWithText("Practice History").assertDoesNotExist()
+    }
+
+    @Test
+    @Config(qualifiers = "w320dp-h800dp")
+    fun gameRewardSectionsCollapseAndSaveIndependentSwitchesAtLargeTextSize() {
+        val model = MathViewModel(application)
+        compose.setContent { MathTheme(textSizePercent = 200) { SettingsScreen(model) } }
+        compose.openAdminSettings()
+        compose.onNodeWithText("Game Settings").performScrollTo().performClick()
+        val collapsed = SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Collapsed")
+        val expanded = SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Expanded")
+        listOf(Subject.MATH, Subject.READING).forEach { subject ->
+            val parent = compose.onNodeWithText("${subject.label} Settings")
+            parent.performScrollTo().performClick()
+            val section = compose.onNodeWithText("${subject.label} Rewards System")
+            val titles = if (subject == Subject.MATH) MathRewardGame.entries.map { it.title }
+                else ReadingGame.entries.map { it.title }
+            section.performScrollTo().assertHasClickAction().assert(collapsed)
+            titles.forEach { compose.onNodeWithContentDescription("$it rewards").assertDoesNotExist() }
+            section.performClick().assert(expanded)
+            titles.forEachIndexed { index, title ->
+                compose.onNodeWithContentDescription("$title rewards").performScrollTo()
+                    .assertIsDisplayed().assertIsOn().performClick().assertIsOff()
+                titles.drop(index + 1).forEach {
+                    compose.onNodeWithContentDescription("$it rewards").performScrollTo().assertIsOn()
+                }
+            }
+            val master = compose.onNodeWithContentDescription("${subject.label} Rewards System")
+            master.performScrollTo().assertIsOn().performClick().assertIsOff()
+            master.performClick().assertIsOn()
+            section.performScrollTo().performClick().assert(collapsed)
+            titles.forEach { compose.onNodeWithContentDescription("$it rewards").assertDoesNotExist() }
+            section.performClick().assert(expanded)
+            titles.forEach { compose.onNodeWithContentDescription("$it rewards").performScrollTo().assertIsOff() }
+            compose.onNodeWithContentDescription("${titles.first()} rewards").performScrollTo()
+                .performClick().assertIsOn()
+            parent.performScrollTo().performClick()
+            section.assertDoesNotExist()
+            parent.performScrollTo().performClick()
+            section.performScrollTo().assert(expanded)
+            compose.onNodeWithContentDescription("${titles.first()} rewards").performScrollTo().assertIsOn()
+            parent.performScrollTo().performClick()
+        }
+        val restored = MathViewModel(application)
+        assertEquals(MathRewardGame.entries.toSet() - MathRewardGame.BASIC, restored.disabledMathGameRewards)
+        assertEquals(ReadingGame.entries.toSet() - ReadingGame.entries.first(), restored.disabledReadingGameRewards)
+        assertTrue(restored.disabledReadingGames.isEmpty())
+        assertTrue(restored.disabledRewards.isEmpty())
+        Subject.entries.forEach { assertTrue(restored.rewardsEnabled(it)) }
+        compose.onNodeWithText("Close").performClick()
+        compose.openGameSettings()
+        compose.onNodeWithText("Math Rewards System").performScrollTo().assert(collapsed).performClick()
+        compose.onNodeWithContentDescription("${MathRewardGame.LOGIC.title} rewards").performScrollTo().assertIsOff()
     }
 
     @Test fun activeReadingGamesDialogSavesIndependentChoicesAndAllowsAllGamesToBeDisabled() {
@@ -489,6 +546,7 @@ class RewardsSettingsTest {
         val model = MathViewModel(application)
         compose.setContent { MathTheme { SettingsScreen(model) } }
         compose.openGameSettings()
+        compose.onNodeWithText("Math Rewards System").performScrollTo().performClick()
         compose.onNodeWithText("Earn prize fragments in math challenges by completing 25 or more questions with over 90% correct")
             .performScrollTo().assertIsDisplayed()
         compose.onNodeWithContentDescription("Math Rewards System").performScrollTo().assertIsOn()
@@ -530,6 +588,7 @@ class RewardsSettingsTest {
         assertEquals(600, model.timeLimitSeconds)
         assertFalse(model.showTimer)
         assertFalse(model.rewardsEnabled)
+        compose.onNodeWithText("Reading Rewards System").performScrollTo().performClick()
         compose.onNodeWithContentDescription("Reading Rewards System").performScrollTo().performClick().assertIsOff()
         compose.onNodeWithTag("reading-time-limit").performScrollTo().assertIsEnabled().performClick()
         compose.onNodeWithText("45 seconds").performScrollTo().performClick()

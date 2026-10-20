@@ -65,11 +65,16 @@ class MathViewModel(
     val readyParameters: GameParameters? get() = readyGame?.parameters
     val readyMultiplicationMatrix: Boolean get() = readyGame?.isMultiplicationMatrix == true
     val readyLogicMath: Boolean get() = readyGame?.isLogicMath == true
+    val readyRewardsEnabled: Boolean
+        get() = readyGame?.let {
+            it.mode == GameMode.REWARDS &&
+                rewardsEnabled(MathRewardGame.from(it.isMultiplicationMatrix, it.isLogicMath))
+        } == true
     val readyTimeLimitMs: Long?
         get() {
             val ready = readyGame ?: return null
             val count = ready.parameters.questionCount ?: return null
-            return if (ready.mode == GameMode.REWARDS && rewardsEnabled && showTimer && timeLimitSeconds > 0)
+            return if (readyRewardsEnabled && showTimer && timeLimitSeconds > 0)
                 timeLimitSeconds * 1_000L * count / 5 else null
         }
     var overlay by mutableStateOf<Overlay?>(null)
@@ -164,6 +169,13 @@ class MathViewModel(
     })
     val rewardsEnabled: Boolean get() = rewardsEnabled(Subject.MATH)
     fun rewardsEnabled(subject: Subject): Boolean = subjectRewards.getValue(subject)
+    var disabledMathGameRewards by mutableStateOf(settings.readDisabledMathGameRewards())
+        private set
+    var disabledReadingGameRewards by mutableStateOf(settings.readDisabledReadingGameRewards())
+        private set
+    fun rewardsEnabled(game: MathRewardGame): Boolean = rewardsEnabled && game !in disabledMathGameRewards
+    fun rewardsEnabled(game: ReadingGame): Boolean =
+        rewardsEnabled(Subject.READING) && game !in disabledReadingGameRewards
     var rewardThresholds by mutableStateOf(settings.readRewardThresholds())
         private set
     var matrixRewardTier by mutableStateOf(settings.readMatrixRewardTier())
@@ -464,7 +476,7 @@ class MathViewModel(
         lastResult = null
         pendingResult = null
         dismissReward()
-        rewardsEnabledAtStart = gameMode == GameMode.REWARDS && rewardsEnabled
+        rewardsEnabledAtStart = readyRewardsEnabled
         activeTimeLimitMs = readyTimeLimitMs
         resetTimer()
         readyGame = null
@@ -502,7 +514,9 @@ class MathViewModel(
             isLogicMath = state.logicSettings != null,
             rewardThresholds = rewardThresholds, matrixRewardTier = matrixRewardTier,
             prizeType = selectPrize(state.questionCount, state.correct, state.attempts.size,
-                rewardsEnabledAtStart, rewardsEnabled && gameMode == GameMode.REWARDS, expired, rewardRandom,
+                rewardsEnabledAtStart, gameMode == GameMode.REWARDS &&
+                    rewardsEnabled(MathRewardGame.from(state.isMultiplicationMatrix, state.logicSettings != null)),
+                expired, rewardRandom,
                 disabledRewards, rewardThresholds, matrixRewardTier.takeIf { state.isMultiplicationMatrix }))
         val pending = PendingResult(result)
         pendingResult = pending
@@ -1135,6 +1149,16 @@ class MathViewModel(
     fun chooseSubjectRewardsEnabled(subject: Subject, value: Boolean) {
         subjectRewards = subjectRewards + (subject to value)
         settings.edit().putBoolean(subject.rewardsPreference, value).apply()
+    }
+
+    fun chooseMathGameRewardsEnabled(game: MathRewardGame, enabled: Boolean) {
+        disabledMathGameRewards = if (enabled) disabledMathGameRewards - game else disabledMathGameRewards + game
+        settings.edit().putStringSet("disabled_math_game_rewards", disabledMathGameRewards.map { it.name }.toSet()).apply()
+    }
+
+    fun chooseReadingGameRewardsEnabled(game: ReadingGame, enabled: Boolean) {
+        disabledReadingGameRewards = if (enabled) disabledReadingGameRewards - game else disabledReadingGameRewards + game
+        settings.edit().putStringSet("disabled_reading_game_rewards", disabledReadingGameRewards.map { it.name }.toSet()).apply()
     }
 
     fun chooseRewardEnabled(type: RewardType, enabled: Boolean) {

@@ -284,16 +284,26 @@ private fun ActiveReadingGamesDialog(model: MathViewModel, onDismiss: () -> Unit
 }
 
 @Composable
-private fun SubjectRewardsSetting(model: MathViewModel, subject: Subject, description: String) {
+private fun SubjectRewardsSetting(model: MathViewModel, subject: Subject, description: String,
+                                 title: String = "${subject.label} Rewards System") {
     val label = "${subject.label} Rewards System"
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text(label)
+            Text(title)
             Text(description, style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Switch(model.rewardsEnabled(subject), { model.chooseSubjectRewardsEnabled(subject, it) },
             modifier = Modifier.semantics { contentDescription = label })
+    }
+}
+
+@Composable
+private fun GameRewardsSetting(title: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(title, Modifier.weight(1f))
+        Switch(checked, onCheckedChange,
+            modifier = Modifier.semantics { contentDescription = "$title rewards" })
     }
 }
 
@@ -556,9 +566,17 @@ private fun GameSettings(
     onReadingGames: () -> Unit
 ) {
     CollapsibleSettingsSection("Math Settings", defaultExpanded = false) {
-        SubjectRewardsSetting(model, Subject.MATH,
-            "Earn prize fragments in math challenges by completing ${model.rewardThresholds.tier1Minimum} " +
-                "or more questions with over 90% correct")
+        CollapsibleSettingsSection("Math Rewards System", defaultExpanded = false) {
+            SubjectRewardsSetting(model, Subject.MATH,
+                "Earn prize fragments in math challenges by completing ${model.rewardThresholds.tier1Minimum} " +
+                    "or more questions with over 90% correct", title = "Enable math rewards")
+            Text("Choose rewards for each game. The subject switch must also be on. " +
+                "Turning rewards off keeps games playable and existing rewards available.")
+            MathRewardGame.entries.forEach { game ->
+                GameRewardsSetting(game.title, game !in model.disabledMathGameRewards,
+                    onCheckedChange = { model.chooseMathGameRewardsEnabled(game, it) })
+            }
+        }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Show timer")
@@ -630,14 +648,22 @@ private fun GameSettings(
     HorizontalDivider()
     CollapsibleSettingsSection("Reading Settings", defaultExpanded = false) {
         ReadingPackSettings()
-        SubjectRewardsSetting(model, Subject.READING,
-            "Earn prize fragments by completing ${model.rewardThresholds.tier1Minimum} " +
-                "or more questions with over 90% correct.")
+        CollapsibleSettingsSection("Reading Rewards System", defaultExpanded = false) {
+            SubjectRewardsSetting(model, Subject.READING,
+                "Earn prize fragments by completing ${model.rewardThresholds.tier1Minimum} " +
+                    "or more questions with over 90% correct.", title = "Enable reading rewards")
+            Text("Choose rewards for each game. The subject switch must also be on. " +
+                "Turning rewards off keeps games playable and existing rewards available.")
+            ReadingGame.entries.forEach { game ->
+                GameRewardsSetting(game.title, game !in model.disabledReadingGameRewards,
+                    onCheckedChange = { model.chooseReadingGameRewardsEnabled(game, it) })
+            }
+        }
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("Time limit per reading game", style = MaterialTheme.typography.titleSmall)
             TimeLimitDropdown(model.readingTimeLimitSeconds, model::chooseReadingTimeLimitSeconds,
                 tag = "reading-time-limit")
-            Text("Total time, regardless of question count. Requires Reading Rewards System. " +
+            Text("Total time, regardless of question count. Requires rewards enabled for the subject and game. " +
                 "None disables the limit. Saved games keep their original limit.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
