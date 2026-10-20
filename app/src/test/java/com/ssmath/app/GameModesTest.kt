@@ -66,10 +66,11 @@ class GameModesTest {
         shadowOf(Looper.getMainLooper()).idle()
     }
 
-    @Test fun logicMathSharesOperationDefaultsAndReturnsToItsOwnSetup() {
+    @Test fun logicMathUsesItsOwnOperationDefaultsAndReturnsToItsOwnSetup() {
         val model = model()
+        val basicDefaults = model.rewardsDefaults
         model.openSettings()
-        model.openRewardsSetup()
+        model.openRewardsSetup(MathRewardGame.LOGIC)
         Operation.entries.forEach { operation ->
             model.updateRewardsParameters(operation,
                 if (operation == Operation.DIVISION) RewardsGameDefaults("20", "5") else RewardsGameDefaults("3", "8"))
@@ -77,7 +78,7 @@ class GameModesTest {
         model.saveRewardsSetup()
         model.closeOverlay()
         val practice = model.minimumText to model.maximumText
-        val defaults = model.rewardsDefaults
+        val defaults = model.logicRewardsDefaults
         Operation.entries.forEach { operation ->
             model.openLogicMathGame()
             model.selectRewardsGame(operation)
@@ -100,8 +101,111 @@ class GameModesTest {
             assertEquals(15, game.questionCount)
             model.backToSetup()
         }
-        assertEquals(defaults, model.rewardsDefaults)
+        assertEquals(defaults, model.logicRewardsDefaults)
+        assertEquals(defaults, model().logicRewardsDefaults)
+        assertEquals(basicDefaults, model.rewardsDefaults)
         assertEquals(practice, model.minimumText to model.maximumText)
+    }
+
+    @Test fun sharedDefaultsMigrateOnceThenSubjectEditsAndLaunchesStayIndependent() {
+        Operation.entries.forEach { operation ->
+            settings.edit().putInt("rewards_${operation.name}_first", 3)
+                .putInt("rewards_${operation.name}_second", 8).commit()
+        }
+        val model = model()
+        val legacy = model.rewardsDefaults
+        assertEquals(legacy, model.logicRewardsDefaults)
+        model.openSettings()
+        model.openRewardsSetup()
+        model.updateRewardsParameters(Operation.ADDITION, RewardsGameDefaults("4", "9"))
+        model.saveRewardsSetup()
+        assertEquals(legacy, model().logicRewardsDefaults)
+        model.openRewardsSetup(MathRewardGame.LOGIC)
+        model.updateRewardsParameters(Operation.ADDITION, RewardsGameDefaults("5", "7"))
+        model.updateRewardsParameters(Operation.DIVISION, RewardsGameDefaults("2", "20"))
+        model.saveRewardsSetup()
+        val restored = model()
+        assertEquals(RewardsGameDefaults("4", "9"), restored.rewardsDefaults[Operation.ADDITION])
+        assertEquals(RewardsGameDefaults("5", "7"), restored.logicRewardsDefaults[Operation.ADDITION])
+        assertEquals(RewardsGameDefaults("2", "20"), restored.logicRewardsDefaults[Operation.DIVISION])
+        assertEquals(legacy[Operation.DIVISION], restored.rewardsDefaults[Operation.DIVISION])
+        readyRewards(restored, 15)
+        assertEquals(GameParameters("4", "9", "15"), restored.readyParameters)
+        restored.backToSetup()
+        restored.dismissSetupDialog()
+        restored.openLogicMathGame()
+        restored.updateRewardsQuestionCount("15")
+        restored.selectRewardsGame(Operation.ADDITION)
+        assertEquals(GameParameters("5", "7", "15"), restored.readyParameters)
+        restored.openSettings()
+        restored.openRewardsSetup(MathRewardGame.LOGIC)
+        restored.updateRewardsParameters(Operation.ADDITION, RewardsGameDefaults("6", "8"))
+        restored.saveRewardsSetup()
+        assertEquals(GameParameters("5", "7", "15"), restored.readyParameters)
+        restored.closeOverlay()
+        restored.start()
+        assertEquals(5, restored.game?.minimum)
+        assertEquals(7, restored.game?.maximum)
+        assertNotNull(restored.game?.logicSettings)
+    }
+
+    @Test fun logicDefaultsRejectInvalidDraftsAndDiscardUnsavedChanges() {
+        val model = model()
+        val original = model.logicRewardsDefaults
+        model.openSettings()
+        model.openRewardsSetup(MathRewardGame.LOGIC)
+        model.updateRewardsParameters(Operation.ADDITION, RewardsGameDefaults("8", "3"))
+        model.updateRewardsParameters(Operation.DIVISION, RewardsGameDefaults("2", "20"))
+        assertFalse(model.canSaveRewardsSetup)
+        model.saveRewardsSetup()
+        assertEquals(Overlay.REWARDS_SETUP, model.overlay)
+        assertEquals(original, model().logicRewardsDefaults)
+        model.cancelRewardsSetup()
+        assertEquals(Overlay.SETTINGS, model.overlay)
+        assertEquals(original, model.rewardsSetupDraft)
+        model.openRewardsSetup(MathRewardGame.LOGIC)
+        model.updateRewardsParameters(Operation.ADDITION, RewardsGameDefaults("3", "5"))
+        model.closeOverlay()
+        assertEquals(original, model().logicRewardsDefaults)
+        model.openRewardsSetup()
+        assertEquals(model.rewardsDefaults, model.rewardsSetupDraft)
+    }
+
+    @Test fun matrixActivityDefaultsSaveAndCancelIndependentlyWithoutChangingItsFixedFormat() {
+        val model = model()
+        val basic = model.rewardsDefaults
+        val logic = model.logicRewardsDefaults
+        model.openSettings()
+        model.openRewardsSetup(MathRewardGame.MATRIX)
+        model.updateMatrixSetupRandomize(true)
+        model.updateMatrixSetupRewardTier(RewardTier.TIER_1)
+        model.updateRewardsParameters(Operation.MULTIPLICATION, RewardsGameDefaults("2", "5"))
+        assertEquals(basic, model.rewardsSetupDraft)
+        model.cancelRewardsSetup()
+        assertFalse(model.randomizeMatrixQuestions)
+        assertEquals(RewardTier.TIER_2, model.matrixRewardTier)
+        model.openRewardsSetup(MathRewardGame.MATRIX)
+        assertFalse(model.matrixSetupRandomize)
+        assertEquals(RewardTier.TIER_2, model.matrixSetupRewardTier)
+        model.updateMatrixSetupRandomize(true)
+        model.updateMatrixSetupRewardTier(RewardTier.TIER_1)
+        model.saveRewardsSetup()
+        assertEquals(Overlay.SETTINGS, model.overlay)
+        val restored = model()
+        assertTrue(restored.randomizeMatrixQuestions)
+        assertEquals(RewardTier.TIER_1, restored.matrixRewardTier)
+        assertEquals(basic, restored.rewardsDefaults)
+        assertEquals(logic, restored.logicRewardsDefaults)
+        restored.openMultiplicationMatrixGame()
+        assertEquals(GameParameters("1", "11", "121"), restored.readyParameters)
+        restored.start()
+        val game = restored.game
+        restored.openSettings()
+        restored.openRewardsSetup(MathRewardGame.MATRIX)
+        restored.updateMatrixSetupRandomize(false)
+        restored.saveRewardsSetup()
+        assertSame(game, restored.game)
+        assertTrue(restored.game!!.isMultiplicationMatrix)
     }
 
     @Test fun logicSettingsValidatePersistAndAreSnapshottedForEveryQuestion() {

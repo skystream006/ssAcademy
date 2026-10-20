@@ -437,7 +437,7 @@ private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit) {
                     HorizontalDivider()
                     CollapsibleSettingsSection("Game Settings", defaultExpanded = false) {
                         GameSettings(model,
-                            onRewardsSetup = { onDismiss(); model.openRewardsSetup() },
+                            onRewardsSetup = { subject -> onDismiss(); model.openRewardsSetup(subject) },
                             onReadingProgress = { onDismiss(); model.openReadingProgress() },
                             onReadingLevel = { showingReadingLevel = true },
                             onReadingGames = { showingReadingGames = true })
@@ -562,9 +562,19 @@ private fun LogicMathLimitField(
 }
 
 @Composable
+private fun DefaultActivitySettingsLink(tag: String, description: String, onClick: () -> Unit) {
+    ListItem(headlineContent = { Text("Default Activity Settings") },
+        supportingContent = { Text(description) },
+        leadingContent = { Icon(Icons.Rounded.Settings, null) },
+        trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null) },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        modifier = Modifier.clickable(onClick = onClick).testTag(tag))
+}
+
+@Composable
 private fun GameSettings(
     model: MathViewModel,
-    onRewardsSetup: () -> Unit,
+    onRewardsSetup: (MathRewardGame) -> Unit,
     onReadingProgress: () -> Unit,
     onReadingLevel: () -> Unit,
     onReadingGames: () -> Unit
@@ -613,42 +623,22 @@ private fun GameSettings(
             Switch(model.verticalEquations, model::chooseVerticalEquations,
                 modifier = Modifier.semantics { contentDescription = "Vertical equations" })
         }
-        CollapsibleSettingsSection("Multiplication Matrix Settings", defaultExpanded = false) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Randomize matrix question order")
-                    Text("Shuffle all 121 questions once per Multiplication Matrix Rewards Game. Applies to new games.",
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Switch(model.randomizeMatrixQuestions, model::chooseRandomizeMatrixQuestions,
-                    modifier = Modifier.semantics { contentDescription = "Randomize matrix question order" })
+        CollapsibleSettingsSection("Basic Math Settings", defaultExpanded = false) {
+            DefaultActivitySettingsLink("rewards-setup", "Default number limits for Basic Math") {
+                onRewardsSetup(MathRewardGame.BASIC)
             }
-            Text("Matrix Reward Tier", style = MaterialTheme.typography.titleSmall)
-            Text("Use this tier instead of the question minimums for Multiplication Matrix Rewards Game. " +
-                "Changes apply when the game finishes. Accuracy, timer, and enabled-reward rules still apply.",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Column(Modifier.selectableGroup()) {
-                RewardTier.entries.forEach { tier ->
-                    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).selectable(
-                        selected = model.matrixRewardTier == tier, role = Role.RadioButton,
-                        onClick = { model.chooseMatrixRewardTier(tier) }
-                    ).testTag("matrix-reward-${tier.name}"),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = model.matrixRewardTier == tier, onClick = null)
-                        Text(tier.label, Modifier.padding(start = 8.dp))
-                    }
-                }
+        }
+        CollapsibleSettingsSection("Multiplication Matrix Settings", defaultExpanded = false) {
+            DefaultActivitySettingsLink("matrix-rewards-setup", "Question order and reward tier for Multiplication Matrix") {
+                onRewardsSetup(MathRewardGame.MATRIX)
             }
         }
         CollapsibleSettingsSection("Logic Math Settings", defaultExpanded = false) {
             LogicMathSettingsFields(model)
+            DefaultActivitySettingsLink("logic-rewards-setup", "Default number limits for Logic Math") {
+                onRewardsSetup(MathRewardGame.LOGIC)
+            }
         }
-        ListItem(headlineContent = { Text("Default Math Reward Game Settings") },
-            supportingContent = { Text("Default number limits for each math type") },
-            leadingContent = { Icon(Icons.Rounded.Settings, null) },
-            trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null) },
-            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-            modifier = Modifier.clickable(onClick = onRewardsSetup).testTag("rewards-setup"))
     }
     HorizontalDivider()
     CollapsibleSettingsSection("Reading Settings", defaultExpanded = false) {

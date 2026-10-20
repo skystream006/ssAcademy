@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -60,9 +61,11 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -506,40 +509,76 @@ private fun RewardsSetupScreen(model: MathViewModel) {
     Column(Modifier.fillMaxSize().testTag("rewards-setup-screen").verticalScroll(rememberScrollState())
         .padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         TextButton(onClick = model::cancelRewardsSetup) { Text("Back") }
-        Text("Default Math Reward Game Settings", style = MaterialTheme.typography.headlineSmall)
-        Text("Save default number limits for each math type, shared by Challenge- Basic Math and Challenge - Logic Math. " +
-            "Choose the number of questions when starting a challenge. " +
-            "Practice Game settings stay separate.")
-        Operation.entries.forEach { operation ->
-            val parameters = model.rewardsSetupDraft.getValue(operation)
-            val division = operation == Operation.DIVISION
-            Card(Modifier.fillMaxWidth().align(Alignment.CenterHorizontally)) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(operation.label, style = MaterialTheme.typography.titleLarge)
-                    OutlinedTextField(parameters.firstText,
-                        { model.updateRewardsParameters(operation, parameters.copy(firstText = it)) },
-                        label = { Text(if (division) "Maximum First number" else "Minimum number") },
-                        supportingText = { Text(if (division) "Whole number from $MIN_MAXIMUM to ${"%,d".format(MAX_MAXIMUM)}"
-                            else "Whole number from $MIN_MAXIMUM to the maximum number") },
-                        isError = parameters.firstText.isNotEmpty() && (parameters.first == null ||
-                            (!division && parameters.second != null && (parameters.first ?: 0) > requireNotNull(parameters.second))),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
-                        modifier = Modifier.fillMaxWidth().testTag("rewards-${operation.name}-first"))
-                    OutlinedTextField(parameters.secondText,
-                        { model.updateRewardsParameters(operation, parameters.copy(secondText = it)) },
-                        label = { Text(if (division) "Maximum Second number" else "Maximum number") },
-                        supportingText = { Text("Whole number from $MIN_MAXIMUM to ${"%,d".format(MAX_MAXIMUM)}") },
-                        isError = parameters.secondText.isNotEmpty() && parameters.second == null,
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
-                        modifier = Modifier.fillMaxWidth().testTag("rewards-${operation.name}-second"))
+        Text("Default Activity Settings", style = MaterialTheme.typography.headlineSmall)
+        Text(model.rewardsSetupSubject.title, style = MaterialTheme.typography.titleLarge)
+        if (model.rewardsSetupSubject == MathRewardGame.MATRIX) {
+            MatrixActivitySettings(model)
+        } else {
+            Text("Save default number limits for ${model.rewardsSetupSubject.title} only. " +
+                "Basic Math and Logic Math defaults are independent. " +
+                "Choose the number of questions when starting a challenge. " +
+                "Practice Game settings stay separate.")
+            Operation.entries.forEach { operation ->
+                val parameters = model.rewardsSetupDraft.getValue(operation)
+                val division = operation == Operation.DIVISION
+                Card(Modifier.fillMaxWidth().align(Alignment.CenterHorizontally)) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(operation.label, style = MaterialTheme.typography.titleLarge)
+                        OutlinedTextField(parameters.firstText,
+                            { model.updateRewardsParameters(operation, parameters.copy(firstText = it)) },
+                            label = { Text(if (division) "Maximum First number" else "Minimum number") },
+                            supportingText = { Text(if (division) "Whole number from $MIN_MAXIMUM to ${"%,d".format(MAX_MAXIMUM)}"
+                                else "Whole number from $MIN_MAXIMUM to the maximum number") },
+                            isError = parameters.firstText.isNotEmpty() && (parameters.first == null ||
+                                (!division && parameters.second != null && (parameters.first ?: 0) > requireNotNull(parameters.second))),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+                            modifier = Modifier.fillMaxWidth().testTag("rewards-${operation.name}-first"))
+                        OutlinedTextField(parameters.secondText,
+                            { model.updateRewardsParameters(operation, parameters.copy(secondText = it)) },
+                            label = { Text(if (division) "Maximum Second number" else "Maximum number") },
+                            supportingText = { Text("Whole number from $MIN_MAXIMUM to ${"%,d".format(MAX_MAXIMUM)}") },
+                            isError = parameters.secondText.isNotEmpty() && parameters.second == null,
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                            modifier = Modifier.fillMaxWidth().testTag("rewards-${operation.name}-second"))
+                    }
                 }
             }
         }
         Button(onClick = model::saveRewardsSetup, enabled = model.canSaveRewardsSetup,
             modifier = Modifier.fillMaxWidth().align(Alignment.CenterHorizontally)
                 .testTag("save-rewards-setup")) { Text("Save defaults") }
+    }
+}
+
+@Composable
+private fun MatrixActivitySettings(model: MathViewModel) {
+    Text("The matrix is fixed: 1 × 1 through 11 × 11, with 121 questions.")
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("Randomize matrix question order")
+            Text("Shuffle all 121 questions once per Multiplication Matrix Rewards Game. Applies to new games.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Switch(model.matrixSetupRandomize, model::updateMatrixSetupRandomize,
+            modifier = Modifier.semantics { contentDescription = "Randomize matrix question order" })
+    }
+    Text("Matrix Reward Tier", style = MaterialTheme.typography.titleSmall)
+    Text("Use this tier instead of the question minimums for Multiplication Matrix Rewards Game. " +
+        "Saved changes apply when the game finishes. Accuracy, timer, and enabled-reward rules still apply.",
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Column(Modifier.selectableGroup()) {
+        RewardTier.entries.forEach { tier ->
+            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).selectable(
+                selected = model.matrixSetupRewardTier == tier, role = Role.RadioButton,
+                onClick = { model.updateMatrixSetupRewardTier(tier) }
+            ).testTag("matrix-reward-${tier.name}"),
+                verticalAlignment = Alignment.CenterVertically) {
+                RadioButton(selected = model.matrixSetupRewardTier == tier, onClick = null)
+                Text(tier.label, Modifier.padding(start = 8.dp))
+            }
+        }
     }
 }
 
