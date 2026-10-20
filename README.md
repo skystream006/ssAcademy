@@ -187,7 +187,9 @@ use the subject's master rewards switch and separate game switches. Math has swi
 **Challenge- Basic Math**, **Challenge - Logic Math**, and **Multiplication Matrix Rewards Game**;
 Reading has one for every reading game. Game reward switches default to on and are saved
 independently. Turning a subject's master switch off preserves its individual game choices.
-These switches control prize fragments, not game availability or celebrations, and never remove earned rewards.
+These switches control prize fragments and time limits, not game availability or celebrations,
+and never remove earned rewards. Turning rewards off for a subject or game removes its current
+game's time limit without changing the saved duration for future games.
 The import button shows the installed pack version, counts by game/level, and download progress.
 **Set Reading Level** opens a dialog
 with **Sprout**, **Trail**, and **Summit**, in increasing difficulty; existing drafts keep their original level.
@@ -296,8 +298,9 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   The selection applies to the next math challenge with that game's rewards enabled;
   Practice Game has no time limit.
   The ready screen shows the total limit. A timed game shows time remaining and ends when time runs out,
-  saving the partial result without a prize. Changing settings during practice does
-  not remove its active time limit.
+  saving the partial result without a prize. Changing the duration or hiding the timer during practice
+  does not remove its active time limit, but turning off Math or that game's rewards does.
+  Re-enabling rewards applies the saved time-limit setting to future games, not the current game.
 - **Time limit per reading game** – under **Reading Settings**, separately saved from Math.
   Choose **None**, **5, 10, 15, 20, 30, or 45 seconds**, **1, 2, 3, or 4 minutes**, or **5, 10, or 15 minutes**.
   Reading uses this as the total game limit, without Math's question-count scaling, when
@@ -306,7 +309,9 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   On upgrade, the previous shared limit is copied once if Show timer was enabled;
   otherwise Reading starts with None. Subsequent Math and Reading choices are independent.
   Leaving Reading or backgrounding the app pauses its timer. Saved reading sessions retain
-  their elapsed time and original limit, even after changing either subject's settings.
+  their elapsed time and original limit after changing the duration setting. If Reading or that
+  game's rewards are off, continuing or resuming the session removes its limit and keeps counting
+  elapsed time; re-enabling rewards does not restore the removed limit.
 - **Show correct answers** – on by default. Reveal correct answers after
   mistakes during practice, in Results, and in Practice History. Wrong answers are
   still marked and counted, and saved attempts are unchanged. This choice is remembered.
