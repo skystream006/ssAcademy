@@ -10,6 +10,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -40,6 +42,8 @@ internal fun AdminPinDialog(onUnlocked: () -> Unit, onDismiss: () -> Unit) {
         onDismissRequest = onDismiss,
         title = { Text(if (creating) "Create Admin PIN" else "Enter Admin PIN") },
         text = {
+            val pinFocus = remember { FocusRequester() }
+            LaunchedEffect(Unit) { pinFocus.requestFocus() }
             Column(
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(if (creating) "Create a 4–8 digit PIN to protect the Admin Menu. You will need it each time you open this menu."
@@ -48,7 +52,7 @@ internal fun AdminPinDialog(onUnlocked: () -> Unit, onDismiss: () -> Unit) {
                     label = { Text("PIN") }, singleLine = true, enabled = !busy,
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                    modifier = Modifier.fillMaxWidth().testTag("admin-pin"))
+                    modifier = Modifier.fillMaxWidth().focusRequester(pinFocus).testTag("admin-pin"))
                 if (creating) {
                     OutlinedTextField(confirmation, { confirmation = it; error = null },
                         label = { Text("Confirm PIN") }, singleLine = true, enabled = !busy,

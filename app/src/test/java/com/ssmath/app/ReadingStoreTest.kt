@@ -755,6 +755,62 @@ class ReadingStoreTest {
         }
     }
 
+    @Test fun eachReadingGameSnapshotsItsOwnRewardsAndTimerWithoutDisablingPlay() {
+        val math = MathViewModel(application)
+        math.chooseReadingTimeLimitSeconds(30)
+        ReadingGame.entries.forEach { game ->
+            val model = ReadingViewModel(application, RecordingStorage(readingFixture()))
+            await { model.data != null }
+            ReadingGame.entries.forEach { math.chooseReadingGameRewardsEnabled(it, it != game) }
+            for (enabled in listOf(false, true)) {
+                math.chooseReadingGameRewardsEnabled(game, enabled)
+                val previous = model.data?.activeSession?.id
+                model.startSession(game, 25)
+                await { model.data?.activeSession?.id != previous && !model.saving }
+                val session = requireNotNull(model.data?.activeSession)
+                assertEquals(game, session.game)
+                assertEquals(enabled, session.rewardsEnabledAtStart)
+                assertEquals(if (enabled) 30_000L else null, session.timeLimitMs)
+                math.chooseReadingGameRewardsEnabled(game, !enabled)
+                assertEquals(session, model.data?.activeSession)
+                assertTrue(math.disabledReadingGames.isEmpty())
+                ReadingEngine.validate(requireNotNull(model.data))
+            }
+        }
+    }
+
+    @Test fun readingGameRewardSwitchIsCheckedAtBothStartAndFinishAcrossReload() {
+        for (game in ReadingGame.entries) for (atStart in listOf(false, true)) {
+            for (atFinish in listOf(false, true)) for (completion in listOf("submit", "finish")) {
+                val math = MathViewModel(application)
+                math.chooseRewardThresholds(1, 2)
+                math.chooseReadingGameRewardsEnabled(game, atStart)
+                var data = ReadingEngine.startSession(
+                    ReadingEngine.addProfile(ReadingData(), "Ari", "reader-a"),
+                    game, ReadingLevel.SPROUT, 1, settings.readReadingRewardsEnabled(game))
+                // Leave the final activity ready for the ViewModel's submit or finish path.
+                val solved = readingSolve(data)
+                data = data.copy(attempts = solved.attempts.map { it.copy(finishedAt = null) })
+                val storage = ReadingStore(file)
+                storage.load()
+                storage.save(data)
+                val model = ReadingViewModel(application, ReadingStore(file))
+                await { model.data != null }
+                math.chooseReadingGameRewardsEnabled(game, atFinish)
+                if (completion == "finish") model.finishActivity() else model.submit("answer")
+                await { model.data?.activeSession?.finishedAt != null && !model.saving }
+                val session = requireNotNull(model.data?.activeSession)
+                assertEquals("$game: start=$atStart finish=$atFinish via $completion",
+                    atStart && atFinish, session.prizeType != null)
+                assertEquals(session, ReadingStore(file).load().activeSession)
+                math.chooseReadingGameRewardsEnabled(game, false)
+                model.finishActivity()
+                await { !model.saving }
+                assertEquals(session, model.data?.activeSession)
+            }
+        }
+    }
+
     @Test fun readingMigratesThirtySecondsWithoutScalingAndSnapshotsTheLimitAcrossReload() {
         settings.edit().putBoolean("reading_rewards_enabled", true).putBoolean("show_timer", true)
             .putInt("time_limit_minutes", 5).putInt("time_limit_seconds", 30).commit()

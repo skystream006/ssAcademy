@@ -77,6 +77,78 @@ class RewardsModelTest {
         shadowOf(Looper.getMainLooper()).idle()
     }
 
+    @Test fun perGameRewardsDefaultOnRespectLegacySubjectSwitchesAndPersistIndependently() {
+        val settings = application.getSharedPreferences("settings", 0)
+        settings.edit().putBoolean("rewards_enabled", false).putBoolean("reading_rewards_enabled", false).commit()
+        val model = model()
+        MathRewardGame.entries.forEach { assertFalse(model.rewardsEnabled(it)) }
+        ReadingGame.entries.forEach { assertFalse(model.rewardsEnabled(it)) }
+        assertTrue(model.disabledMathGameRewards.isEmpty())
+        assertTrue(model.disabledReadingGameRewards.isEmpty())
+        model.chooseRewardsEnabled(true)
+        model.chooseSubjectRewardsEnabled(Subject.READING, true)
+        MathRewardGame.entries.forEach { assertTrue(model.rewardsEnabled(it)) }
+        ReadingGame.entries.forEach { assertTrue(model.rewardsEnabled(it)) }
+        model.chooseMathGameRewardsEnabled(MathRewardGame.LOGIC, false)
+        model.chooseReadingGameRewardsEnabled(ReadingGame.STUDIO, false)
+        val restored = model()
+        MathRewardGame.entries.forEach { assertEquals(it != MathRewardGame.LOGIC, restored.rewardsEnabled(it)) }
+        ReadingGame.entries.forEach { assertEquals(it != ReadingGame.STUDIO, restored.rewardsEnabled(it)) }
+        assertTrue(restored.disabledReadingGames.isEmpty())
+        assertTrue(restored.disabledRewards.isEmpty())
+        restored.chooseRewardsEnabled(false)
+        restored.chooseRewardsEnabled(true)
+        assertFalse(restored.rewardsEnabled(MathRewardGame.LOGIC))
+    }
+
+    private fun readyRewardGame(model: MathViewModel, game: MathRewardGame) {
+        model.done()
+        when (game) {
+            MathRewardGame.BASIC -> model.openRewardsGame()
+            MathRewardGame.LOGIC -> model.openLogicMathGame()
+            MathRewardGame.MATRIX -> model.openMultiplicationMatrixGame()
+        }
+        if (game != MathRewardGame.MATRIX) {
+            model.updateRewardsQuestionCount("25")
+            model.selectRewardsGame(Operation.ADDITION)
+        }
+        assertEquals(game, model.currentMathRewardGame)
+    }
+
+    @Test fun eachMathGameRequiresItsOwnRewardsAtStartAndFinishAndKeepsTimerSnapshot() {
+        val model = model()
+        model.chooseShowTimer(true)
+        model.chooseTimeLimitSeconds(30)
+        MathRewardGame.entries.forEach { game ->
+            for (atStart in listOf(false, true)) for (atFinish in listOf(false, true)) {
+                MathRewardGame.entries.forEach { model.chooseMathGameRewardsEnabled(it, it != game) }
+                model.chooseMathGameRewardsEnabled(game, atStart)
+                readyRewardGame(model, game)
+                val count = if (game == MathRewardGame.MATRIX) 121 else 25
+                val limit = (30_000L * count / 5).takeIf { atStart }
+                assertEquals(limit, model.readyTimeLimitMs)
+                model.start()
+                assertEquals(Screen.PLAYING, model.screen)
+                assertEquals(game, model.currentMathRewardGame)
+                model.chooseMathGameRewardsEnabled(game, atFinish)
+                assertEquals(limit, model.activeTimeLimitMs)
+                finish(model, count)
+                val result = requireNotNull(model.lastResult)
+                assertEquals(atStart && atFinish, result.prizeType != null)
+                assertNotNull(model.celebration)
+                assertEquals(result, model().history.first { it.id == result.id })
+                model.chooseMathGameRewardsEnabled(game, false)
+                while (model.celebration != null) model.dismissCelebration()
+                if (result.prizeType != null) {
+                    model.showRewardForResult(result)
+                    model.claimReward()
+                    shadowOf(Looper.getMainLooper()).idle()
+                    assertNotNull(model.history.first { it.id == result.id }.prize)
+                }
+            }
+        }
+    }
+
     @Test fun rewardRuleSettingsPersistIndependentlyAndInvalidEditsAreIgnored() {
         val model = model()
         assertEquals(RewardThresholds(), model.rewardThresholds)

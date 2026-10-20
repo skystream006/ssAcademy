@@ -158,6 +158,7 @@ practice histories, accessible without opening Admin Menu.
 configured), create and confirm a **4–8 digit PIN**. Enter that PIN each time you open
 Admin Menu; cancelling keeps it locked. The PIN is stored only as a salted password
 hash on this device. Five incorrect attempts pause access for 30 seconds.
+The PIN input is focused automatically when the menu opens, including first-time PIN creation.
 Closing the menu, leaving Settings, or recreating the screen locks it again.
 Use **Change PIN** inside Admin Menu to enter your current PIN and confirm a new
 **4–8 digit PIN**, then press **Save PIN**. Successful changes close and lock Admin Menu;
@@ -181,6 +182,12 @@ games already running keep their original limits. Picture rows remain horizontal
 of the **Vertical equations** setting, which applies to numeric equations.
 **Reading Settings** contains **Reading Progress**, **Set Reading Level**, **Active Reading Games**,
 **Reading Rewards System**, **Time limit per reading game**, and **Import / Update Reading Activities**.
+**Math Rewards System** and **Reading Rewards System** start collapsed. Expand either to
+use the subject's master rewards switch and separate game switches. Math has switches for
+**Challenge- Basic Math**, **Challenge - Logic Math**, and **Multiplication Matrix Rewards Game**;
+Reading has one for every reading game. Game reward switches default to on and are saved
+independently. Turning a subject's master switch off preserves its individual game choices.
+These switches control prize fragments, not game availability or celebrations, and never remove earned rewards.
 The import button shows the installed pack version, counts by game/level, and download progress.
 **Set Reading Level** opens a dialog
 with **Sprout**, **Trail**, and **Summit**, in increasing difficulty; existing drafts keep their original level.
@@ -244,7 +251,8 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   leaves its active questions unchanged and its timer paused until you leave Settings.
 - **Math Rewards System** – under Math Settings, on by default. In math challenges, earn
   prizes for completing the configured minimum questions with **more than 90% correct**.
-  This setting never enables prizes in Practice Game.
+  Both the subject and the selected game's rewards must be enabled at start and finish.
+  These settings never enable prizes in Practice Game.
   After the celebration, tap the hopping gift box to open it and release confetti.
   By default, **Tier 1** rewards are for sessions of **25–49 questions**: a random Lollipop,
   Ice Cream Cone, Gummi Bear, Ramen, or Bed Time Fragment. **Tier 2** rewards are for sessions
@@ -270,7 +278,7 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
 - **Reading Rewards System** – under Reading Settings, enables the same prize fragments
   as math challenges, using the shared minimum-question settings and Rewards inventory.
   Complete all selected activities and meet a tier's minimum with **more than 90% correct**
-  to qualify; rewards must be on at both start and finish.
+  to qualify; both the subject and the selected game's rewards must be on at start and finish.
   Disabled reward types are excluded from new prizes. Existing gifts remain claimable.
   Reading checkpoint points have been removed; checkpoints still track activity progress.
 - **Show timer** – off by default. Show or hide the timer while practicing. The timer pauses while
@@ -285,14 +293,15 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   **2 minutes 30 seconds for 25**, and **5 minutes for 50 questions**.
   The total math limit scales with the chosen question count: **1 minute per 5 questions**
   gives **3 minutes for 15**, **5 minutes for 25**, and **10 minutes for 50 questions**.
-  The selection applies to the next math challenge only; Practice Game has no time limit.
+  The selection applies to the next math challenge with that game's rewards enabled;
+  Practice Game has no time limit.
   The ready screen shows the total limit. A timed game shows time remaining and ends when time runs out,
   saving the partial result without a prize. Changing settings during practice does
   not remove its active time limit.
 - **Time limit per reading game** – under **Reading Settings**, separately saved from Math.
   Choose **None**, **5, 10, 15, 20, 30, or 45 seconds**, **1, 2, 3, or 4 minutes**, or **5, 10, or 15 minutes**.
   Reading uses this as the total game limit, without Math's question-count scaling, when
-  Reading Rewards System is enabled at launch. Math Rewards System and Math's Show timer
+  Reading Rewards System and that game's rewards are enabled at launch. Math Rewards System and Math's Show timer
   setting do not control this limit; timed reading games always show time remaining.
   On upgrade, the previous shared limit is copied once if Show timer was enabled;
   otherwise Reading starts with None. Subsequent Math and Reading choices are independent.
