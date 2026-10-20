@@ -65,6 +65,93 @@ class MathAppTest {
         MathViewModel(application, ProblemGenerator(Random(7)), clock = { now },
             wallClock = { 1_700_000_000_000 }, ioDispatcher = ioDispatcher)
 
+    @Test fun logicChallengeSharesRewardChoicesAndOffersEveryOperation() {
+        val model = model(Dispatchers.Unconfined)
+        compose.setContent { MathAppContent(model) }
+        compose.onNodeWithTag("subject-Math").performClick()
+        compose.onNodeWithTag("rewards-game").performScrollTo().assertTextEquals("Challenge- Basic Math")
+        compose.onNodeWithTag("logic-math-game").performScrollTo().performClick()
+        compose.onNode(hasText("Challenge - Logic Math") and hasAnyAncestor(isDialog())).assertIsDisplayed()
+        Operation.entries.forEach {
+            compose.onNodeWithTag("rewards-operation-${it.name}").performScrollTo().assertIsNotEnabled()
+        }
+        listOf(15, 25, 50).forEach {
+            compose.onNodeWithTag("rewards-question-count-$it").performScrollTo().performClick().assertIsSelected()
+        }
+        Operation.entries.forEach {
+            compose.onNodeWithTag("rewards-operation-${it.name}").performScrollTo().performClick()
+            assertEquals(it, model.readyOperation)
+            assertTrue(model.readyLogicMath)
+            compose.onNodeWithText("Challenge - Logic Math").assertIsDisplayed()
+            compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }
+            assertEquals(SetupDialog.LOGIC, model.setupDialog)
+        }
+        compose.onNodeWithText("Cancel").performClick()
+        compose.onNodeWithTag("math-games-screen").assertIsDisplayed()
+        compose.onNodeWithTag("logic-math-game").performScrollTo().performClick()
+        compose.runOnIdle {
+            (ShadowDialog.getLatestDialog() as ComponentDialog).onBackPressedDispatcher.onBackPressed()
+        }
+        compose.onNodeWithTag("game-setup-dialog").assertDoesNotExist()
+    }
+
+    @Test fun logicPictureCluesAndSubmittedAnswerRemainReviewableInResultsAndHistory() {
+        val model = model(Dispatchers.Unconfined)
+        model.chooseRewardThresholds(1, 2)
+        model.chooseShowCorrectAnswers(false)
+        model.openLogicMathGame()
+        compose.setContent { MathAppContent(model) }
+        compose.onNodeWithTag("rewards-question-count-1").performScrollTo().performClick()
+        compose.onNodeWithTag("rewards-operation-ADDITION").performScrollTo().performClick()
+        compose.onNodeWithTag("start-button").performScrollTo().performClick()
+        val puzzle = requireNotNull(model.game?.problem?.logicPuzzle)
+        puzzle.clues.forEachIndexed { index, clue ->
+            compose.onNodeWithTag("logic-clue-$index").performScrollTo().assertContentDescriptionEquals(
+                "${clue.expression.accessibilityText} = ${clue.total}")
+        }
+        compose.onNodeWithTag("logic-question").performScrollTo()
+            .assertContentDescriptionEquals("${puzzle.question.accessibilityText} = ?")
+        compose.onNodeWithTag("answer-input").performScrollTo().performTextInput("0")
+        compose.onNodeWithTag("submit-answer").performScrollTo().performClick()
+        compose.onNodeWithTag("result-correct").assertTextEquals("You got 0 right!")
+        compose.onNode(hasScrollToIndexAction()).performScrollToIndex(1)
+        compose.onNodeWithTag("logic-question").performScrollTo()
+            .assertContentDescriptionEquals("${puzzle.question.accessibilityText} = 0")
+        compose.onNodeWithText("Correct answer:", substring = true).assertDoesNotExist()
+        compose.onNodeWithTag("done-button").performClick()
+        compose.runOnIdle { model.openHistory() }
+        compose.onNodeWithText("Challenge - Logic Math · Addition · 1 to 10").performClick()
+        compose.onNode(hasScrollToIndexAction()).performScrollToIndex(1)
+        compose.onNodeWithTag("logic-clue-0").performScrollTo().assertContentDescriptionEquals(
+            "${puzzle.clues.first().expression.accessibilityText} = ${puzzle.clues.first().total}")
+        compose.onNodeWithTag("logic-question").performScrollTo()
+            .assertContentDescriptionEquals("${puzzle.question.accessibilityText} = 0")
+        compose.onNodeWithText("Correct answer:", substring = true).assertDoesNotExist()
+        compose.runOnIdle { model.chooseShowCorrectAnswers(true) }
+        compose.onNodeWithText("Correct answer: ${puzzle.answer}").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    @Config(qualifiers = "w320dp-h480dp")
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun longLogicPuzzlesKeepAnswerAndQuitReachableWithLargeText() {
+        val model = model(Dispatchers.Unconfined)
+        model.chooseTextSize(200)
+        model.chooseLogicMathSettings(LogicMathSettings(6, 6, 8, 8))
+        model.openLogicMathGame()
+        model.updateRewardsQuestionCount("15")
+        model.selectRewardsGame(Operation.DIVISION)
+        model.start()
+        compose.setContent { MathAppContent(model) }
+        compose.onNodeWithTag("answer-input").performScrollTo().assertIsDisplayed()
+            .performTextInput(requireNotNull(model.game).problem.answer.toString())
+        compose.onNodeWithTag("submit-answer").performScrollTo().assertIsDisplayed().performClick()
+        compose.onNodeWithTag("question-progress").performScrollTo().assertTextEquals("Question 2 of 15")
+        compose.onNodeWithTag("quit-game").assertIsDisplayed().performClick()
+        compose.onNodeWithText("Quit", useUnmergedTree = true).performClick()
+        compose.onNodeWithTag("math-games-screen").assertIsDisplayed()
+    }
+
     @Test fun multiplicationMatrixLaunchesFromMathAndShowsAllAnswersInResultsAndHistory() {
         val model = model(Dispatchers.Unconfined)
         compose.setContent { MathAppContent(model) }
@@ -526,7 +613,7 @@ class MathAppTest {
         compose.onNodeWithTag("rewards-game").performScrollTo().performClick()
         assertRewardsLaunchHeader()
         val titleLayouts = mutableListOf<TextLayoutResult>()
-        compose.onNode(hasText("Rewards Game") and hasAnyAncestor(isDialog()))
+        compose.onNode(hasText("Challenge- Basic Math") and hasAnyAncestor(isDialog()))
             .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(titleLayouts) }
         assertFalse(titleLayouts.single().didOverflowWidth)
         assertFalse(titleLayouts.single().didOverflowHeight)
@@ -1922,7 +2009,7 @@ class MathAppTest {
     }
 
     private fun assertRewardsLaunchHeader() {
-        compose.onNode(hasText("Rewards Game") and hasAnyAncestor(isDialog())).assertIsDisplayed()
+        compose.onNode(hasText("Challenge- Basic Math") and hasAnyAncestor(isDialog())).assertIsDisplayed()
         compose.onNodeWithText("How many questions would you like?").performScrollTo().assertIsDisplayed()
         listOf(15, 25, 50).forEach { count ->
             compose.onNodeWithTag("rewards-question-count-$count").performScrollTo().assertIsDisplayed()

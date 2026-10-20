@@ -301,7 +301,11 @@ private fun HomeScreen(model: MathViewModel) {
                 }
                 Button(onClick = model::openRewardsGame,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("rewards-game")) {
-                    Text("Rewards Game", textAlign = TextAlign.Center)
+                    Text("Challenge- Basic Math", textAlign = TextAlign.Center)
+                }
+                Button(onClick = model::openLogicMathGame,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("logic-math-game")) {
+                    Text("Challenge - Logic Math", textAlign = TextAlign.Center)
                 }
                 Button(onClick = model::openMultiplicationMatrixGame,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("multiplication-matrix-game")) {
@@ -317,7 +321,13 @@ private fun HomeScreen(model: MathViewModel) {
             Text("Practice with Other animations only. No prizes or Pokémon are awarded.")
             SetupForm(model, Modifier.fillMaxWidth())
         }
-        SetupDialog.REWARDS -> GameSetupDialog("Rewards Game", model::dismissSetupDialog) {
+        SetupDialog.REWARDS, SetupDialog.LOGIC -> GameSetupDialog(
+            if (model.setupDialog == SetupDialog.LOGIC) "Challenge - Logic Math" else "Challenge- Basic Math",
+            model::dismissSetupDialog) {
+            if (model.setupDialog == SetupDialog.LOGIC) {
+                Text("Use the picture clues to find each picture's value, then solve the final equation. " +
+                    "Multiply and divide before adding or subtracting.")
+            }
             Text("How many questions would you like?", style = MaterialTheme.typography.titleLarge)
             RewardsQuestionCountChoices(model.rewardsQuestionCount,
                 { model.updateRewardsQuestionCount(it.toString()) }, thresholds = model.rewardThresholds)
@@ -488,7 +498,8 @@ private fun RewardsSetupScreen(model: MathViewModel) {
         .padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         TextButton(onClick = model::cancelRewardsSetup) { Text("Back") }
         Text("Default Math Reward Game Settings", style = MaterialTheme.typography.headlineSmall)
-        Text("Save default number limits for each math type. Choose the number of questions when starting a Rewards Game. " +
+        Text("Save default number limits for each math type, shared by Challenge- Basic Math and Challenge - Logic Math. " +
+            "Choose the number of questions when starting a challenge. " +
             "Practice Game settings stay separate.")
         Operation.entries.forEach { operation ->
             val parameters = model.rewardsSetupDraft.getValue(operation)
@@ -590,7 +601,8 @@ private fun ReadyDialog(model: MathViewModel) {
         else "numbers ${parameters.first} to ${parameters.second}"
     DialogCard {
         Text(if (model.readyMultiplicationMatrix) "Multiplication Matrix Rewards Game"
-            else if (model.gameMode == GameMode.PRACTICE) "Practice Game" else "Rewards Game",
+            else if (model.readyLogicMath) "Challenge - Logic Math"
+            else if (model.gameMode == GameMode.PRACTICE) "Practice Game" else "Challenge- Basic Math",
             style = MaterialTheme.typography.titleMedium)
         Text("Press Start when Ready", style = MaterialTheme.typography.headlineSmall,
             textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
@@ -601,7 +613,7 @@ private fun ReadyDialog(model: MathViewModel) {
             Text(if (model.randomizeMatrixQuestions)
                 "Answer all 121 questions in random order, with each pair from 1 × 1 to 11 × 11 appearing once."
                 else "Answer each row in order: 1 × 1 to 1 × 11, then 2 × 1 to 2 × 11, up to 11 × 11.")
-            Text("The same Rewards Game rules apply: finish all 121 questions with more than 90% correct " +
+            Text("The same challenge rules apply: finish all 121 questions with more than 90% correct " +
                 "before the time limit, if enabled. The game ends at 13 wrong answers.")
             Text("Complete the matrix to collect both a Mega Pokémon and a Pokémon or Other animation.")
             if (model.rewardsEnabled) {
@@ -611,6 +623,10 @@ private fun ReadyDialog(model: MathViewModel) {
                 }
             }
             else Text("Prize fragments are unavailable while Math Rewards System is OFF.")
+        }
+        if (model.readyLogicMath) {
+            Text("Each picture keeps the same hidden value within a puzzle. Use the clues, then answer the last row. " +
+                "Multiply and divide before adding or subtracting.")
         }
         model.readyTimeLimitMs?.let { limit ->
             Text("Time limit: ${formatDuration(limit)}", modifier = Modifier.fillMaxWidth(),
@@ -687,6 +703,10 @@ private fun PlayingScreen(model: MathViewModel, onQuit: () -> Unit) {
 
 @Composable
 internal fun Equation(problem: Problem, answer: String, vertical: Boolean, style: TextStyle, modifier: Modifier = Modifier) {
+    problem.logicPuzzle?.let { puzzle ->
+        LogicPuzzleEquation(puzzle, answer, style, modifier)
+        return
+    }
     val description = "${problem.text} = $answer"
     if (!vertical) {
         Text(description, style = style, modifier = modifier)
@@ -728,6 +748,29 @@ internal fun Equation(problem: Problem, answer: String, vertical: Boolean, style
             HorizontalDivider(color = LocalContentColor.current, modifier = Modifier.testTag("equation-line"))
             Text(result, style = fittedStyle, softWrap = false,
                 modifier = Modifier.fillMaxWidth().testTag("equation-answer"))
+        }
+    }
+}
+
+@Composable
+internal fun LogicPuzzleEquation(puzzle: LogicPuzzle, answer: String, style: TextStyle, modifier: Modifier = Modifier) {
+    Column(modifier.fillMaxWidth().testTag("logic-puzzle"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Picture clues", style = MaterialTheme.typography.titleSmall)
+        Text("Same picture, same value. × and ÷ before + and −. Scroll sideways for longer rows.",
+            style = MaterialTheme.typography.bodySmall)
+        Column(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            puzzle.clues.forEachIndexed { index, clue ->
+                Text("${clue.expression.text} = ${clue.total}",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.testTag("logic-clue-$index").clearAndSetSemantics {
+                        contentDescription = "${clue.expression.accessibilityText} = ${clue.total}"
+                    })
+            }
+            Text("${puzzle.question.text} = $answer", style = style,
+                modifier = Modifier.testTag("logic-question").clearAndSetSemantics {
+                    contentDescription = "${puzzle.question.accessibilityText} = $answer"
+                })
         }
     }
 }

@@ -66,6 +66,157 @@ class GameModesTest {
         shadowOf(Looper.getMainLooper()).idle()
     }
 
+    @Test fun logicMathSharesOperationDefaultsAndReturnsToItsOwnSetup() {
+        val model = model()
+        model.openSettings()
+        model.openRewardsSetup()
+        Operation.entries.forEach { operation ->
+            model.updateRewardsParameters(operation,
+                if (operation == Operation.DIVISION) RewardsGameDefaults("20", "5") else RewardsGameDefaults("3", "8"))
+        }
+        model.saveRewardsSetup()
+        model.closeOverlay()
+        val practice = model.minimumText to model.maximumText
+        val defaults = model.rewardsDefaults
+        Operation.entries.forEach { operation ->
+            model.openLogicMathGame()
+            model.selectRewardsGame(operation)
+            assertEquals(Screen.SETUP, model.screen)
+            model.updateRewardsQuestionCount("15")
+            model.selectRewardsGame(operation)
+            assertTrue(model.readyLogicMath)
+            assertEquals(GameMode.REWARDS, model.gameMode)
+            assertEquals(defaults.getValue(operation).firstText, model.readyParameters?.firstText)
+            assertEquals(defaults.getValue(operation).secondText, model.readyParameters?.secondText)
+            model.backToSetup()
+            assertEquals(SetupDialog.LOGIC, model.setupDialog)
+            assertEquals("15", model.rewardsQuestionCountText)
+            model.selectRewardsGame(operation)
+            model.start()
+            val game = requireNotNull(model.game)
+            assertNotNull(game.problem.logicPuzzle)
+            assertTrue(operation in requireNotNull(game.problem.logicPuzzle).question.operations)
+            assertFalse(game.isMultiplicationMatrix)
+            assertEquals(15, game.questionCount)
+            model.backToSetup()
+        }
+        assertEquals(defaults, model.rewardsDefaults)
+        assertEquals(practice, model.minimumText to model.maximumText)
+    }
+
+    @Test fun logicSettingsValidatePersistAndAreSnapshottedForEveryQuestion() {
+        val model = model()
+        val initial = LogicMathSettings(2, 2, 2, 2)
+        val updated = LogicMathSettings(4, 6, 6, 8)
+        model.chooseLogicMathSettings(initial)
+        assertEquals(initial, model().logicMathSettings)
+        listOf(
+            initial.copy(minimumPictures = 1), initial.copy(maximumPictures = 7),
+            initial.copy(minimumPictures = 3), initial.copy(maximumLength = 9),
+            initial.copy(minimumLength = 1), initial.copy(maximumPictures = 3),
+            initial.copy(minimumLength = 3)
+        ).forEach {
+            model.chooseLogicMathSettings(it)
+            assertEquals(initial, model.logicMathSettings)
+            assertEquals(initial, model().logicMathSettings)
+        }
+        model.openLogicMathGame()
+        model.updateRewardsQuestionCount("15")
+        model.selectRewardsGame(Operation.ADDITION)
+        model.start()
+        model.chooseLogicMathSettings(updated)
+        repeat(14) {
+            assertEquals(initial, model.game?.logicSettings)
+            val puzzle = requireNotNull(model.game?.problem?.logicPuzzle)
+            assertEquals(2, puzzle.values.size)
+            assertEquals(2, puzzle.question.pictures.size)
+            answer(model)
+        }
+        model.backToSetup()
+        model.openLogicMathGame()
+        model.updateRewardsQuestionCount("15")
+        model.selectRewardsGame(Operation.ADDITION)
+        model.start()
+        assertEquals(updated, model.game?.logicSettings)
+        assertEquals(updated, model().logicMathSettings)
+    }
+
+    @Test fun invalidStoredLogicSettingsFallBackWithoutChangingMathDefaults() {
+        settings.edit().putInt("logic_minimum_pictures", 1).putInt("logic_maximum_length", 1000).commit()
+        assertEquals(LogicMathSettings(), model().logicMathSettings)
+        settings.edit().putString("logic_minimum_pictures", "bad").commit()
+        assertEquals(LogicMathSettings(), model().logicMathSettings)
+    }
+
+    @Test fun logicMathAwardsAndPersistsOriginalPictureEquationsWithoutChangingBasicMath() {
+        val model = model()
+        model.openLogicMathGame()
+        model.updateRewardsQuestionCount("25")
+        model.selectRewardsGame(Operation.MULTIPLICATION)
+        model.start()
+        val first = requireNotNull(model.game).problem
+        answer(model)
+        assertNotEquals(first.logicPuzzle, model.game?.problem?.logicPuzzle)
+        repeat(24) { answer(model) }
+        val result = requireNotNull(model.lastResult)
+        assertEquals(25, result.correct)
+        assertTrue(result.isLogicMath)
+        assertEquals("Challenge - Logic Math · Multiplication", result.gameLabel)
+        assertEquals(first, result.attempts.first().problem)
+        assertTrue(result.attempts.all { it.problem.logicPuzzle != null && it.correct })
+        assertEquals(RewardTier.TIER_1, result.prizeType?.tier)
+        assertEquals(CelebrationCategory.POKEMONS, model.celebration?.category)
+        model.dismissCelebration()
+        model.claimReward()
+        shadowOf(Looper.getMainLooper()).idle()
+        assertNotNull(model.lastResult?.prize)
+        assertEquals(model.lastResult, model().history.first())
+        model.done()
+        readyRewards(model)
+        model.start()
+        assertNull(model.game?.problem?.logicPuzzle)
+        assertNull(model.game?.logicSettings)
+    }
+
+    @Test fun logicMathUsesSharedTimeWrongAnswerAndDisabledRewardRules() {
+        val model = model()
+        model.chooseShowTimer(true)
+        model.chooseTimeLimitSeconds(30)
+        model.openLogicMathGame()
+        model.updateRewardsQuestionCount("15")
+        model.selectRewardsGame(Operation.DIVISION)
+        assertEquals(90_000L, model.readyTimeLimitMs)
+        model.start()
+        assertEquals(90_000L, model.activeTimeLimitMs)
+        answer(model)
+        now += 90_000L
+        answer(model)
+        assertTrue(requireNotNull(model.lastResult).timedOut)
+        assertTrue(requireNotNull(model.lastResult).isLogicMath)
+        assertEquals(1, model.lastResult?.attempts?.size)
+        assertNull(model.lastResult?.prizeType)
+        model.done()
+        model.chooseSubjectRewardsEnabled(Subject.MATH, false)
+        model.openLogicMathGame()
+        model.updateRewardsQuestionCount("15")
+        model.selectRewardsGame(Operation.SUBTRACTION)
+        assertNull(model.readyTimeLimitMs)
+        model.start()
+        assertNull(model.activeTimeLimitMs)
+        repeat(2) { answer(model, correct = false) }
+        assertEquals(Screen.RESULTS, model.screen)
+        assertEquals(2, model.lastResult?.wrong)
+        assertNull(model.lastResult?.prizeType)
+        model.done()
+        model.openLogicMathGame()
+        model.updateRewardsQuestionCount("25")
+        model.selectRewardsGame(Operation.ADDITION)
+        model.start()
+        repeat(25) { answer(model) }
+        assertEquals(25, model.lastResult?.correct)
+        assertNull(model.lastResult?.prizeType)
+    }
+
     @Test fun matrixUsesFinishTierRegardlessOfMinimaAndClaimsStoredTierAfterSettingsChange() {
         val model = model()
         for (thresholds in listOf(RewardThresholds(15, 25), RewardThresholds(200, 300))) {

@@ -72,9 +72,9 @@ enum class Operation(val label: String, val symbol: String) {
 }
 
 @Serializable
-data class Problem(val left: Int, val right: Int, val operation: Operation) {
-    val answer: Int get() = operation.apply(left, right)
-    val text: String get() = "$left ${operation.symbol} $right"
+data class Problem(val left: Int, val right: Int, val operation: Operation, val logicPuzzle: LogicPuzzle? = null) {
+    val answer: Int get() = logicPuzzle?.answer ?: operation.apply(left, right)
+    val text: String get() = logicPuzzle?.text ?: "$left ${operation.symbol} $right"
 }
 
 /** One answered problem. [given] is what the user entered. */
@@ -115,6 +115,10 @@ fun parseAnswer(text: String): Int? {
 }
 
 class ProblemGenerator(private val random: Random = Random.Default) {
+    fun nextLogic(operation: Operation, maximum: Int, settings: LogicMathSettings,
+        minimum: Int = MIN_MAXIMUM, maximumSecond: Int = maximum): Problem =
+        Problem(0, 0, operation, LogicPuzzleGenerator(random).next(operation, maximum, settings, minimum, maximumSecond))
+
     /**
      * Addition, subtraction and multiplication use numbers between [minimum] and [maximum].
      * Subtraction never goes below zero. Division has a whole-number answer, with the
@@ -166,6 +170,7 @@ data class GameState(
     val minimum: Int = MIN_MAXIMUM,
     val maximumSecond: Int = maximum,
     val isMultiplicationMatrix: Boolean = false,
+    val logicSettings: LogicMathSettings? = null,
     private val matrixQuestionOrder: List<Int> = if (isMultiplicationMatrix)
         (0 until MultiplicationMatrix.QUESTION_COUNT).toList() else emptyList()
 ) {
@@ -178,6 +183,8 @@ data class GameState(
         require(!isMultiplicationMatrix || (operation == Operation.MULTIPLICATION &&
             minimum == 1 && maximum == MultiplicationMatrix.SIZE && maximumSecond == MultiplicationMatrix.SIZE &&
             questionCount == MultiplicationMatrix.QUESTION_COUNT))
+        require(logicSettings == null || (logicSettings.isValid && !isMultiplicationMatrix))
+        require((logicSettings != null) == (problem.logicPuzzle != null))
     }
 
     val correct: Int get() = attempts.count { it.correct }
@@ -190,9 +197,11 @@ data class GameState(
     fun answer(value: Int, generator: ProblemGenerator): GameState {
         check(!finished) { "The game is over." }
         val next = copy(attempts = attempts + Attempt(problem, value))
-        return if (next.finished) next else next.copy(problem =
-            if (isMultiplicationMatrix) MultiplicationMatrix.problemAt(matrixQuestionOrder[next.attempts.size])
-            else generator.next(operation, maximum, problem, minimum, maximumSecond))
+        return if (next.finished) next else next.copy(problem = when {
+            isMultiplicationMatrix -> MultiplicationMatrix.problemAt(matrixQuestionOrder[next.attempts.size])
+            logicSettings != null -> generator.nextLogic(operation, maximum, logicSettings, minimum, maximumSecond)
+            else -> generator.next(operation, maximum, problem, minimum, maximumSecond)
+        })
     }
 
     companion object {
@@ -207,9 +216,12 @@ data class GameState(
         }
 
         fun start(operation: Operation, maximum: Int, generator: ProblemGenerator,
-            questionCount: Int = DEFAULT_QUESTION_COUNT, minimum: Int = MIN_MAXIMUM, maximumSecond: Int = maximum) =
-            GameState(operation, maximum, generator.next(operation, maximum, minimum = minimum, maximumSecond = maximumSecond),
-                questionCount = questionCount, minimum = minimum, maximumSecond = maximumSecond)
+            questionCount: Int = DEFAULT_QUESTION_COUNT, minimum: Int = MIN_MAXIMUM, maximumSecond: Int = maximum,
+            logicSettings: LogicMathSettings? = null) =
+            GameState(operation, maximum,
+                if (logicSettings != null) generator.nextLogic(operation, maximum, logicSettings, minimum, maximumSecond)
+                else generator.next(operation, maximum, minimum = minimum, maximumSecond = maximumSecond),
+                questionCount = questionCount, minimum = minimum, maximumSecond = maximumSecond, logicSettings = logicSettings)
     }
 }
 

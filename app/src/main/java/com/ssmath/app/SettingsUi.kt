@@ -404,7 +404,7 @@ private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit) {
                     }
                     HorizontalDivider()
                     CollapsibleSettingsSection("Available Rewards", defaultExpanded = false) {
-                        Text("Choose which rewards can be awarded when a Rewards Game finishes. Existing prizes and fragments stay available.")
+                        Text("Choose which rewards can be awarded when math challenges finish. Existing prizes and fragments stay available.")
                         RewardMinimumSettings(model)
                         RewardTier.entries.forEach { tier ->
                             Text("${tier.label} · ${model.rewardThresholds.questionCountLabel(tier)}", Modifier.fillMaxWidth(),
@@ -418,7 +418,7 @@ private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit) {
                                 }
                             }
                         }
-                        Text("If all rewards in a tier are disabled, Rewards Games in that tier give no prize.")
+                        Text("If all rewards in a tier are disabled, math challenges in that tier give no prize.")
                     }
                     HorizontalDivider()
                     CollapsibleSettingsSection("Game Settings", defaultExpanded = false) {
@@ -474,6 +474,80 @@ private fun RewardMinimumSettings(model: MathViewModel) {
 }
 
 @Composable
+private fun LogicMathSettingsFields(model: MathViewModel) {
+    val saved = model.logicMathSettings
+    var minimumPicturesText by rememberSaveable(saved) { mutableStateOf(saved.minimumPictures.toString()) }
+    var maximumPicturesText by rememberSaveable(saved) { mutableStateOf(saved.maximumPictures.toString()) }
+    var minimumLengthText by rememberSaveable(saved) { mutableStateOf(saved.minimumLength.toString()) }
+    var maximumLengthText by rememberSaveable(saved) { mutableStateOf(saved.maximumLength.toString()) }
+    val pictureBounds = MIN_LOGIC_PICTURES..MAX_LOGIC_PICTURES
+    val lengthBounds = MIN_LOGIC_LENGTH..MAX_LOGIC_LENGTH
+    fun parseLimit(text: String, bounds: IntRange) = text.trim().toIntOrNull()?.takeIf { it in bounds }
+    val minimumPictures = parseLimit(minimumPicturesText, pictureBounds)
+    val maximumPictures = parseLimit(maximumPicturesText, pictureBounds)
+    val minimumLength = parseLimit(minimumLengthText, lengthBounds)
+    val maximumLength = parseLimit(maximumLengthText, lengthBounds)
+    val draft = if (minimumPictures != null && maximumPictures != null &&
+        minimumLength != null && maximumLength != null) {
+        LogicMathSettings(minimumPictures, maximumPictures, minimumLength, maximumLength)
+    } else null
+    val valid = draft?.isValid == true
+    val picturesOutOfOrder = minimumPictures != null && maximumPictures != null &&
+        minimumPictures > maximumPictures
+    val lengthsOutOfOrder = minimumLength != null && maximumLength != null && minimumLength > maximumLength
+    val minimumTooShort = minimumPictures != null && minimumLength != null && minimumPictures > minimumLength
+    val maximumTooShort = maximumPictures != null && maximumLength != null && maximumPictures > maximumLength
+
+    Text("Different pictures are counted across the whole puzzle. The final row uses every selected picture. " +
+        "Equation length counts total picture occurrences per row, including repeated pictures.")
+    Text("Each minimum must not exceed its maximum. Minimum pictures must not exceed minimum equation length; " +
+        "maximum pictures must not exceed maximum equation length.",
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Text("Saved limits apply to new games only.",
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    LogicMathLimitField("Minimum Number of Different Pictures", minimumPicturesText,
+        { minimumPicturesText = it }, pictureBounds,
+        minimumPictures == null || picturesOutOfOrder || minimumTooShort, "logic-math-minimum-pictures")
+    LogicMathLimitField("Maximum Number of Different Pictures", maximumPicturesText,
+        { maximumPicturesText = it }, pictureBounds,
+        maximumPictures == null || picturesOutOfOrder || maximumTooShort, "logic-math-maximum-pictures")
+    LogicMathLimitField("Minimum Equation Length", minimumLengthText,
+        { minimumLengthText = it }, lengthBounds,
+        minimumLength == null || lengthsOutOfOrder || minimumTooShort, "logic-math-minimum-length")
+    LogicMathLimitField("Maximum Equation Length", maximumLengthText,
+        { maximumLengthText = it }, lengthBounds,
+        maximumLength == null || lengthsOutOfOrder || maximumTooShort, "logic-math-maximum-length")
+    if (!valid) {
+        Text("Correct the highlighted limits before saving.",
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+    }
+    Button(onClick = {
+        draft?.takeIf { it.isValid }?.let(model::chooseLogicMathSettings)
+    }, enabled = valid && draft != saved,
+        modifier = Modifier.fillMaxWidth().testTag("save-logic-math-settings")) {
+        Text("Save logic math settings", textAlign = TextAlign.Center)
+    }
+}
+
+@Composable
+private fun LogicMathLimitField(
+    label: String,
+    text: String,
+    onValueChange: (String) -> Unit,
+    bounds: IntRange,
+    isError: Boolean,
+    tag: String
+) {
+    Text(label, style = MaterialTheme.typography.bodyMedium)
+    OutlinedTextField(text, { onValueChange(it.take(6)) },
+        supportingText = { Text("Whole number from ${bounds.first} to ${bounds.last}") },
+        isError = isError, singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        modifier = Modifier.fillMaxWidth().testTag(tag).semantics { contentDescription = label })
+}
+
+@Composable
 private fun GameSettings(
     model: MathViewModel,
     onRewardsSetup: () -> Unit,
@@ -483,7 +557,7 @@ private fun GameSettings(
 ) {
     CollapsibleSettingsSection("Math Settings", defaultExpanded = false) {
         SubjectRewardsSetting(model, Subject.MATH,
-            "Earn prize fragments in Rewards Game by completing ${model.rewardThresholds.tier1Minimum} " +
+            "Earn prize fragments in math challenges by completing ${model.rewardThresholds.tier1Minimum} " +
                 "or more questions with over 90% correct")
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -516,30 +590,35 @@ private fun GameSettings(
             Switch(model.verticalEquations, model::chooseVerticalEquations,
                 modifier = Modifier.semantics { contentDescription = "Vertical equations" })
         }
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("Randomize matrix question order")
-                Text("Shuffle all 121 questions once per Multiplication Matrix Rewards Game. Applies to new games.",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        CollapsibleSettingsSection("Multiplication Matrix Settings", defaultExpanded = false) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Randomize matrix question order")
+                    Text("Shuffle all 121 questions once per Multiplication Matrix Rewards Game. Applies to new games.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(model.randomizeMatrixQuestions, model::chooseRandomizeMatrixQuestions,
+                    modifier = Modifier.semantics { contentDescription = "Randomize matrix question order" })
             }
-            Switch(model.randomizeMatrixQuestions, model::chooseRandomizeMatrixQuestions,
-                modifier = Modifier.semantics { contentDescription = "Randomize matrix question order" })
-        }
-        Text("Matrix reward tier", style = MaterialTheme.typography.titleSmall)
-        Text("Use this tier instead of the question minimums for Multiplication Matrix Rewards Game. " +
-            "Changes apply when the game finishes. Accuracy, timer, and enabled-reward rules still apply.",
-            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Column(Modifier.selectableGroup()) {
-            RewardTier.entries.forEach { tier ->
-                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).selectable(
-                    selected = model.matrixRewardTier == tier, role = Role.RadioButton,
-                    onClick = { model.chooseMatrixRewardTier(tier) }
-                ).testTag("matrix-reward-${tier.name}"),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(selected = model.matrixRewardTier == tier, onClick = null)
-                    Text(tier.label, Modifier.padding(start = 8.dp))
+            Text("Matrix Reward Tier", style = MaterialTheme.typography.titleSmall)
+            Text("Use this tier instead of the question minimums for Multiplication Matrix Rewards Game. " +
+                "Changes apply when the game finishes. Accuracy, timer, and enabled-reward rules still apply.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Column(Modifier.selectableGroup()) {
+                RewardTier.entries.forEach { tier ->
+                    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).selectable(
+                        selected = model.matrixRewardTier == tier, role = Role.RadioButton,
+                        onClick = { model.chooseMatrixRewardTier(tier) }
+                    ).testTag("matrix-reward-${tier.name}"),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = model.matrixRewardTier == tier, onClick = null)
+                        Text(tier.label, Modifier.padding(start = 8.dp))
+                    }
                 }
             }
+        }
+        CollapsibleSettingsSection("Logic Math Settings", defaultExpanded = false) {
+            LogicMathSettingsFields(model)
         }
         ListItem(headlineContent = { Text("Default Math Reward Game Settings") },
             supportingContent = { Text("Default number limits for each math type") },
@@ -748,7 +827,7 @@ private fun TimeLimitSetting(
         Text(if (pauseInBackground) "Pause in background: On. Math time pauses when you leave the app."
             else "Pause in background: Off. Math time keeps running when you leave the app.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text("Rewards Game only, not Practice Game. 1 minute per 5 questions gives 5 minutes for 25 questions. " +
+        Text("Math challenges only, not Practice Game. 1 minute per 5 questions gives 5 minutes for 25 questions. " +
             "Time always pauses in settings.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
@@ -870,7 +949,7 @@ fun PokemonsScreen(model: MathViewModel) {
             }
             if (collected.isEmpty()) {
                 item(key = "empty-collection", span = { GridItemSpan(maxLineSpan) }) {
-                    Text("Finish practices to collect Other celebrations. Pokémon can appear in Rewards Game after 15 or more questions. " +
+                    Text("Finish practices to collect Other celebrations. Pokémon can appear in math challenges after 15 or more questions. " +
                         "Mega Pokémons are exclusive to the Multiplication Matrix Rewards Game.",
                         Modifier.padding(8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -1027,6 +1106,7 @@ internal fun CollapsibleSettingsSection(
     content: @Composable ColumnScope.() -> Unit
 ) {
     var manualExpansion by rememberSaveable { mutableStateOf<Boolean?>(null) }
+    val contentState = rememberSaveableStateHolder()
     val expanded = manualExpansion ?: defaultExpanded
     Column(Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.16f), MaterialTheme.shapes.medium)
         .padding(8.dp).testTag("settings-section-$title"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1041,6 +1121,8 @@ internal fun CollapsibleSettingsSection(
             Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
             Icon(if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, null)
         }
-        if (expanded) content()
+        if (expanded) {
+            contentState.SaveableStateProvider("section-content") { content() }
+        }
     }
 }

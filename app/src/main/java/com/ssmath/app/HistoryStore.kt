@@ -40,10 +40,15 @@ data class PracticeResult(
     val isMultiplicationMatrix: Boolean = false,
     val megaPokemonReward: Celebration? = null,
     val rewardThresholds: RewardThresholds = RewardThresholds(),
-    val matrixRewardTier: RewardTier = RewardTier.TIER_2
+    val matrixRewardTier: RewardTier = RewardTier.TIER_2,
+    val isLogicMath: Boolean = false
 ) {
     val pokemonRewards: Set<Celebration> get() = setOfNotNull(pokemonReward, megaPokemonReward)
-    val gameLabel: String get() = if (isMultiplicationMatrix) "Multiplication Matrix" else operation.label
+    val gameLabel: String get() = when {
+        isMultiplicationMatrix -> "Multiplication Matrix"
+        isLogicMath -> "Challenge - Logic Math · ${operation.label}"
+        else -> operation.label
+    }
     val numberDescription: String get() =
         if (operation == Operation.DIVISION && maximumSecond != null) "first up to $maximum · second up to $maximumSecond"
         else "numbers $minimum to $maximum"
