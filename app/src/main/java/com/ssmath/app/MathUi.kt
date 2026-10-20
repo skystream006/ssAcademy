@@ -309,7 +309,7 @@ private fun HomeScreen(model: MathViewModel) {
                 }
                 Button(onClick = model::openMultiplicationMatrixGame,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("multiplication-matrix-game")) {
-                    Text("Multiplication Matrix Rewards Game", textAlign = TextAlign.Center)
+                    Text("Challenge - Multiplication Matrix", textAlign = TextAlign.Center)
                 }
             }
         } else {
