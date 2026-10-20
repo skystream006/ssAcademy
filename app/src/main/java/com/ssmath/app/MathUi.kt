@@ -669,7 +669,7 @@ private fun PlayingScreen(model: MathViewModel, onQuit: () -> Unit) {
                 OutlinedButton(onClick = onQuit,
                     modifier = Modifier.heightIn(min = 48.dp).testTag("quit-game")) { Text("Quit game") }
             }
-            Column(Modifier.weight(1f).align(Alignment.CenterHorizontally).widthIn(max = 440.dp).fillMaxWidth()
+            Column(Modifier.weight(1f).fillMaxWidth()
                 .verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)) {

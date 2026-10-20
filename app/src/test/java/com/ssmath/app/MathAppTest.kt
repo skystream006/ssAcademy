@@ -152,6 +152,37 @@ class MathAppTest {
         compose.onNodeWithTag("math-games-screen").assertIsDisplayed()
     }
 
+    @Test
+    @Config(qualifiers = "w1280dp-h720dp-land")
+    fun logicGameplayUsesFullWidthOnWideScreens() {
+        assertLogicGameplayUsesAvailableWidth()
+    }
+
+    @Test
+    fun logicGameplayUsesFullWidthOnPhones() {
+        assertLogicGameplayUsesAvailableWidth()
+    }
+
+    private fun assertLogicGameplayUsesAvailableWidth() {
+        val model = model(Dispatchers.Unconfined)
+        model.chooseLogicMathSettings(LogicMathSettings(6, 6, 8, 8))
+        model.openLogicMathGame()
+        model.updateRewardsQuestionCount("15")
+        model.selectRewardsGame(Operation.ADDITION)
+        model.start()
+        compose.setContent { MathAppContent(model) }
+        val rootBounds = compose.onRoot().getUnclippedBoundsInRoot()
+        val expectedWidth = rootBounds.right - rootBounds.left - 48.dp
+        listOf("problem", "game-progress", "answer-input", "submit-answer").forEach { tag ->
+            compose.onNodeWithTag(tag).performScrollTo().assertWidthIsEqualTo(expectedWidth)
+        }
+        compose.onNodeWithTag("answer-input").performScrollTo()
+            .performTextInput(requireNotNull(model.game).problem.answer.toString())
+        compose.onNodeWithTag("submit-answer").performScrollTo().performClick()
+        compose.onNodeWithTag("question-progress").performScrollTo().assertTextEquals("Question 2 of 15")
+        compose.onNodeWithTag("quit-game").assertIsDisplayed()
+    }
+
     @Test fun multiplicationMatrixLaunchesFromMathAndShowsAllAnswersInResultsAndHistory() {
         val model = model(Dispatchers.Unconfined)
         compose.setContent { MathAppContent(model) }
