@@ -198,6 +198,10 @@ class MathViewModel(
         private set
     var readingTimeLimitSeconds by mutableStateOf(settings.readReadingTimeLimitSeconds())
         private set
+    var scienceTimeLimitSeconds by mutableStateOf(normalizeTimeLimitSeconds(settings.getInt("science_time_limit_seconds", 0)))
+        private set
+    var advancedTimeLimitSeconds by mutableStateOf(normalizeTimeLimitSeconds(settings.getInt("advanced_time_limit_seconds", 0)))
+        private set
     var activeTimeLimitMs by mutableStateOf<Long?>(null)
         private set
     var showCorrectAnswers by mutableStateOf(settings.getBoolean("show_correct_answers", true))
@@ -1204,6 +1208,16 @@ class MathViewModel(
     fun chooseReadingTimeLimitSeconds(value: Int) {
         readingTimeLimitSeconds = normalizeTimeLimitSeconds(value)
         settings.edit().putInt("reading_time_limit_seconds", readingTimeLimitSeconds).apply()
+    }
+
+    fun chooseScienceTimeLimitSeconds(value: Int) {
+        scienceTimeLimitSeconds = normalizeTimeLimitSeconds(value)
+        settings.edit().putInt("science_time_limit_seconds", scienceTimeLimitSeconds).apply()
+    }
+
+    fun chooseAdvancedTimeLimitSeconds(value: Int) {
+        advancedTimeLimitSeconds = normalizeTimeLimitSeconds(value)
+        settings.edit().putInt("advanced_time_limit_seconds", advancedTimeLimitSeconds).apply()
     }
 
     fun chooseShowCorrectAnswers(value: Boolean) {

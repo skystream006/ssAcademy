@@ -740,7 +740,9 @@ class ReadingStoreTest {
         val math = MathViewModel(application)
         math.chooseShowTimer(true)
         math.chooseTimeLimitSeconds(900)
-        listOf(Triple(5, true, 5_000L), Triple(10, true, 10_000L), Triple(20, true, 20_000L),
+        listOf(Triple(5, true, 5_000L), Triple(10, true, 10_000L),
+            Triple(11, true, 11_000L), Triple(12, true, 12_000L),
+            Triple(13, true, 13_000L), Triple(14, true, 14_000L), Triple(20, true, 20_000L),
             Triple(60, true, 60_000L), Triple(0, true, null),
             Triple(30, false, null), Triple(30, true, 30_000L)).forEach { (seconds, rewards, limit) ->
             math.chooseReadingTimeLimitSeconds(seconds)
@@ -750,6 +752,10 @@ class ReadingStoreTest {
             await { model.data?.activeSession?.id != previousId && !model.saving }
             assertEquals(limit, model.data?.activeSession?.timeLimitMs)
             assertEquals(rewards, model.data?.activeSession?.rewardsEnabledAtStart)
+            math.chooseScienceTimeLimitSeconds(seconds)
+            math.chooseAdvancedTimeLimitSeconds(14)
+            math.chooseReadingTimeLimitSeconds(0)
+            assertEquals(limit, model.data?.activeSession?.timeLimitMs)
             ReadingEngine.validate(requireNotNull(model.data))
             assertEquals(900, math.timeLimitSeconds)
         }

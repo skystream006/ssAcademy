@@ -625,7 +625,8 @@ class RewardsSettingsTest {
         compose.setContent { MathTheme(textSizePercent = 200) { SettingsScreen(model) } }
         compose.openGameSettings(Subject.READING)
         compose.onNodeWithText("Time limit per reading game").performScrollTo().assertIsDisplayed()
-        listOf(5 to "5 seconds", 10 to "10 seconds", 15 to "15 seconds",
+        listOf(5 to "5 seconds", 10 to "10 seconds", 11 to "11 seconds", 12 to "12 seconds",
+            13 to "13 seconds", 14 to "14 seconds", 15 to "15 seconds",
             20 to "20 seconds", 30 to "30 seconds", 45 to "45 seconds",
             60 to "1 minute", 120 to "2 minutes", 180 to "3 minutes", 240 to "4 minutes",
             300 to "5 minutes", 600 to "10 minutes", 900 to "15 minutes", 0 to "None")
@@ -640,6 +641,54 @@ class RewardsSettingsTest {
                 assertEquals(seconds, MathViewModel(application).readingTimeLimitSeconds)
                 assertEquals(0, model.timeLimitSeconds)
             }
+    }
+
+    @Test
+    @Config(qualifiers = "w320dp-h800dp")
+    fun futureSubjectTimeLimitsOfferIndependentSavedChoicesAndNoneAtLargeTextSize() {
+        val model = MathViewModel(application)
+        model.chooseTimeLimitSeconds(11)
+        model.chooseReadingTimeLimitSeconds(12)
+        model.chooseRewardsEnabled(false)
+        compose.setContent { MathTheme(textSizePercent = 200) { SettingsScreen(model) } }
+        compose.openGameSettings(Subject.SCIENCE)
+        listOf(Subject.SCIENCE, Subject.ADVANCED).forEach { subject ->
+            val name = subject.label.lowercase()
+            val title = if (subject == Subject.SCIENCE) "Science Settings" else "Advanced Subject Settings"
+            if (subject == Subject.ADVANCED) {
+                compose.onNodeWithText(title).performScrollTo().performClick()
+            }
+            compose.onNodeWithText("Saved for future $name activities.", substring = true)
+                .performScrollTo().assertIsDisplayed()
+            compose.onNodeWithTag("$name-time-limit").performScrollTo().assertTextEquals("None")
+            compose.onNodeWithContentDescription("${subject.label} Rewards System").performScrollTo()
+                .assertIsOn().performClick().assertIsOff()
+            (timeLimitOptionsSeconds.filter { it != 0 } + 0).forEach { seconds ->
+                val label = when (seconds) {
+                    0 -> "None"
+                    in 1..59 -> "$seconds seconds"
+                    60 -> "1 minute"
+                    else -> "${seconds / 60} minutes"
+                }
+                compose.onNodeWithTag("$name-time-limit").performScrollTo().assertIsDisplayed().performClick()
+                compose.onNodeWithText(label).performScrollTo().performClick()
+                compose.onNodeWithTag("$name-time-limit").assertTextEquals(label)
+                val restored = MathViewModel(application)
+                assertEquals(if (subject == Subject.SCIENCE) seconds else 14, restored.scienceTimeLimitSeconds)
+                assertEquals(if (subject == Subject.ADVANCED) seconds else 0, restored.advancedTimeLimitSeconds)
+                assertEquals(11, restored.timeLimitSeconds)
+                assertEquals(12, restored.readingTimeLimitSeconds)
+                assertFalse(restored.showTimer)
+                assertFalse(restored.rewardsEnabled)
+            }
+            compose.onNodeWithTag("$name-time-limit").performScrollTo().performClick()
+            compose.onNodeWithText("14 seconds").performScrollTo().performClick()
+            compose.onNodeWithText(title).performScrollTo().performClick()
+            compose.onNodeWithTag("$name-time-limit").assertDoesNotExist()
+            compose.onNodeWithText(title).performScrollTo().performClick()
+            compose.onNodeWithTag("$name-time-limit").performScrollTo().assertTextEquals("14 seconds")
+            compose.onNodeWithText(title).performScrollTo().performClick()
+        }
     }
 
     @Test fun backgroundPauseButtonIsBesideTimerAndRemembersBothStates() {
@@ -720,7 +769,8 @@ class RewardsSettingsTest {
         compose.setContent { MathTheme { SettingsScreen(model) } }
         compose.openGameSettings()
         compose.onNodeWithText("Time limit per 5 questions").performScrollTo().assertIsDisplayed()
-        listOf(5 to "5 seconds", 10 to "10 seconds", 15 to "15 seconds",
+        listOf(5 to "5 seconds", 10 to "10 seconds", 11 to "11 seconds", 12 to "12 seconds",
+            13 to "13 seconds", 14 to "14 seconds", 15 to "15 seconds",
             20 to "20 seconds", 30 to "30 seconds", 45 to "45 seconds",
             60 to "1 minute", 120 to "2 minutes",
             180 to "3 minutes", 240 to "4 minutes").forEach { (seconds, label) ->

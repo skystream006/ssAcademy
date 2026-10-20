@@ -207,7 +207,9 @@ Linked celebrations are removed unless another saved result also
 earned them. Other readers' unrelated history, Math history, and imported activities are kept.
 Rewards whose ownership records were already discarded by older app versions cannot be
 linked back to deleted games and are kept.
-**Science Settings** and **Advanced Subject Settings** each have their own rewards switch.
+**Science Settings** and **Advanced Subject Settings** each have their own rewards switch and
+independently saved time-limit dropdown, defaulting to **None**, with the same duration options as Math and Reading.
+These choices are saved for future activities; Science and Advanced do not yet have playable games.
 Their practice histories in **Result Histories** show an empty state until their activities are available.
 All four reward switches are independent and on by default. Existing Math reward
 preferences are preserved, and disabling a subject's rewards never removes earned rewards.
@@ -289,7 +291,7 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   Turn it off to keep counting Math game time when the app is in the background, including time limits.
   This choice is remembered; Reading timers still pause in the background.
   When both Math Rewards System and Show timer are enabled, **Time limit per 5 questions** offers
-  **None**, **5, 10, 15, 20, 30, or 45 seconds**, **1, 2, 3, or 4 minutes**, or **5, 10, or 15 minutes**.
+  **None**, **5, 10, 11, 12, 13, 14, 15, 20, 30, or 45 seconds**, **1, 2, 3, or 4 minutes**, or **5, 10, or 15 minutes**.
   Older saved selections above 15 minutes use 15 minutes for new games.
   **30 seconds per 5 questions** gives **1 minute 30 seconds for 15**,
   **2 minutes 30 seconds for 25**, and **5 minutes for 50 questions**.
@@ -302,7 +304,7 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   does not remove its active time limit, but turning off Math or that game's rewards does.
   Re-enabling rewards applies the saved time-limit setting to future games, not the current game.
 - **Time limit per reading game** – under **Reading Settings**, separately saved from Math.
-  Choose **None**, **5, 10, 15, 20, 30, or 45 seconds**, **1, 2, 3, or 4 minutes**, or **5, 10, or 15 minutes**.
+  Choose **None**, **5, 10, 11, 12, 13, 14, 15, 20, 30, or 45 seconds**, **1, 2, 3, or 4 minutes**, or **5, 10, or 15 minutes**.
   Reading uses this as the total game limit, without Math's question-count scaling, when
   Reading Rewards System and that game's rewards are enabled at launch. Math Rewards System and Math's Show timer
   setting do not control this limit; timed reading games always show time remaining.
