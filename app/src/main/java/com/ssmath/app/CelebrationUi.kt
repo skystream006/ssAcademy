@@ -42,6 +42,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
@@ -394,6 +395,8 @@ internal fun CelebrationDialog(
         }
     }
     AlertDialog(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+        properties = DialogProperties(usePlatformDefaultWidth = false),
         onDismissRequest = onFinished,
         title = { Text(if (replay) celebration.label else "Congratulations!") },
         text = {

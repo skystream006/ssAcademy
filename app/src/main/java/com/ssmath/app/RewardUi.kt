@@ -55,6 +55,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.currentStateAsState
@@ -180,6 +181,8 @@ private fun RewardGiftDialog(
     }
 
     AlertDialog(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+        properties = DialogProperties(usePlatformDefaultWidth = false),
         onDismissRequest = onDismiss,
         title = { Text(if (prize == null) "You earned a gift!" else "A fragment for you!") },
         text = {
@@ -311,6 +314,8 @@ internal fun UseRewardsDialog(
     var selected by rememberSaveable { mutableStateOf<RewardType?>(null) }
     val choice = selected
     AlertDialog(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+        properties = DialogProperties(usePlatformDefaultWidth = false),
         onDismissRequest = { if (selected != null) selected = null else onDismiss() },
         title = { Text(if (choice == null) "What reward would you like to use?" else "Use reward?") },
         text = {
