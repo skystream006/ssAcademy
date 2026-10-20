@@ -106,6 +106,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -239,6 +240,8 @@ private fun MainContent(model: MathViewModel) {
             }
             model.earlyFinishMessage?.let { message ->
                 AlertDialog(onDismissRequest = model::dismissEarlyFinishDialog,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+                    properties = DialogProperties(usePlatformDefaultWidth = false),
                     text = { Text(message) },
                     confirmButton = {
                         TextButton(onClick = model::dismissEarlyFinishDialog,
@@ -249,6 +252,8 @@ private fun MainContent(model: MathViewModel) {
     }
     if (confirmQuit && model.screen == Screen.PLAYING) {
         AlertDialog(onDismissRequest = { confirmQuit = false },
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+            properties = DialogProperties(usePlatformDefaultWidth = false),
             title = { Text("Quit this practice?") },
             text = { Text("Results are only saved after answering all ${model.game?.questionCount} questions or " +
                 "reaching ${model.game?.maxWrongAnswers} wrong answers" +
@@ -261,7 +266,7 @@ private fun MainContent(model: MathViewModel) {
 @Composable
 private fun DialogCard(content: @Composable ColumnScope.() -> Unit) {
     Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), contentAlignment = Alignment.Center) {
-        Card(Modifier.widthIn(max = 440.dp).fillMaxWidth(),
+        Card(Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
             elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)) {
             Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) { content() }
@@ -288,7 +293,7 @@ private fun HomeScreen(model: MathViewModel) {
     Column(Modifier.fillMaxSize().testTag("home-screen"), horizontalAlignment = Alignment.CenterHorizontally) {
         CollectionButtons(model::openRewards, model::openPokemons)
         if (model.mathGamesOpen) {
-            Column(Modifier.weight(1f).widthIn(max = 440.dp).fillMaxWidth().testTag("math-games-screen")
+            Column(Modifier.weight(1f).fillMaxWidth().testTag("math-games-screen")
                 .padding(bottom = 64.dp).verticalScroll(rememberScrollState()).padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)) {
                 Button(onClick = model::closeMathGames, modifier = Modifier.testTag("subjects-back")) {
@@ -353,7 +358,7 @@ internal fun CollectionButtons(onRewards: () -> Unit, onPokemons: () -> Unit, ta
     }
     // Both buttons must fit the wider label, image, spacing, and horizontal padding.
     val minimumButtonWidth = with(LocalDensity.current) { labelWidth.toDp() } + 24.dp + 8.dp + 16.dp
-    FlowRow(Modifier.widthIn(max = 440.dp).fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+    FlowRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp), maxItemsInEachRow = 2) {
         Button(onClick = onRewards,
@@ -383,7 +388,7 @@ private fun SubjectGrid(onMath: () -> Unit, onReading: () -> Unit, modifier: Mod
     val comingSoon = {
         Toast.makeText(context, "More Activities are coming soon!", Toast.LENGTH_SHORT).show()
     }
-    Column(modifier.widthIn(max = 440.dp).fillMaxWidth().testTag("subject-grid")
+    Column(modifier.fillMaxWidth().testTag("subject-grid")
         .padding(bottom = 64.dp).verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -508,7 +513,7 @@ private fun RewardsSetupScreen(model: MathViewModel) {
         Operation.entries.forEach { operation ->
             val parameters = model.rewardsSetupDraft.getValue(operation)
             val division = operation == Operation.DIVISION
-            Card(Modifier.widthIn(max = 600.dp).fillMaxWidth().align(Alignment.CenterHorizontally)) {
+            Card(Modifier.fillMaxWidth().align(Alignment.CenterHorizontally)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(operation.label, style = MaterialTheme.typography.titleLarge)
                     OutlinedTextField(parameters.firstText,
@@ -533,7 +538,7 @@ private fun RewardsSetupScreen(model: MathViewModel) {
             }
         }
         Button(onClick = model::saveRewardsSetup, enabled = model.canSaveRewardsSetup,
-            modifier = Modifier.widthIn(max = 600.dp).fillMaxWidth().align(Alignment.CenterHorizontally)
+            modifier = Modifier.fillMaxWidth().align(Alignment.CenterHorizontally)
                 .testTag("save-rewards-setup")) { Text("Save defaults") }
     }
 }
@@ -669,7 +674,7 @@ private fun PlayingScreen(model: MathViewModel, onQuit: () -> Unit) {
                 OutlinedButton(onClick = onQuit,
                     modifier = Modifier.heightIn(min = 48.dp).testTag("quit-game")) { Text("Quit game") }
             }
-            Column(Modifier.weight(1f).align(Alignment.CenterHorizontally).widthIn(max = 440.dp).fillMaxWidth()
+            Column(Modifier.weight(1f).fillMaxWidth()
                 .verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)) {

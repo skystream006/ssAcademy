@@ -143,11 +143,17 @@ class LogicPuzzleGenerator(private val random: Random = Random.Default) {
 
         // Each row introduces one unknown with a nonzero coefficient, so the solution is unique
         // even when different pictures have equal values or the saved range contains one number.
+        val questionCounts = question.pictures.groupingBy { it }.eachCount()
         val clues = selected.mapIndexed { index, picture ->
             val clueLength = random.nextInt(settings.minimumLength, settings.maximumLength + 1)
             val pictures = if (index == 0) List(clueLength) { picture } else
                 listOf(picture) + List(clueLength - 1) { selected[random.nextInt(index)] }
-            val clue = expression(pictures.shuffled(random), Operation.ADDITION)
+            // Reordering an addition does not make a new question. Repeating the new
+            // picture instead still determines its value without revealing the final row.
+            val distinctPictures = if (operation == Operation.ADDITION &&
+                pictures.groupingBy { it }.eachCount() == questionCounts
+            ) List(clueLength) { picture } else pictures
+            val clue = expression(distinctPictures.shuffled(random), Operation.ADDITION)
             LogicClue(clue, clue.evaluate(values))
         }.shuffled(random)
         return LogicPuzzle(clues, question, values.toMap())

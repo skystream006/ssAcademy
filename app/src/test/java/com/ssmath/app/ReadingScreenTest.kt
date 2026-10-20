@@ -18,6 +18,7 @@ import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.onNodeWithTag
@@ -32,6 +33,7 @@ import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTextInputSelection
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import java.io.File
 import java.util.concurrent.CountDownLatch
@@ -113,6 +115,24 @@ class ReadingScreenTest {
             model.data?.let(condition) == true && !model.saving
         }
         compose.waitForIdle()
+    }
+
+    @Test
+    @Config(qualifiers = "w1280dp-h720dp-land")
+    fun readingWelcomeAndMenuUseFullWidth() {
+        show(ReadingData(), welcome = true)
+        val width = 1280.dp
+        compose.onNodeWithTag("academy-welcome").assertWidthIsEqualTo(width - 32.dp)
+        compose.onNodeWithTag("academy-name").performScrollTo().assertWidthIsEqualTo(width - 80.dp)
+            .performTextInput("Ari")
+        click("academy-save-name")
+        waitFor { it.profile != null }
+        compose.onNodeWithTag("reading-menu").assertWidthIsEqualTo(width)
+        compose.onNodeWithTag("reading-rewards").assertWidthIsEqualTo((width - 44.dp) / 2)
+        compose.onNodeWithTag("reading-pokemons").assertWidthIsEqualTo((width - 44.dp) / 2)
+        compose.onNodeWithTag("reading-exit").performScrollTo().assertWidthIsEqualTo(width - 32.dp)
+            .performClick()
+        assertEquals(1, exited)
     }
 
     @Test fun giftChoicesUseSavedAdminMinimumsAndLaunchMatchingReadingSessions() {

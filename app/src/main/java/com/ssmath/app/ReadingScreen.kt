@@ -109,7 +109,7 @@ internal fun AcademyWelcome(model: ReadingViewModel) {
     Dialog(onDismissRequest = {},
         properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false,
             usePlatformDefaultWidth = false)) {
-        Card(Modifier.widthIn(max = 440.dp).fillMaxWidth().padding(16.dp).imePadding().testTag("academy-welcome")) {
+        Card(Modifier.fillMaxWidth().padding(16.dp).imePadding().testTag("academy-welcome")) {
             Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Welcome to the Academy! What is your name?", style = MaterialTheme.typography.headlineSmall)
@@ -433,7 +433,7 @@ private fun ReadingMenu(data: ReadingData, model: ReadingViewModel, onExit: () -
         .filterNot { it in disabledGames }
     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
         CollectionButtons({ stop(); onRewards() }, { stop(); onPokemons() }, "reading")
-        Column(Modifier.weight(1f).widthIn(max = 600.dp).fillMaxWidth().testTag("reading-menu")
+        Column(Modifier.weight(1f).fillMaxWidth().testTag("reading-menu")
             .verticalScroll(rememberScrollState()).padding(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 64.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             ReadingHeading("Reading adventures")

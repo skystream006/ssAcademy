@@ -140,6 +140,26 @@ class LogicMathTest {
         }
     }
 
+    @Test fun additionQuestionsDoNotRepeatCluesEvenWhenPicturesAreReordered() {
+        val generator = LogicPuzzleGenerator(Random(34))
+        val settings = LogicMathSettings(2, 2, 3, 4)
+        repeat(500) {
+            val puzzle = generator.next(Operation.ADDITION, 10, settings, minimum = 8)
+            assertPuzzle(puzzle, Operation.ADDITION, settings, 8, 10, 10)
+        }
+    }
+
+    @Test fun fixedEqualValuesAndLengthsStillHaveDistinctAdditionQuestions() {
+        val generator = LogicPuzzleGenerator(Random(24))
+        for (count in 2..6) for (length in count..8) {
+            val settings = LogicMathSettings(count, count, length, length)
+            repeat(20) {
+                val puzzle = generator.next(Operation.ADDITION, 8, settings, minimum = 8)
+                assertPuzzle(puzzle, Operation.ADDITION, settings, 8, 8, 8)
+            }
+        }
+    }
+
     @Test fun divisionHonorsSeparateMaximumsAndPositiveExactFocusPairs() {
         val generator = LogicPuzzleGenerator(Random(203))
         val settings = LogicMathSettings(2, 6, 2, 8)
@@ -269,6 +289,13 @@ class LogicMathTest {
             assertEquals(independentEvaluate(expression, puzzle.values), expression.evaluate(puzzle.values))
         }
         puzzle.clues.forEach { assertEquals(it.total, independentEvaluate(it.expression, puzzle.values)) }
+        if (operation == Operation.ADDITION) {
+            val questionCounts = puzzle.question.pictures.groupingBy { it }.eachCount()
+            puzzle.clues.forEach {
+                assertNotEquals("The question must not be a reordered clue",
+                    questionCounts, it.expression.pictures.groupingBy { picture -> picture }.eachCount())
+            }
+        }
         assertTrue(puzzle.question.operations.contains(operation))
         assertTrue(puzzle.question.operations.all { it == operation || it == Operation.ADDITION })
         assertEquals(independentEvaluate(puzzle.question, puzzle.values), puzzle.answer)

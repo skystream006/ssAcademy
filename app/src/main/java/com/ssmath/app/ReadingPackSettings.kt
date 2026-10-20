@@ -2,6 +2,7 @@ package com.ssmath.app
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -16,12 +17,15 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 
 @Composable
 internal fun ReadingImportRequiredDialog(model: ReadingViewModel, onDismiss: () -> Unit, onSettings: () -> Unit) {
     val loading = model.packStatus == null && model.storageError == null
     AlertDialog(onDismissRequest = onDismiss,
-        modifier = Modifier.testTag("reading-import-required"),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).testTag("reading-import-required"),
+        properties = DialogProperties(usePlatformDefaultWidth = false),
         title = { Text(if (model.storageError != null) "Reading storage unavailable"
             else if (loading) "Checking reading activities" else "Import reading activities first") },
         text = {
