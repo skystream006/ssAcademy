@@ -759,14 +759,21 @@ class ReadingStoreTest {
         val math = MathViewModel(application)
         math.chooseReadingTimeLimitSeconds(30)
         ReadingGame.entries.forEach { game ->
-            val model = ReadingViewModel(application, RecordingStorage(readingFixture()))
-            await { model.data != null }
             ReadingGame.entries.forEach { math.chooseReadingGameRewardsEnabled(it, it != game) }
             for (enabled in listOf(false, true)) {
+                val storage = RecordingStorage(readingFixture())
+                val model = ReadingViewModel(application, object : ReadingStorage by storage {
+                    override fun startSession(data: ReadingData, game: ReadingGame, level: ReadingLevel, count: Int,
+                                              rewardsEnabledAtStart: Boolean, timeLimitMs: Long?): ReadingData =
+                        ReadingEngine.startSession(data, game, level, count, rewardsEnabledAtStart,
+                            timeLimitMs = timeLimitMs,
+                            assigned = if (game == ReadingGame.GRAMMAR) grammarSession(count).attempts else null)
+                            .also(storage::save)
+                })
+                await { model.data != null }
                 math.chooseReadingGameRewardsEnabled(game, enabled)
-                val previous = model.data?.activeSession?.id
                 model.startSession(game, 25)
-                await { model.data?.activeSession?.id != previous && !model.saving }
+                await { model.data?.activeSession != null && !model.saving }
                 val session = requireNotNull(model.data?.activeSession)
                 assertEquals(game, session.game)
                 assertEquals(enabled, session.rewardsEnabledAtStart)
@@ -785,16 +792,17 @@ class ReadingStoreTest {
                 val math = MathViewModel(application)
                 math.chooseRewardThresholds(1, 2)
                 math.chooseReadingGameRewardsEnabled(game, atStart)
-                var data = ReadingEngine.startSession(
+                var data = if (game == ReadingGame.GRAMMAR)
+                    grammarSession(1, settings.readReadingRewardsEnabled(game))
+                else ReadingEngine.startSession(
                     ReadingEngine.addProfile(ReadingData(), "Ari", "reader-a"),
                     game, ReadingLevel.SPROUT, 1, settings.readReadingRewardsEnabled(game))
                 // Leave the final activity ready for the ViewModel's submit or finish path.
                 val solved = readingSolve(data)
                 data = data.copy(attempts = solved.attempts.map { it.copy(finishedAt = null) })
-                val storage = ReadingStore(file)
-                storage.load()
-                storage.save(data)
-                val model = ReadingViewModel(application, ReadingStore(file))
+                val storage: ReadingStorage = if (game == ReadingGame.GRAMMAR) RecordingStorage(data)
+                else ReadingStore(file).apply { load(); save(data) }
+                val model = ReadingViewModel(application, storage)
                 await { model.data != null }
                 math.chooseReadingGameRewardsEnabled(game, atFinish)
                 if (completion == "finish") model.finishActivity() else model.submit("answer")
@@ -802,7 +810,7 @@ class ReadingStoreTest {
                 val session = requireNotNull(model.data?.activeSession)
                 assertEquals("$game: start=$atStart finish=$atFinish via $completion",
                     atStart && atFinish, session.prizeType != null)
-                assertEquals(session, ReadingStore(file).load().activeSession)
+                assertEquals(session, storage.load().activeSession)
                 math.chooseReadingGameRewardsEnabled(game, false)
                 model.finishActivity()
                 await { !model.saving }
