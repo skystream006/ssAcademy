@@ -116,7 +116,9 @@ class ReadingViewModel(
         private set
     var sessionElapsedMs by mutableStateOf(0L)
         private set
-    val sessionRemainingMs: Long? get() = data?.activeSession?.timeLimitMs?.let {
+    private val sessionTimeLimitMs: Long? get() = data?.activeSession
+        ?.takeIf { settings.readReadingRewardsEnabled(it.game) }?.timeLimitMs
+    val sessionRemainingMs: Long? get() = sessionTimeLimitMs?.let {
         (it - sessionElapsedMs).coerceAtLeast(0)
     }
     private var sessionForeground = false
@@ -333,7 +335,7 @@ class ReadingViewModel(
         runningSince?.let {
             sessionElapsedMs += (now - it).coerceAtLeast(0)
             runningSince = now
-            data?.activeSession?.timeLimitMs?.let { limit -> sessionElapsedMs = sessionElapsedMs.coerceAtMost(limit) }
+            sessionTimeLimitMs?.let { limit -> sessionElapsedMs = sessionElapsedMs.coerceAtMost(limit) }
         }
     }
 
@@ -367,12 +369,13 @@ class ReadingViewModel(
         val current = data ?: return
         val session = current.activeSession ?: return
         if (session.finishedAt != null || storageError != null || session.id != clockSessionId) return
+        val limit = sessionTimeLimitMs
         val elapsed = maxOf(session.elapsedMs, sessionElapsedMs)
-        if (elapsed == session.elapsedMs) return
-        val expired = session.timeLimitMs?.let { elapsed >= it } == true
-        if (!flush && !expired && elapsed - session.elapsedMs < 1_000) return
+        if (elapsed == session.elapsedMs && limit == session.timeLimitMs) return
+        val expired = limit?.let { elapsed >= it } == true
+        if (!flush && !expired && limit == session.timeLimitMs && elapsed - session.elapsedMs < 1_000) return
         var next = current.copy(sessions = current.sessions.map {
-            if (it.id == session.id) it.copy(elapsedMs = elapsed) else it
+            if (it.id == session.id) it.copy(elapsedMs = elapsed, timeLimitMs = limit) else it
         })
         if (expired)
             next = ReadingEngine.endSession(next, session.id, timedOut = true,

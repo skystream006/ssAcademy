@@ -661,7 +661,7 @@ class MathViewModel(
             elapsedBefore += (clock() - since).coerceAtLeast(0)
             runningSince = null
         }
-        if (!shouldRun) {
+        if (!shouldRun || activeTimeLimitMs == null) {
             timeoutJob?.cancel()
             timeoutJob = null
         } else if (checkTimeLimit()) {
@@ -1153,11 +1153,19 @@ class MathViewModel(
     fun chooseSubjectRewardsEnabled(subject: Subject, value: Boolean) {
         subjectRewards = subjectRewards + (subject to value)
         settings.edit().putBoolean(subject.rewardsPreference, value).apply()
+        if (subject == Subject.MATH && !value) {
+            activeTimeLimitMs = null
+            updateTimer()
+        }
     }
 
     fun chooseMathGameRewardsEnabled(game: MathRewardGame, enabled: Boolean) {
         disabledMathGameRewards = if (enabled) disabledMathGameRewards - game else disabledMathGameRewards + game
         settings.edit().putStringSet("disabled_math_game_rewards", disabledMathGameRewards.map { it.name }.toSet()).apply()
+        if (game == currentMathRewardGame && !enabled) {
+            activeTimeLimitMs = null
+            updateTimer()
+        }
     }
 
     fun chooseReadingGameRewardsEnabled(game: ReadingGame, enabled: Boolean) {

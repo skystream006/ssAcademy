@@ -1100,7 +1100,7 @@ class ReadingStoreTest {
         assertEquals(5_000L, ReadingStore(file).load().activeSession?.elapsedMs)
 
         settings.edit().putInt("reading_time_limit_seconds", 0)
-            .putBoolean("reading_rewards_enabled", false).putBoolean("show_timer", false)
+            .putBoolean("show_timer", false)
             .putInt("time_limit_seconds", 15).commit()
         clock += 1_000_000
         val resumed = ReadingViewModel(application, ReadingStore(file), clock = { clock })
@@ -1122,6 +1122,81 @@ class ReadingStoreTest {
         assertEquals(finished, ReadingStore(file).load())
         ReadingEngine.validate(finished)
         resumed.setSessionForeground(false)
+    }
+
+    @Test fun disablingReadingRewardsRemovesTheLimitAndAllowsCompletionPastTheDeadline() {
+        for (disableSubject in listOf(false, true)) {
+            settings.edit().clear().putInt("reading_time_limit_seconds", 30)
+                .putInt("reward_tier_1_minimum", 1).putInt("reward_tier_2_minimum", 2).commit()
+            val store = ReadingStore(file)
+            store.load()
+            store.save(readingSessionFixture(count = 1, timeLimitMs = 1_000))
+            var clock = 0L
+            val model = ReadingViewModel(application, store, clock = { clock })
+            await { model.data != null && !model.saving }
+            model.setSessionForeground(true)
+            assertEquals(1_000L, model.sessionRemainingMs)
+            if (disableSubject) settings.edit().putBoolean("reading_rewards_enabled", false).commit()
+            else settings.edit().putStringSet("disabled_reading_game_rewards",
+                setOf(ReadingGame.MISSING.name)).commit()
+            assertNull(model.sessionRemainingMs)
+            clock += 2_000
+            shadowOf(Looper.getMainLooper()).idleFor(200, TimeUnit.MILLISECONDS)
+            await { model.data?.activeSession?.elapsedMs == 2_000L && !model.saving }
+            assertNull(model.data?.activeSession?.timeLimitMs)
+            assertFalse(requireNotNull(model.data?.activeSession).timedOut)
+            model.act { ReadingEngine.field(it, "answer", readingCorrect(it).toString()) }
+            model.submit("answer")
+            await { model.data?.activeSession?.finishedAt != null && !model.saving }
+            val finished = requireNotNull(model.data)
+            assertEquals(1, finished.sessionAnswered(requireNotNull(finished.activeSession)))
+            assertFalse(requireNotNull(finished.activeSession).timedOut)
+            assertNull(finished.activeSession?.prizeType)
+            assertEquals(2_000L, finished.activeSession?.elapsedMs)
+            assertEquals(finished, ReadingStore(file).load())
+            assertEquals(30, settings.readReadingTimeLimitSeconds())
+            model.setSessionForeground(false)
+        }
+    }
+
+    @Test fun resumedReadingSessionsIgnoreDisabledRewardsAndDoNotRestoreRemovedLimits() {
+        for (disableSubject in listOf(false, true)) {
+            settings.edit().clear().putInt("reading_time_limit_seconds", 30).commit()
+            val original = readingSessionFixture(timeLimitMs = 1_000)
+            val store = ReadingStore(file)
+            store.load()
+            store.save(original.copy(page = ReadingPage.MENU,
+                sessions = original.sessions.map { it.copy(elapsedMs = 500) }))
+            if (disableSubject) settings.edit().putBoolean("reading_rewards_enabled", false).commit()
+            else settings.edit().putStringSet("disabled_reading_game_rewards",
+                setOf(ReadingGame.MISSING.name)).commit()
+            var clock = 0L
+            val model = ReadingViewModel(application, store, clock = { clock })
+            await { model.data != null && !model.saving }
+            assertNull(model.sessionRemainingMs)
+            model.act { ReadingEngine.resume(it, requireNotNull(it.active).id) }
+            await { model.data?.page == ReadingPage.ACTIVITY && !model.saving }
+            assertNull(model.data?.activeSession?.timeLimitMs)
+            model.setSessionForeground(true)
+            clock += 2_000
+            model.act { ReadingEngine.hint(it) }
+            await { model.data?.activeSession?.elapsedMs == 2_500L && model.data?.active?.hints == 1 && !model.saving }
+            model.setSessionForeground(false)
+            settings.edit().putBoolean("reading_rewards_enabled", true)
+                .putStringSet("disabled_reading_game_rewards", emptySet()).commit()
+            val restored = ReadingViewModel(application, ReadingStore(file), clock = { clock })
+            await { restored.data != null && !restored.saving }
+            assertNull(restored.sessionRemainingMs)
+            restored.setSessionForeground(true)
+            clock += 2_000
+            restored.act { ReadingEngine.hint(it) }
+            await { restored.data?.activeSession?.elapsedMs == 4_500L && restored.data?.active?.hints == 2 && !restored.saving }
+            assertFalse(requireNotNull(restored.data?.activeSession).timedOut)
+            restored.setSessionForeground(false)
+            restored.startSession(ReadingGame.MISSING, 25)
+            await { restored.data?.activeSession?.id != original.activeSession?.id && !restored.saving }
+            assertEquals(30_000L, restored.data?.activeSession?.timeLimitMs)
+        }
     }
 
     @Test fun sessionPrizeUsesLiveFinishPreferencesAndFailedSaveCannotRerollIt() {

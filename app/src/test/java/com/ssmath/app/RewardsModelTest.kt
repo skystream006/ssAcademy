@@ -115,7 +115,7 @@ class RewardsModelTest {
         assertEquals(game, model.currentMathRewardGame)
     }
 
-    @Test fun eachMathGameRequiresItsOwnRewardsAtStartAndFinishAndKeepsTimerSnapshot() {
+    @Test fun eachMathGameRequiresItsOwnRewardsAtStartAndFinishAndDisablingRemovesItsLimit() {
         val model = model()
         model.chooseShowTimer(true)
         model.chooseTimeLimitSeconds(30)
@@ -131,7 +131,7 @@ class RewardsModelTest {
                 assertEquals(Screen.PLAYING, model.screen)
                 assertEquals(game, model.currentMathRewardGame)
                 model.chooseMathGameRewardsEnabled(game, atFinish)
-                assertEquals(limit, model.activeTimeLimitMs)
+                assertEquals(limit.takeIf { atFinish }, model.activeTimeLimitMs)
                 finish(model, count)
                 val result = requireNotNull(model.lastResult)
                 assertEquals(atStart && atFinish, result.prizeType != null)
@@ -147,6 +147,57 @@ class RewardsModelTest {
                 }
             }
         }
+    }
+
+    @Test fun disablingMathRewardsDuringPlayIgnoresTheDeadlineAndKeepsElapsedTime() {
+        val model = model()
+        model.chooseShowTimer(true)
+        model.chooseTimeLimitSeconds(5)
+        for (game in MathRewardGame.entries) for (disableSubject in listOf(false, true)) {
+            model.chooseRewardsEnabled(true)
+            MathRewardGame.entries.forEach { model.chooseMathGameRewardsEnabled(it, true) }
+            readyRewardGame(model, game)
+            model.start()
+            val limit = requireNotNull(model.activeTimeLimitMs)
+            MathRewardGame.entries.filter { it != game }.forEach {
+                model.chooseMathGameRewardsEnabled(it, false)
+            }
+            model.chooseSubjectRewardsEnabled(Subject.READING, false)
+            assertEquals(limit, model.activeTimeLimitMs)
+            model.openSettings()
+            if (disableSubject) model.chooseRewardsEnabled(false)
+            else model.chooseMathGameRewardsEnabled(game, false)
+            model.closeOverlay()
+            assertNull(model.activeTimeLimitMs)
+            now += limit + 1_000
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(200))
+            assertEquals(Screen.PLAYING, model.screen)
+            assertFalse(model.checkTimeLimit())
+            answer(model)
+            assertEquals(1, model.game?.attempts?.size)
+            finish(model, requireNotNull(model.game?.questionCount) - 1)
+            val result = requireNotNull(model.lastResult)
+            assertFalse(result.timedOut)
+            assertEquals(limit + 1_000, result.durationMs)
+            assertNull(result.prizeType)
+            assertNotNull(model.celebration)
+            assertEquals(5, model.timeLimitSeconds)
+        }
+    }
+
+    @Test fun reenablingMathRewardsAppliesTimeLimitsOnlyToFutureGames() {
+        val model = model()
+        model.chooseShowTimer(true)
+        start(model, count = 25, minutes = 1)
+        model.chooseMathGameRewardsEnabled(MathRewardGame.BASIC, false)
+        model.chooseMathGameRewardsEnabled(MathRewardGame.BASIC, true)
+        assertNull(model.activeTimeLimitMs)
+        now += 400_000
+        assertFalse(model.checkTimeLimit())
+        start(model, count = 25, minutes = 1)
+        assertEquals(300_000L, model.activeTimeLimitMs)
+        now += 300_000
+        assertTrue(model.checkTimeLimit())
     }
 
     @Test fun rewardRuleSettingsPersistIndependentlyAndInvalidEditsAreIgnored() {
@@ -790,7 +841,6 @@ class RewardsModelTest {
         assertEquals(300_000L, model.activeTimeLimitMs)
         model.chooseShowTimer(false)
         model.chooseTimeLimitSeconds(900)
-        model.chooseRewardsEnabled(false)
         now += 300_000
         assertTrue(model.checkTimeLimit())
         assertTrue(model.lastResult!!.timedOut)
