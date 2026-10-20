@@ -698,7 +698,19 @@ private fun GameSettings(
         CollapsibleSettingsSection(title, defaultExpanded = false) {
             SubjectRewardsSetting(model, subject,
                 "Choose whether to earn rewards when ${subject.label.lowercase()} activities become available.")
-            Text("More activities are coming soon.", style = MaterialTheme.typography.bodySmall)
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Time limit for ${subject.label.lowercase()} activities", style = MaterialTheme.typography.titleSmall)
+                if (subject == Subject.SCIENCE) {
+                    TimeLimitDropdown(model.scienceTimeLimitSeconds, model::chooseScienceTimeLimitSeconds,
+                        tag = "science-time-limit")
+                } else {
+                    TimeLimitDropdown(model.advancedTimeLimitSeconds, model::chooseAdvancedTimeLimitSeconds,
+                        tag = "advanced-time-limit")
+                }
+                Text("Saved for future ${subject.label.lowercase()} activities. None disables the limit. " +
+                    "More activities are coming soon.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     }
 }
