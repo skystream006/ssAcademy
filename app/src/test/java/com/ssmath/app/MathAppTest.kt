@@ -601,11 +601,13 @@ class MathAppTest {
         compose.setContent { MathAppContent(model) }
         compose.onNodeWithContentDescription("Settings").performClick()
         compose.openGameSettings()
-        compose.onNodeWithTag("rewards-setup").performScrollTo().assert(hasText("Default Math Reward Game Settings"))
+        compose.onNodeWithText("Basic Math Settings").performScrollTo().performClick()
+        compose.onNodeWithTag("rewards-setup").performScrollTo().assert(hasText("Default Activity Settings"))
         compose.onNodeWithTag("rewards-setup").performScrollTo().performClick()
         compose.onNode(isDialog()).assertDoesNotExist()
         compose.onNodeWithTag("rewards-setup-screen").assertIsDisplayed()
-        compose.onNodeWithText("Default Math Reward Game Settings").assertIsDisplayed()
+        compose.onNodeWithText("Default Activity Settings").assertIsDisplayed()
+        compose.onNodeWithText(MathRewardGame.BASIC.title).assertIsDisplayed()
         Operation.entries.forEachIndexed { index, operation ->
             compose.onNodeWithTag("rewards-${operation.name}-first").performScrollTo()
                 .performTextReplacement((index + 1).toString())
@@ -655,12 +657,61 @@ class MathAppTest {
         compose.onNodeWithTag("question-count-input").performScrollTo().assertTextContains("3")
     }
 
+    @Test fun logicDefaultActivitySettingsSaveIndependentlyAndDiscardUnsavedChanges() {
+        val model = model()
+        val basicDefaults = model.rewardsDefaults
+        model.openRewardsGame()
+        model.openSettings()
+        compose.setContent { MathAppContent(model) }
+        compose.openGameSettings()
+        compose.onNodeWithText("Logic Math Settings").performScrollTo().performClick()
+        compose.onNodeWithTag("logic-rewards-setup").performScrollTo()
+            .assert(hasText("Default Activity Settings")).performClick()
+        compose.onNodeWithText("Default Activity Settings").assertIsDisplayed()
+        compose.onNodeWithText(MathRewardGame.LOGIC.title).assertIsDisplayed()
+        assertEquals(MathRewardGame.LOGIC, model.rewardsSetupSubject)
+        Operation.entries.forEachIndexed { index, operation ->
+            compose.onNodeWithTag("rewards-${operation.name}-first").performScrollTo()
+                .performTextReplacement((index + 2).toString())
+            compose.onNodeWithTag("rewards-${operation.name}-second").performScrollTo()
+                .performTextReplacement((index + 20).toString())
+        }
+        compose.onNodeWithTag("save-rewards-setup").performScrollTo().assertIsEnabled().performClick()
+        assertEquals(basicDefaults, model.rewardsDefaults)
+        assertNotEquals(basicDefaults, model.logicRewardsDefaults)
+        val savedLogicDefaults = model.logicRewardsDefaults
+        assertEquals(savedLogicDefaults, model().logicRewardsDefaults)
+        compose.openGameSettings()
+        compose.onNodeWithText("Basic Math Settings").performScrollTo().performClick()
+        compose.onNodeWithTag("rewards-setup").performScrollTo().performClick()
+        compose.onNodeWithText(MathRewardGame.BASIC.title).assertIsDisplayed()
+        compose.onNodeWithTag("rewards-ADDITION-first").performScrollTo().assertTextContains("1")
+        compose.onNodeWithTag("rewards-ADDITION-second").performScrollTo().performTextReplacement("99")
+        compose.onNodeWithTag("save-rewards-setup").performScrollTo().performClick()
+        assertEquals(savedLogicDefaults, model.logicRewardsDefaults)
+        val savedBasicDefaults = model.rewardsDefaults
+        compose.openGameSettings()
+        compose.onNodeWithText("Logic Math Settings").performScrollTo().performClick()
+        compose.onNodeWithTag("logic-rewards-setup").performScrollTo().performClick()
+        compose.onNodeWithTag("rewards-ADDITION-first").performScrollTo().assertTextContains("2")
+            .performTextReplacement("")
+        compose.onNodeWithTag("save-rewards-setup").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithText("Back").performScrollTo().performClick()
+        assertEquals(savedLogicDefaults, model.logicRewardsDefaults)
+        assertEquals(savedBasicDefaults, model.rewardsDefaults)
+        compose.openGameSettings()
+        compose.onNodeWithText("Logic Math Settings").performScrollTo().performClick()
+        compose.onNodeWithTag("logic-rewards-setup").performScrollTo().performClick()
+        compose.onNodeWithTag("rewards-ADDITION-first").performScrollTo().assertTextContains("2")
+    }
+
     @Test fun rewardsSetupRejectsInvalidParametersAndBackDiscardsEdits() {
         val model = model()
         val defaults = model.rewardsDefaults
         compose.setContent { MathAppContent(model) }
         compose.onNodeWithContentDescription("Settings").performClick()
         compose.openGameSettings()
+        compose.onNodeWithText("Basic Math Settings").performScrollTo().performClick()
         compose.onNodeWithTag("rewards-setup").performScrollTo().performClick()
         compose.onNodeWithTag("rewards-ADDITION-first").performScrollTo().performTextReplacement("11")
         compose.onNodeWithTag("save-rewards-setup").performScrollTo().assertIsNotEnabled()
@@ -673,6 +724,7 @@ class MathAppTest {
         assertEquals(Overlay.SETTINGS, model.overlay)
         assertEquals(defaults, model.rewardsDefaults)
         compose.openGameSettings()
+        compose.onNodeWithText("Basic Math Settings").performScrollTo().performClick()
         compose.onNodeWithTag("rewards-setup").performScrollTo().performClick()
         compose.onNodeWithTag("rewards-ADDITION-first").performScrollTo().assertTextContains("1")
         compose.onNodeWithText("Back").performScrollTo().performClick()
@@ -720,8 +772,9 @@ class MathAppTest {
         compose.onNodeWithText("Cancel").assertIsDisplayed().performClick()
         compose.onNodeWithContentDescription("Settings").performClick()
         compose.openGameSettings()
+        compose.onNodeWithText("Basic Math Settings").performScrollTo().performClick()
         compose.onNodeWithTag("rewards-setup").performScrollTo().assertIsDisplayed()
-        val setupLabel = "Default Math Reward Game Settings"
+        val setupLabel = "Default Activity Settings"
         assertFalse(textLayout(setupLabel).didOverflowWidth)
         assertFalse(textLayout(setupLabel).didOverflowHeight)
         compose.onNodeWithTag("rewards-setup").performScrollTo().performClick()

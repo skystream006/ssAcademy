@@ -38,9 +38,10 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    reward types; unavailable prizes are indicated when rewards are disabled.
    Question counts are chosen per game, not saved in challenge defaults, and
    do not change your Practice Game choices. Change the number limits in
-   **Settings > Admin Menu > Game Settings > Math Settings > Default Math Reward Game Settings**.
+   **Settings > Admin Menu > Game Settings > Math Settings > Basic Math Settings > Default Activity Settings**.
    **Challenge - Logic Math** offers the same question-count choices and four math types,
-   using the same default number limits, timer, scoring, wrong-answer limit, and reward rules.
+   using its own number limits in **Logic Math Settings > Default Activity Settings**,
+   with the same timer, scoring, wrong-answer limit, and reward rules.
    Each question is a new offline picture puzzle: clue rows uniquely determine the hidden
    picture values, then you enter the answer to the final row. The same picture keeps the
    same value throughout that puzzle; different pictures may have equal values.
@@ -52,13 +53,14 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    **Multiplication Matrix Rewards Game** has a fixed **121 questions**, covering every pair
    from **1 × 1 through 11 × 11** in row order: 1 × 1, 1 × 2, …, 1 × 11, then
    2 × 1, and so on by default. Enable **Randomize matrix question order** in
-   **Settings > Admin Menu > Game Settings > Math Settings > Multiplication Matrix Settings** to shuffle all 121 questions
+   **Settings > Admin Menu > Game Settings > Math Settings > Multiplication Matrix Settings > Default Activity Settings**
+   to shuffle all 121 questions
    once per new matrix game, with every pair appearing exactly once. The option is off by
    default, is remembered for next time, and does not change a game already in progress.
    It does not change your other games' saved number limits or question counts.
    The same rewards rules apply: finish all questions with **more than 90% correct** for an
    enabled prize fragment, with Math Rewards System enabled at start and finish.
-   **Matrix Reward Tier** in the same collapsible section chooses **Tier 1** or **Tier 2** (the default),
+   **Matrix Reward Tier** in the same activity settings chooses **Tier 1** or **Tier 2** (the default),
    independently of the usual minimum-question thresholds. The selected tier is used when
    the game finishes; no prize is awarded if all rewards in that tier are disabled.
    The configured time limit per 5 questions scales to all 121 questions, and the game stops
@@ -169,8 +171,9 @@ Admin Menu contains **Game Settings**, **My Rewards** (add/remove controls), and
 darker backgrounds, including nested subject settings.
 **Math Settings** contains **Math Rewards System**,
 **Show timer** (and its conditional **Time limit per 5 questions**), **Show correct answers**,
-**Vertical equations**, **Default Math Reward Game Settings**, and collapsed
-**Multiplication Matrix Settings** and **Logic Math Settings** sections.
+**Vertical equations**, and collapsed **Basic Math Settings**,
+**Multiplication Matrix Settings**, and **Logic Math Settings** sections.
+Each subject has its own **Default Activity Settings** entry.
 **Logic Math Settings** provides **Minimum Number of Different Pictures** (default 2),
 **Maximum Number of Different Pictures** (default 3), **Minimum Equation Length** (default 3),
 and **Maximum Equation Length** (default 4). Picture counts range from 2 to 6 per puzzle;
@@ -246,11 +249,14 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   already used. The result's My Pokémons reward is also removed unless another saved
   result earned the same celebration. Older collection entries without a linked result
   are kept, as are unrelated celebrations added through Debug Menu.
-- **Default Math Reward Game Settings** – set shared Basic Math and Logic Math default number limits for all four math types.
-  **Save defaults** saves all four together; **Back** discards unsaved edits.
+- **Default Activity Settings** – under each math subject's settings, set independent
+  Basic Math and Logic Math number limits for all four math types, or the matrix's
+  question order and reward tier. Matrix bounds remain 1–11 with 121 questions.
+  **Save defaults** saves only the selected subject; **Back** discards unsaved edits.
   Both return to Settings. Division's two maximums are independent. Limits are
   remembered on this device separately from Practice Game choices, and initially
-  use your previous number limits (or 1–10 on a new install). Previously saved
+  use your previous number limits (or 1–10 on a new install). Existing shared limits
+  initialize both Basic Math and Logic Math once; later edits stay independent. Previously saved
   Rewards Game question counts are no longer used. Editing defaults during a game
   leaves its active questions unchanged and its timer paused until you leave Settings.
 - **Math Rewards System** – under Math Settings, on by default. In math challenges, earn

@@ -99,6 +99,10 @@ class MathViewModel(
         private set
     var rewardsDefaults by mutableStateOf(loadRewardsDefaults())
         private set
+    var logicRewardsDefaults by mutableStateOf(loadLogicRewardsDefaults())
+        private set
+    var rewardsSetupSubject by mutableStateOf(MathRewardGame.BASIC)
+        private set
     var rewardsSetupDraft by mutableStateOf(rewardsDefaults)
         private set
     var game by mutableStateOf<GameState?>(null)
@@ -210,6 +214,10 @@ class MathViewModel(
         private set
     var randomizeMatrixQuestions by mutableStateOf(settings.getBoolean("randomize_matrix_questions", false))
         private set
+    var matrixSetupRandomize by mutableStateOf(randomizeMatrixQuestions)
+        private set
+    var matrixSetupRewardTier by mutableStateOf(matrixRewardTier)
+        private set
     var logicMathSettings by mutableStateOf(loadLogicMathSettings())
         private set
     var textSizePercent by mutableStateOf(settings.getInt("text_size_percent", DEFAULT_TEXT_SIZE_PERCENT)
@@ -251,7 +259,8 @@ class MathViewModel(
     val canSubmitSetup: Boolean get() = selectedOperation != null && questionCount != null &&
         if (selectedOperation == Operation.DIVISION) divisionMaximumFirst != null && divisionMaximumSecond != null
         else minimum != null && maximum != null
-    val canSaveRewardsSetup: Boolean get() = Operation.entries.all { rewardsSetupDraft[it]?.isValid(it) == true }
+    val canSaveRewardsSetup: Boolean get() = rewardsSetupSubject == MathRewardGame.MATRIX ||
+        Operation.entries.all { rewardsSetupDraft[it]?.isValid(it) == true }
     val feedback: Feedback?
         get() = game?.attempts?.lastOrNull()?.let { attempt ->
             when {
@@ -282,10 +291,28 @@ class MathViewModel(
         return defaults
     }
 
-    private fun persistRewardsDefaults(defaults: Map<Operation, RewardsGameDefaults>) {
+    private fun loadLogicRewardsDefaults(): Map<Operation, RewardsGameDefaults> {
+        val defaults = Operation.entries.associateWith { operation ->
+            val fallback = rewardsDefaults.getValue(operation)
+            val prefix = "logic_rewards_${operation.name}_"
+            RewardsGameDefaults(
+                settings.getInt("${prefix}first", requireNotNull(fallback.first)).toString(),
+                settings.getInt("${prefix}second", requireNotNull(fallback.second)).toString()
+            ).takeIf { it.isValid(operation) } ?: fallback
+        }
+        // Snapshot the formerly shared defaults before either subject can be edited.
+        persistRewardsDefaults(defaults, MathRewardGame.LOGIC)
+        return defaults
+    }
+
+    private fun persistRewardsDefaults(
+        defaults: Map<Operation, RewardsGameDefaults>,
+        subject: MathRewardGame = MathRewardGame.BASIC
+    ) {
         val edit = settings.edit()
         defaults.forEach { (operation, parameters) ->
-            val prefix = "rewards_${operation.name}_"
+            val prefix = if (subject == MathRewardGame.LOGIC) "logic_rewards_${operation.name}_"
+                else "rewards_${operation.name}_"
             edit.putInt("${prefix}first", requireNotNull(parameters.first))
                 .putInt("${prefix}second", requireNotNull(parameters.second))
                 .remove("${prefix}question_count")
@@ -358,38 +385,63 @@ class MathViewModel(
 
     fun dismissSetupDialog() { setupDialog = null }
 
-    fun openRewardsSetup() {
+    fun openRewardsSetup(subject: MathRewardGame = MathRewardGame.BASIC) {
         if (overlay != Overlay.SETTINGS) return
-        rewardsSetupDraft = rewardsDefaults
+        rewardsSetupSubject = subject
+        resetRewardsSetupDraft()
         overlay = Overlay.REWARDS_SETUP
     }
 
+    private fun resetRewardsSetupDraft() {
+        rewardsSetupDraft = if (rewardsSetupSubject == MathRewardGame.LOGIC) logicRewardsDefaults else rewardsDefaults
+        matrixSetupRandomize = randomizeMatrixQuestions
+        matrixSetupRewardTier = matrixRewardTier
+    }
+
     fun updateRewardsParameters(operation: Operation, parameters: RewardsGameDefaults) {
-        if (overlay != Overlay.REWARDS_SETUP) return
+        if (overlay != Overlay.REWARDS_SETUP || rewardsSetupSubject == MathRewardGame.MATRIX) return
         rewardsSetupDraft = rewardsSetupDraft + (operation to parameters)
+    }
+
+    fun updateMatrixSetupRandomize(value: Boolean) {
+        if (overlay != Overlay.REWARDS_SETUP || rewardsSetupSubject != MathRewardGame.MATRIX) return
+        matrixSetupRandomize = value
+    }
+
+    fun updateMatrixSetupRewardTier(value: RewardTier) {
+        if (overlay != Overlay.REWARDS_SETUP || rewardsSetupSubject != MathRewardGame.MATRIX) return
+        matrixSetupRewardTier = value
     }
 
     fun saveRewardsSetup() {
         if (overlay != Overlay.REWARDS_SETUP || !canSaveRewardsSetup) return
+        if (rewardsSetupSubject == MathRewardGame.MATRIX) {
+            chooseRandomizeMatrixQuestions(matrixSetupRandomize)
+            chooseMatrixRewardTier(matrixSetupRewardTier)
+            overlay = Overlay.SETTINGS
+            return
+        }
         val defaults = rewardsSetupDraft.mapValues { (_, parameters) ->
             RewardsGameDefaults(requireNotNull(parameters.first).toString(), requireNotNull(parameters.second).toString())
         }
-        persistRewardsDefaults(defaults)
-        rewardsDefaults = defaults
+        persistRewardsDefaults(defaults, rewardsSetupSubject)
+        if (rewardsSetupSubject == MathRewardGame.LOGIC) logicRewardsDefaults = defaults
+        else rewardsDefaults = defaults
         rewardsSetupDraft = defaults
         overlay = Overlay.SETTINGS
     }
 
     fun cancelRewardsSetup() {
         if (overlay != Overlay.REWARDS_SETUP) return
-        rewardsSetupDraft = rewardsDefaults
+        resetRewardsSetupDraft()
         overlay = Overlay.SETTINGS
     }
 
     fun selectRewardsGame(operation: Operation) {
         if (screen != Screen.SETUP || overlay != null ||
             (setupDialog != SetupDialog.REWARDS && setupDialog != SetupDialog.LOGIC)) return
-        val parameters = rewardsDefaults[operation]?.takeIf { it.isValid(operation) } ?: return
+        val defaults = if (setupDialog == SetupDialog.LOGIC) logicRewardsDefaults else rewardsDefaults
+        val parameters = defaults[operation]?.takeIf { it.isValid(operation) } ?: return
         val count = rewardsQuestionCount ?: return
         ready(GameMode.REWARDS, operation, GameParameters(parameters.firstText, parameters.secondText, count.toString()),
             isLogicMath = setupDialog == SetupDialog.LOGIC)
