@@ -561,7 +561,7 @@ class MathAppTest {
         compose.onNodeWithText("Back").performClick()
         compose.onNodeWithTag("home-screen").assertIsDisplayed()
         compose.onNode(isDialog()).assertIsDisplayed()
-        compose.onNodeWithTag("minimum-input").performScrollTo().assertTextContains("40")
+        compose.onNodeWithTag("minimum-input").performScrollTo().assertTextContains("10")
     }
 
     @Test
