@@ -309,6 +309,24 @@ class AdminMenuTest {
         compose.onNodeWithText("Change PIN").assertIsDisplayed()
     }
 
+    @Test fun pinBypassKeepsAdminReturnDestinationAfterRestoringEitherChildPage() {
+        val model = MathViewModel(application)
+        model.chooseAdminPinLockEnabled(false)
+        model.openSettings()
+        val restoration = StateRestorationTester(compose)
+        restoration.setContent { MathAppContent(model) }
+        compose.onNodeWithTag("admin-menu").performScrollTo().performClick()
+        compose.runOnIdle { model.openRewardsSetup() }
+        restoration.emulateSavedInstanceStateRestore()
+        compose.onNodeWithTag("save-rewards-setup").performScrollTo().performClick()
+        compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
+        compose.runOnIdle { model.openReadingProgress() }
+        restoration.emulateSavedInstanceStateRestore()
+        compose.onNodeWithTag("reading-back").performScrollTo().performClick()
+        compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
+        compose.onNodeWithTag("admin-pin-dialog").assertDoesNotExist()
+    }
+
     @Test fun adminDefaultsReturnOnSaveAndBackAndRelockAfterRestoration() {
         val model = MathViewModel(application)
         model.openSettings()

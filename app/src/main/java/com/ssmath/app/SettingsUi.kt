@@ -83,6 +83,9 @@ fun SettingsScreen(model: MathViewModel) {
     var adminUnlocked by remember { mutableStateOf(false) }
     var showingName by rememberSaveable { mutableStateOf(false) }
     val adminPage = model.overlay == Overlay.REWARDS_SETUP || model.overlay == Overlay.READING_PROGRESS
+    LaunchedEffect(adminPage) {
+        if (adminPage) showingAdmin = true
+    }
     val dismissAdmin = {
         showingAdmin = false
         adminUnlocked = false

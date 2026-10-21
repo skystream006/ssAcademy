@@ -1134,9 +1134,12 @@ class GameModesTest {
 
     @Test fun capturedReadyParametersCannotBeChangedByPracticeEditsOrInvalidDrafts() {
         val model = model()
+        model.openPracticeGame()
+        model.selectOperation(Operation.ADDITION)
         model.updateMinimum("4")
         model.updateMaximum("8")
-        readyPractice(model, count = 3)
+        model.updateQuestionCount("3")
+        model.submitSetup()
         model.updateMinimum("")
         model.updateMaximum("1")
         model.updateQuestionCount("")

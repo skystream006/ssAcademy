@@ -546,14 +546,16 @@ class MathAppTest {
                 assertNull(model.overlay)
             }
         }
+        assertEquals("40", model.divisionMaximumFirstText)
+        assertEquals("7", model.divisionMaximumSecondText)
         compose.onNodeWithTag("subject-Math").performClick()
         compose.onNodeWithTag("practice-game").performClick()
         compose.onNodeWithTag("operation-DIVISION").performScrollTo().assertIsSelected()
-        compose.onNodeWithTag("minimum-input").performScrollTo().assertTextContains("40")
-        compose.onNodeWithTag("maximum-input").performScrollTo().assertTextContains("7")
+        compose.onNodeWithTag("minimum-input").performScrollTo().assertTextContains("10")
+        compose.onNodeWithTag("maximum-input").performScrollTo().assertTextContains("10")
         compose.onNodeWithTag("question-count-input").performScrollTo().assertTextContains("15")
         compose.onNodeWithTag("submit-setup").performScrollTo().assertIsEnabled().performClick()
-        compose.onNodeWithText("Division · first up to 40 · second up to 7 · 15 questions").assertIsDisplayed()
+        compose.onNodeWithText("Division · first up to 10 · second up to 10 · 15 questions").assertIsDisplayed()
         compose.onNodeWithTag("home-rewards").assertDoesNotExist()
         compose.onNodeWithTag("home-pokemons").assertDoesNotExist()
         compose.onNodeWithText("Back").performClick()
@@ -1841,7 +1843,7 @@ class MathAppTest {
         compose.onNodeWithText("Division · first up to 100 · second up to 7").assertIsDisplayed()
     }
 
-    @Test fun divisionMaximumValidationAndSwitchingOperationsKeepSeparateSettings() {
+    @Test fun divisionMaximumValidationAndSwitchingOperationsLoadBasicDefaults() {
         val model = model()
         model.selectOperation(Operation.ADDITION)
         model.updateMinimum("4")
@@ -1873,8 +1875,8 @@ class MathAppTest {
             model.selectOperation(Operation.ADDITION)
         }
         compose.onNodeWithText("What is the minimum number?").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithTag("minimum-input").assertTextContains("4")
-        compose.onNodeWithTag("maximum-input").performScrollTo().assertTextContains("8")
+        compose.onNodeWithTag("minimum-input").assertTextContains("1")
+        compose.onNodeWithTag("maximum-input").performScrollTo().assertTextContains("10")
         assertEquals(4, model().minimum)
         assertEquals(8, model().maximum)
     }
