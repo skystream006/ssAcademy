@@ -161,13 +161,11 @@ internal fun MathAppContent(model: MathViewModel) {
                 snackbarHost = { SnackbarHost(snackbar) }) { padding ->
                 Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).imePadding()) {
                     when (model.overlay) {
-                        Overlay.SETTINGS -> SettingsScreen(model)
-                        Overlay.REWARDS_SETUP -> RewardsSetupScreen(model)
+                        Overlay.SETTINGS, Overlay.REWARDS_SETUP, Overlay.READING_PROGRESS -> SettingsScreen(model)
                         Overlay.HISTORY -> HistoryScreen(model)
                         Overlay.SUBJECT_HISTORY -> SubjectHistoryScreen(model)
                         Overlay.REWARDS -> RewardsScreen(model)
                         Overlay.POKEMONS -> PokemonsScreen(model)
-                        Overlay.READING_PROGRESS -> ReadingProgressScreen(model)
                         Overlay.READING -> {
                             ReadingScreen(
                                 onExit = model::closeOverlay,
@@ -327,6 +325,7 @@ private fun HomeScreen(model: MathViewModel) {
     when (model.setupDialog) {
         SetupDialog.PRACTICE -> GameSetupDialog("Practice Game", model::dismissSetupDialog) {
             Text("Practice with Other animations only. No prizes or Pokémon are awarded.")
+            Text("Starts with Basic Math's default number limits. Changes here apply only to this practice game.")
             SetupForm(model, Modifier.fillMaxWidth())
         }
         SetupDialog.REWARDS, SetupDialog.LOGIC -> GameSetupDialog(
@@ -504,7 +503,7 @@ private fun GameSetupDialog(title: String, onDismiss: () -> Unit, content: @Comp
 }
 
 @Composable
-private fun RewardsSetupScreen(model: MathViewModel) {
+internal fun RewardsSetupScreen(model: MathViewModel) {
     BackHandler(onBack = model::cancelRewardsSetup)
     Column(Modifier.fillMaxSize().testTag("rewards-setup-screen").verticalScroll(rememberScrollState())
         .padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -514,10 +513,10 @@ private fun RewardsSetupScreen(model: MathViewModel) {
         if (model.rewardsSetupSubject == MathRewardGame.MATRIX) {
             MatrixActivitySettings(model)
         } else {
-            Text("Save default number limits for ${model.rewardsSetupSubject.title} only. " +
+            Text("Save default number limits for ${model.rewardsSetupSubject.title}. " +
                 "Basic Math and Logic Math defaults are independent. " +
                 "Choose the number of questions when starting a challenge. " +
-                "Practice Game settings stay separate.")
+                "Practice Game shares Basic Math's default number limits.")
             Operation.entries.forEach { operation ->
                 val parameters = model.rewardsSetupDraft.getValue(operation)
                 val division = operation == Operation.DIVISION

@@ -227,8 +227,8 @@ class RewardsSettingsTest {
         assertEquals(RewardThresholds(), model.rewardThresholds)
         assertTrue(MathViewModel(application).randomizeMatrixQuestions)
         compose.onNodeWithText("Matrix Reward Tier").assertDoesNotExist()
-        compose.openGameSettings()
-        matrix.performScrollTo().assert(collapsed).performClick()
+        compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
+        matrix.performScrollTo().assert(expanded)
         compose.onNodeWithTag("matrix-rewards-setup").performScrollTo().performClick()
         compose.onNodeWithTag("matrix-reward-TIER_1").performScrollTo().assertIsSelected()
         compose.onNodeWithContentDescription("Randomize matrix question order").performScrollTo()
@@ -237,8 +237,7 @@ class RewardsSettingsTest {
         compose.onNodeWithText("Back").performScrollTo().performClick()
         assertEquals(RewardTier.TIER_1, MathViewModel(application).matrixRewardTier)
         assertTrue(model.randomizeMatrixQuestions)
-        compose.openGameSettings()
-        matrix.performScrollTo().performClick()
+        compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
         compose.onNodeWithTag("matrix-rewards-setup").performScrollTo().performClick()
         compose.onNodeWithTag("matrix-reward-TIER_1").performScrollTo().assertIsSelected()
         compose.onNodeWithContentDescription("Randomize matrix question order").performScrollTo().assertIsOn()
@@ -517,6 +516,40 @@ class RewardsSettingsTest {
         compose.onNodeWithText("Settings").assertIsDisplayed()
     }
 
+    @Test fun mathSectionsOfferIndependentTimersAndLogicDefaultsComeFirst() {
+        val model = MathViewModel(application)
+        model.chooseShowTimer(true)
+        compose.setContent { MathTheme { SettingsScreen(model) } }
+        compose.openGameSettings()
+        val choices = listOf(
+            Triple("Basic Math Settings", "time-limit", "5 seconds"),
+            Triple("Multiplication Matrix Settings", "matrix-time-limit", "10 seconds"),
+            Triple("Logic Math Settings", "logic-time-limit", "15 seconds"))
+        choices.forEach { (section, tag, label) ->
+            compose.onNodeWithText(section).performScrollTo().performClick()
+            compose.onNodeWithTag(tag).performScrollTo().assertTextEquals("None").performClick()
+            compose.onNodeWithText(label).performScrollTo().performClick()
+            compose.onNodeWithTag(tag).assertTextEquals(label)
+            compose.onNodeWithText(section).performScrollTo().performClick()
+        }
+        val restored = MathViewModel(application)
+        assertEquals(5, restored.timeLimitSeconds)
+        assertEquals(10, restored.matrixTimeLimitSeconds)
+        assertEquals(15, restored.logicTimeLimitSeconds)
+        compose.onNodeWithText("Logic Math Settings").performScrollTo().performClick()
+        val defaults = compose.onNodeWithTag("logic-rewards-setup").performScrollTo()
+            .fetchSemanticsNode().positionInRoot.y
+        val timer = compose.onNodeWithText("Time limit per 5 questions").fetchSemanticsNode().positionInRoot.y
+        val limits = compose.onNodeWithTag("logic-math-minimum-pictures").fetchSemanticsNode().positionInRoot.y
+        assertTrue(defaults < timer)
+        assertTrue(timer < limits)
+        compose.onNodeWithTag("logic-time-limit").performScrollTo().performClick()
+        compose.onNodeWithText("None").performScrollTo().performClick()
+        assertEquals(0, MathViewModel(application).logicTimeLimitSeconds)
+        assertEquals(5, model.timeLimitSeconds)
+        assertEquals(10, model.matrixTimeLimitSeconds)
+    }
+
     @Test fun timeLimitRequiresBothSwitchesAndRemembersSelection() {
         val model = MathViewModel(application)
         compose.setContent { MathTheme { SettingsScreen(model) } }
@@ -528,6 +561,7 @@ class RewardsSettingsTest {
         compose.onNodeWithContentDescription("Show correct answers").performScrollTo().assertIsOn()
         compose.onNodeWithTag("time-limit").assertDoesNotExist()
         compose.onNodeWithContentDescription("Show timer").performScrollTo().assertIsOff().performClick()
+        compose.onNodeWithText("Basic Math Settings").performScrollTo().performClick()
         compose.onNodeWithTag("time-limit").performScrollTo().performClick()
         compose.onNodeWithText("5 minutes").performClick()
         assertEquals(300, model.timeLimitSeconds)
@@ -724,6 +758,7 @@ class RewardsSettingsTest {
         model.chooseShowTimer(true)
         compose.setContent { MathTheme { SettingsScreen(model) } }
         compose.openGameSettings()
+        compose.onNodeWithText("Basic Math Settings").performScrollTo().performClick()
         compose.onNodeWithTag("time-limit").performScrollTo()
         val dropdown = compose.onNodeWithTag("time-limit").fetchSemanticsNode().boundsInRoot
         val pauseButton = compose.onNodeWithContentDescription("Pause in background").assertIsDisplayed().assertIsOn()
@@ -749,6 +784,7 @@ class RewardsSettingsTest {
         model.chooseTimeLimitSeconds(900)
         compose.setContent { MathTheme(textSizePercent = 200) { SettingsScreen(model) } }
         compose.openGameSettings()
+        compose.onNodeWithText("Basic Math Settings").performScrollTo().performClick()
         compose.onNodeWithTag("time-limit").performScrollTo().assertIsDisplayed()
         compose.onNodeWithContentDescription("Pause in background")
             .performScrollTo().assertIsDisplayed().assertIsOn().performClick().assertIsOff()
@@ -796,6 +832,7 @@ class RewardsSettingsTest {
         model.chooseShowTimer(true)
         compose.setContent { MathTheme { SettingsScreen(model) } }
         compose.openGameSettings()
+        compose.onNodeWithText("Basic Math Settings").performScrollTo().performClick()
         compose.onNodeWithText("Time limit per 5 questions").performScrollTo().assertIsDisplayed()
         listOf(5 to "5 seconds", 10 to "10 seconds", 11 to "11 seconds", 12 to "12 seconds",
             13 to "13 seconds", 14 to "14 seconds", 15 to "15 seconds",

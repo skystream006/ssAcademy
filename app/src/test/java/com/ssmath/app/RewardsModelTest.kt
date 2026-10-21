@@ -118,8 +118,8 @@ class RewardsModelTest {
     @Test fun eachMathGameRequiresItsOwnRewardsAtStartAndFinishAndDisablingRemovesItsLimit() {
         val model = model()
         model.chooseShowTimer(true)
-        model.chooseTimeLimitSeconds(30)
         MathRewardGame.entries.forEach { game ->
+            model.chooseMathTimeLimitSeconds(game, 30)
             for (atStart in listOf(false, true)) for (atFinish in listOf(false, true)) {
                 MathRewardGame.entries.forEach { model.chooseMathGameRewardsEnabled(it, it != game) }
                 model.chooseMathGameRewardsEnabled(game, atStart)
@@ -152,7 +152,7 @@ class RewardsModelTest {
     @Test fun disablingMathRewardsDuringPlayIgnoresTheDeadlineAndKeepsElapsedTime() {
         val model = model()
         model.chooseShowTimer(true)
-        model.chooseTimeLimitSeconds(5)
+        MathRewardGame.entries.forEach { model.chooseMathTimeLimitSeconds(it, 5) }
         for (game in MathRewardGame.entries) for (disableSubject in listOf(false, true)) {
             model.chooseRewardsEnabled(true)
             MathRewardGame.entries.forEach { model.chooseMathGameRewardsEnabled(it, true) }

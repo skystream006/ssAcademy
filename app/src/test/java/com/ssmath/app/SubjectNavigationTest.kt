@@ -248,7 +248,8 @@ class SubjectNavigationTest {
         compose.onNodeWithTag("reading-dashboard").assertIsDisplayed()
         compose.onNodeWithTag("reading-back").performScrollTo().performClick()
         assertEquals(Overlay.SETTINGS, model.overlay)
-        compose.onNodeWithTag("admin-dialog").assertDoesNotExist()
+        compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
+        compose.onNodeWithText("Close").performClick()
         compose.onNodeWithContentDescription("Back").performClick()
         assertEquals(Overlay.READING, model.overlay)
         compose.onNodeWithTag("reading-menu").assertIsDisplayed()
@@ -272,8 +273,9 @@ class SubjectNavigationTest {
         model.openSettings()
         val game = model.game
         val elapsed = model.elapsedMs()
-        model.openReadingProgress()
         compose.setContent { MathAppContent(model) }
+        compose.openGameSettings(Subject.READING)
+        compose.onNodeWithTag("reading-progress").performScrollTo().performClick()
         compose.waitUntil(5_000) { readingModel.data != null }
         compose.onNodeWithTag("reading-history-attempt-a").performScrollTo().performClick()
         compose.waitUntil(5_000) {
