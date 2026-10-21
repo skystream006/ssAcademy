@@ -56,11 +56,14 @@ class SettingsDialogTest {
     }
 
     @Test fun rewardAdjustmentsHaveFourColumnsWithArtworkBetweenUpAndDownControls() {
+        val additions = mutableListOf<Pair<RewardType, Boolean>>()
+        val removals = mutableListOf<Pair<RewardType, Boolean>>()
         compose.setContent {
             MathTheme {
                 AddRemoveRewardsDialog(
                     RewardType.entries.associateWith { RewardBalance(2, 1) },
-                    false, null, { _, _ -> }, { _, _ -> }, {}
+                    false, null, { type, fragment -> additions += type to fragment },
+                    { type, fragment -> removals += type to fragment }, {}
                 )
             }
         }
@@ -85,10 +88,11 @@ class SettingsDialogTest {
             assertEquals((down.left + down.right).value, (image.left + image.right).value, 2f)
         }
         compose.onNodeWithContentDescription("Add 1 Lollipop fragment").performScrollTo().performClick()
-        compose.onNodeWithText("Add 1 Lollipop fragment?").assertIsDisplayed()
+        compose.onNodeWithText("Add reward?").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(listOf(RewardType.LOLLIPOP to true), additions) }
         compose.onNodeWithTag("adjust-rewards-dialog").assertWidthIsEqualTo(360.dp)
-        compose.onNodeWithText("Cancel").performClick()
         compose.onNodeWithContentDescription("Remove 1 whole Lollipop reward").performScrollTo().performClick()
-        compose.onNodeWithText("Permanently remove 1 whole Lollipop reward?").assertIsDisplayed()
+        compose.onNodeWithText("Remove reward?").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(listOf(RewardType.LOLLIPOP to false), removals) }
     }
 }

@@ -662,8 +662,9 @@ unlocks every animation; earning Mega Pokémons through gameplay still requires 
 In **Settings > Admin Menu**, expand **My Rewards**, then press **Add/Remove Rewards** to
 view balances by tier in rows of four rewards. Each reward has separate **Whole** and
 **Fragments** controls, with its amount and picture between an **up arrow** (add one)
-and **down arrow** (remove one). Confirm **Add** or **Remove**; **Cancel** leaves the balance
-unchanged. Additions work even with reward earning disabled or an empty inventory.
+and **down arrow** (remove one). Admin additions and removals apply immediately without
+confirmation. **Use rewards** still asks for confirmation before using a reward.
+Additions work even with reward earning disabled or an empty inventory.
 Every 3 matching fragments become 1 whole reward; adding a whole reward keeps existing
 fragments. Removing a fragment never breaks a whole reward, and unavailable units cannot
 be removed. Adjustments are saved on this device without changing practice history,
