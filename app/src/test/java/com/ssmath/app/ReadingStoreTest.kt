@@ -249,6 +249,7 @@ class ReadingStoreTest {
             assertEquals(original.active?.id, restored.active?.id)
             assertEquals(original.active?.contentId, restored.active?.contentId)
             assertEquals(original.stories, restored.stories)
+            @Suppress("DEPRECATION") // Missing legacy flags must default to no checkpoint rewards.
             assertTrue(requireNotNull(restored.active).checkpoints.values.none { it.rewardGranted })
             listOf("reader-a", "reader-b").forEach { id ->
                 assertEquals(original.checkpointCount(id), restored.checkpointCount(id))
@@ -260,6 +261,7 @@ class ReadingStoreTest {
                 val disabled = readingAnswer(restored, readingCorrect(restored), rewardsEnabled = false)
                 assertTrue(requireNotNull(disabled.active).earned("answer"))
                 assertEquals(1, disabled.checkpointCount("reader-a"))
+                @Suppress("DEPRECATION") // Completing a legacy draft must not award checkpoint rewards.
                 assertFalse(requireNotNull(disabled.active).checkpoints.getValue("answer").rewardGranted)
             }
         }
@@ -283,6 +285,7 @@ class ReadingStoreTest {
                 restored = ReadingStore(file).load()
             }
             assertEquals(content.id, complete, restored)
+            @Suppress("DEPRECATION") // Reloading must not retroactively award checkpoint rewards.
             assertTrue(requireNotNull(restored.active).checkpoints.values.none { it.rewardGranted })
             assertTrue(restored.sessions.isEmpty())
         }
@@ -596,6 +599,7 @@ class ReadingStoreTest {
         model.submit("answer")
         await { model.data?.active?.earned("answer") == true && !model.saving }
         assertEquals(1, storage.saved.checkpointCount("reader-a"))
+        @Suppress("DEPRECATION") // Default preferences must not re-enable legacy checkpoint rewards.
         assertFalse(requireNotNull(storage.saved.active).checkpoints.getValue("answer").rewardGranted)
         assertFalse(settings.getBoolean("rewards_enabled", true))
         assertFalse(settings.contains("reading_rewards_enabled"))
@@ -628,7 +632,9 @@ class ReadingStoreTest {
         await { resumed.data?.active?.earned("answer") == true && !resumed.saving }
         val saved = ReadingStore(file).load()
         assertEquals(2, saved.checkpointCount("reader-a"))
+        @Suppress("DEPRECATION") // Verify both old and new attempts retain disabled checkpoint rewards.
         assertFalse(saved.attempts.first().checkpoints.getValue("answer").rewardGranted)
+        @Suppress("DEPRECATION")
         assertFalse(saved.attempts.last().checkpoints.getValue("answer").rewardGranted)
     }
 
@@ -651,6 +657,7 @@ class ReadingStoreTest {
         }
         await { model.data?.active?.earned("answer") == true && !model.saving }
         assertEquals(1, storage.saved.checkpointCount("reader-a"))
+        @Suppress("DEPRECATION") // Queued submissions must not award legacy checkpoint rewards.
         assertFalse(requireNotNull(storage.saved.active).checkpoints.getValue("answer").rewardGranted)
         assertEquals(ReadingAccuracy(0, 1, 1, 0), storage.saved.accuracy("reader-a"))
     }
@@ -674,6 +681,7 @@ class ReadingStoreTest {
         assertEquals(1, storage.saved.checkpointCount("reader-a"))
         assertEquals(1, storage.saved.active?.checkpoints?.get("answer")?.tries)
         assertEquals(ReadingAccuracy(1, 1, 0, 0), storage.saved.accuracy("reader-a"))
+        @Suppress("DEPRECATION") // Retrying a failed save must not award legacy checkpoint rewards.
         assertFalse(requireNotNull(storage.saved.active).checkpoints.getValue("answer").rewardGranted)
     }
 
@@ -904,6 +912,7 @@ class ReadingStoreTest {
         store.save(legacy)
         val restored = ReadingStore(file).load()
         assertEquals(legacy, restored)
+        @Suppress("DEPRECATION") // Preserve true flags from old files without converting them to session prizes.
         assertTrue(requireNotNull(restored.active).checkpoints.values.all { it.rewardGranted })
         assertTrue(restored.sessions.isEmpty())
         assertEquals(restored, ReadingEngine.finish(restored))

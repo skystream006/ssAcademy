@@ -11,6 +11,7 @@ import androidx.test.core.app.ApplicationProvider
 import java.io.File
 import kotlin.random.Random
 import kotlinx.coroutines.Dispatchers
+import kotlinx.serialization.json.Json
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -24,6 +25,10 @@ import org.robolectric.annotation.GraphicsMode
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class, qualifiers = "w360dp-h800dp")
 class PokemonSettingsTest {
+    private companion object {
+        val snapshotJson = Json { encodeDefaults = true }
+    }
+
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     private val application get() = ApplicationProvider.getApplicationContext<Application>()
     private val file get() = File(application.filesDir, "practice_history.json")
@@ -415,7 +420,7 @@ class PokemonSettingsTest {
     @Config(qualifiers = "w320dp-h800dp")
     @GraphicsMode(GraphicsMode.Mode.NATIVE)
     fun allCollectedNamesAreReadableAndScrollableWithLargeText() {
-        file.writeText(kotlinx.serialization.json.Json { encodeDefaults = true }.encodeToString(PracticeSnapshot.serializer(),
+        file.writeText(snapshotJson.encodeToString(PracticeSnapshot.serializer(),
             PracticeSnapshot(pokemons = Celebration.entries.toSet())))
         val model = model()
         model.chooseTextSize(200)

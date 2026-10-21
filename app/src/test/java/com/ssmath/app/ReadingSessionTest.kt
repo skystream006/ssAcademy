@@ -274,6 +274,7 @@ class ReadingSessionTest {
             val disabled = RewardType.entries.toSet() - RewardType.LOLLIPOP
             data = ReadingEngine.finish(data, rewardsEnabled = enabledAtFinish, disabledRewards = disabled)
             assertEquals(if (enabledAtStart && enabledAtFinish) RewardType.LOLLIPOP else null, data.activeSession?.prizeType)
+            @Suppress("DEPRECATION") // Session prizes must not re-enable legacy checkpoint rewards.
             assertTrue(data.attempts.all { it.checkpoints.values.none { c -> c.rewardGranted } })
             ReadingEngine.validate(data)
         }

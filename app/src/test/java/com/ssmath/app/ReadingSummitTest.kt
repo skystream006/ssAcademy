@@ -141,6 +141,7 @@ class ReadingSummitTest {
         assertEquals(30, data.completions("reader-a"))
         assertEquals(66, data.checkpointCount("reader-a"))
         assertEquals(0, data.checkpointCount("reader-b"))
+        @Suppress("DEPRECATION") // Verify SQLite persistence keeps legacy checkpoint rewards disabled.
         assertTrue(data.attempts.flatMap { it.checkpoints.values }.none { it.rewardGranted })
         assertEquals(0, data.completions("reader-b"))
         assertEquals(6, data.stories.size)

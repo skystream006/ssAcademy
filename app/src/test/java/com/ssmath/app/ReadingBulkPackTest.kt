@@ -143,6 +143,7 @@ class ReadingBulkPackTest {
                 ReadingGame.STUDIO -> 4
                 else -> 1
             }, data.checkpointCount("reader-a"))
+            @Suppress("DEPRECATION") // Verify legacy checkpoint rewards stay disabled.
             assertTrue(activity.id, requireNotNull(data.active).checkpoints.values.none { it.rewardGranted })
             ReadingEngine.validate(data)
         }

@@ -254,7 +254,6 @@ internal fun DrawScope.drawKantoEffect(
                     KantoEffect.SLEEP -> drawPath(Path().apply {
                         moveTo(-4f, -5f); lineTo(4f, -5f); lineTo(-4f, 5f); lineTo(4f, 5f)
                     }, Color(0xFFF5E8B4).copy(alpha = fade), style = Stroke(2f))
-                    else -> Unit
                 }
             }
         }
