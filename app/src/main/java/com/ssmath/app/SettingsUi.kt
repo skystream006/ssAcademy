@@ -43,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -81,6 +82,35 @@ fun SettingsScreen(model: MathViewModel) {
     var showingAdmin by remember { mutableStateOf(false) }
     var adminUnlocked by remember { mutableStateOf(false) }
     var showingName by rememberSaveable { mutableStateOf(false) }
+    val adminPage = model.overlay == Overlay.REWARDS_SETUP || model.overlay == Overlay.READING_PROGRESS
+    val dismissAdmin = {
+        showingAdmin = false
+        adminUnlocked = false
+        if (adminPage) model.closeOverlay()
+    }
+    if (!adminPage) {
+        SettingsPage(model,
+            onAdmin = { adminUnlocked = false; showingAdmin = true },
+            onDebug = { showingDebug = true },
+            onName = { showingName = true })
+    }
+    if (showingDebug) {
+        DebugDialog(model, onDismiss = { showingDebug = false })
+    }
+    if (showingAdmin || adminPage) {
+        if (adminUnlocked || !model.adminPinLockEnabled) {
+            AdminDialog(model, onDismiss = dismissAdmin)
+        } else {
+            AdminPinDialog(onUnlocked = { adminUnlocked = true; showingAdmin = true }, onDismiss = dismissAdmin)
+        }
+    }
+    if (showingName) {
+        ChangeNameDialog(rememberReadingViewModel(), onDismiss = { showingName = false })
+    }
+}
+
+@Composable
+private fun SettingsPage(model: MathViewModel, onAdmin: () -> Unit, onDebug: () -> Unit, onName: () -> Unit) {
     ScreenScaffold("Settings", model::closeOverlay) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -89,7 +119,7 @@ fun SettingsScreen(model: MathViewModel) {
                 supportingContent = { Text("Update the name used for all your games") },
                 trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null) },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                modifier = Modifier.clickable { showingName = true }.testTag("change-name"))
+                modifier = Modifier.clickable(onClick = onName).testTag("change-name"))
             CollapsibleSettingsSection("Rewards", defaultExpanded = false) {
                 ListItem(headlineContent = { Text("My Rewards") },
                     supportingContent = { Text("Your prizes and fragments") },
@@ -153,32 +183,16 @@ fun SettingsScreen(model: MathViewModel) {
             }
             HorizontalDivider()
             ListItem(headlineContent = { Text("Admin Menu") },
-                supportingContent = { Text("PIN-protected game settings and reward controls") },
+                supportingContent = { Text(if (model.adminPinLockEnabled) "PIN-protected game settings and reward controls"
+                    else "Game settings and reward controls · PIN lock disabled") },
                 trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null) },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                modifier = Modifier.clickable {
-                    adminUnlocked = false
-                    showingAdmin = true
-                }.testTag("admin-menu"))
+                modifier = Modifier.clickable(onClick = onAdmin).testTag("admin-menu"))
             HorizontalDivider()
-            DebugLogSettings(onOpenDebug = { showingDebug = true })
+            DebugLogSettings(onOpenDebug = onDebug)
             Text("ssAcademy ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.labelSmall,
                 modifier = Modifier.padding(bottom = 20.dp))
         }
-    }
-    if (showingDebug) {
-        DebugDialog(model, onDismiss = { showingDebug = false })
-    }
-    if (showingAdmin) {
-        val dismiss = { showingAdmin = false; adminUnlocked = false }
-        if (adminUnlocked) {
-            AdminDialog(model, onDismiss = dismiss)
-        } else {
-            AdminPinDialog(onUnlocked = { adminUnlocked = true }, onDismiss = dismiss)
-        }
-    }
-    if (showingName) {
-        ChangeNameDialog(rememberReadingViewModel(), onDismiss = { showingName = false })
     }
 }
 
@@ -352,6 +366,15 @@ private fun DebugDialog(model: MathViewModel, onDismiss: () -> Unit) {
             sectionState.SaveableStateProvider("debug-sections") {
                 Column(
                     verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Disable Admin PIN lock", Modifier.weight(1f))
+                        Switch(!model.adminPinLockEnabled,
+                            { model.chooseAdminPinLockEnabled(!it) },
+                            modifier = Modifier.semantics { contentDescription = "Disable Admin PIN lock" })
+                    }
+                    Text("Allows anyone using this device to open the Admin Menu without a PIN. " +
+                        "Your saved PIN is kept and required again when the lock is re-enabled.")
+                    HorizontalDivider()
                     CollapsibleSettingsSection("My Pokémons", defaultExpanded = false) {
                         Text("Add all celebrations, including Mega Pokémons, without changing practice history or rewards.")
                         Button(onClick = model::collectAllCelebrations,
@@ -378,14 +401,28 @@ private fun DebugDialog(model: MathViewModel, onDismiss: () -> Unit) {
 
 @Composable
 private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val pinStore = remember(context) { AdminPinStore(context.getSharedPreferences("settings", 0)) }
     var showingAdjustments by rememberSaveable { mutableStateOf(false) }
     var changingPin by remember { mutableStateOf(false) }
     var showingReadingGames by rememberSaveable { mutableStateOf(false) }
     var showingReadingLevel by rememberSaveable { mutableStateOf(false) }
     val sectionState = rememberSaveableStateHolder()
     val scrollState = rememberScrollState()
+    if (model.overlay == Overlay.REWARDS_SETUP) {
+        RewardsSetupScreen(model)
+        return
+    }
+    if (model.overlay == Overlay.READING_PROGRESS) {
+        ReadingProgressScreen(model)
+        return
+    }
     if (changingPin) {
-        ChangeAdminPinDialog(onChanged = onDismiss, onDismiss = { changingPin = false })
+        if (pinStore.hasPin) {
+            ChangeAdminPinDialog(onChanged = { changingPin = false }, onDismiss = { changingPin = false })
+        } else {
+            AdminPinDialog(onUnlocked = { changingPin = false }, onDismiss = { changingPin = false })
+        }
         return
     }
     if (showingAdjustments) {
@@ -411,7 +448,7 @@ private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit) {
                 Column(
                     verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Button(onClick = { changingPin = true }, modifier = Modifier.fillMaxWidth().testTag("change-pin")) {
-                        Text("Change PIN", textAlign = TextAlign.Center)
+                        Text(if (pinStore.hasPin) "Change PIN" else "Create PIN", textAlign = TextAlign.Center)
                     }
                     Button(onClick = { showingAdjustments = true }, modifier = Modifier.fillMaxWidth()) {
                         Text("Add/Remove Rewards", textAlign = TextAlign.Center)
@@ -437,8 +474,8 @@ private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit) {
                     HorizontalDivider()
                     CollapsibleSettingsSection("Game Settings", defaultExpanded = false) {
                         GameSettings(model,
-                            onRewardsSetup = { subject -> onDismiss(); model.openRewardsSetup(subject) },
-                            onReadingProgress = { onDismiss(); model.openReadingProgress() },
+                            onRewardsSetup = model::openRewardsSetup,
+                            onReadingProgress = model::openReadingProgress,
                             onReadingLevel = { showingReadingLevel = true },
                             onReadingGames = { showingReadingGames = true })
                     }
@@ -601,10 +638,6 @@ private fun GameSettings(
             Switch(model.showTimer, model::chooseShowTimer,
                 modifier = Modifier.semantics { contentDescription = "Show timer" })
         }
-        if (model.rewardsEnabled && model.showTimer) {
-            TimeLimitSetting(model.timeLimitSeconds, model::chooseTimeLimitSeconds,
-                model.pauseInBackground, model::choosePauseInBackground)
-        }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Show correct answers")
@@ -624,20 +657,23 @@ private fun GameSettings(
                 modifier = Modifier.semantics { contentDescription = "Vertical equations" })
         }
         CollapsibleSettingsSection("Basic Math Settings", defaultExpanded = false) {
-            DefaultActivitySettingsLink("rewards-setup", "Default number limits for Basic Math") {
+            DefaultActivitySettingsLink("rewards-setup", "Default number limits for Basic Math and Practice Game") {
                 onRewardsSetup(MathRewardGame.BASIC)
             }
+            MathTimeLimitSetting(model, MathRewardGame.BASIC)
         }
         CollapsibleSettingsSection("Multiplication Matrix Settings", defaultExpanded = false) {
             DefaultActivitySettingsLink("matrix-rewards-setup", "Question order and reward tier for Multiplication Matrix") {
                 onRewardsSetup(MathRewardGame.MATRIX)
             }
+            MathTimeLimitSetting(model, MathRewardGame.MATRIX)
         }
         CollapsibleSettingsSection("Logic Math Settings", defaultExpanded = false) {
-            LogicMathSettingsFields(model)
             DefaultActivitySettingsLink("logic-rewards-setup", "Default number limits for Logic Math") {
                 onRewardsSetup(MathRewardGame.LOGIC)
             }
+            MathTimeLimitSetting(model, MathRewardGame.LOGIC)
+            LogicMathSettingsFields(model)
         }
     }
     HorizontalDivider()
@@ -841,16 +877,26 @@ private fun RewardAdjustmentReel(
 }
 
 @Composable
+private fun MathTimeLimitSetting(model: MathViewModel, game: MathRewardGame) {
+    if (model.rewardsEnabled && model.showTimer) {
+        TimeLimitSetting(model.mathTimeLimitSeconds(game), { model.chooseMathTimeLimitSeconds(game, it) },
+            model.pauseInBackground, model::choosePauseInBackground,
+            tag = if (game == MathRewardGame.BASIC) "time-limit" else "${game.name.lowercase()}-time-limit")
+    }
+}
+
+@Composable
 private fun TimeLimitSetting(
     seconds: Int,
     onChange: (Int) -> Unit,
     pauseInBackground: Boolean,
-    onPauseInBackgroundChange: (Boolean) -> Unit
+    onPauseInBackgroundChange: (Boolean) -> Unit,
+    tag: String
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text("Time limit per 5 questions", style = MaterialTheme.typography.titleSmall)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TimeLimitDropdown(seconds, onChange, tag = "time-limit")
+            TimeLimitDropdown(seconds, onChange, tag = tag)
             OutlinedIconToggleButton(checked = pauseInBackground, onCheckedChange = onPauseInBackgroundChange,
                 modifier = Modifier.semantics {
                     contentDescription = "Pause in background"
@@ -862,7 +908,8 @@ private fun TimeLimitSetting(
         Text(if (pauseInBackground) "Pause in background: On. Math time pauses when you leave the app."
             else "Pause in background: Off. Math time keeps running when you leave the app.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text("Math challenges only, not Practice Game. 1 minute per 5 questions gives 5 minutes for 25 questions. " +
+        Text("Applies only to this math challenge. Practice Game has no time limit. " +
+            "1 minute per 5 questions gives 5 minutes for 25 questions. " +
             "Time always pauses in settings.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }

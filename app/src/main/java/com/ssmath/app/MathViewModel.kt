@@ -76,8 +76,9 @@ class MathViewModel(
         get() {
             val ready = readyGame ?: return null
             val count = ready.parameters.questionCount ?: return null
-            return if (ready.mode == GameMode.REWARDS && currentGameRewardsEnabled && showTimer && timeLimitSeconds > 0)
-                timeLimitSeconds * 1_000L * count / 5 else null
+            val seconds = mathTimeLimitSeconds(currentMathRewardGame)
+            return if (ready.mode == GameMode.REWARDS && currentGameRewardsEnabled && showTimer && seconds > 0)
+                seconds * 1_000L * count / 5 else null
         }
     var overlay by mutableStateOf<Overlay?>(null)
         private set
@@ -166,6 +167,8 @@ class MathViewModel(
     var message by mutableStateOf<String?>(null)
         private set
 
+    var adminPinLockEnabled by mutableStateOf(settings.getBoolean("admin_pin_lock_enabled", true))
+        private set
     var showTimer by mutableStateOf(settings.getBoolean("show_timer", false))
         private set
     var pauseInBackground by mutableStateOf(settings.getBoolean("math_pause_in_background", true))
@@ -200,6 +203,15 @@ class MathViewModel(
         private set
     var timeLimitSeconds by mutableStateOf(settings.readTimeLimitSeconds())
         private set
+    var matrixTimeLimitSeconds by mutableStateOf(settings.readMathGameTimeLimitSeconds(MathRewardGame.MATRIX))
+        private set
+    var logicTimeLimitSeconds by mutableStateOf(settings.readMathGameTimeLimitSeconds(MathRewardGame.LOGIC))
+        private set
+    fun mathTimeLimitSeconds(game: MathRewardGame): Int = when (game) {
+        MathRewardGame.BASIC -> timeLimitSeconds
+        MathRewardGame.MATRIX -> matrixTimeLimitSeconds
+        MathRewardGame.LOGIC -> logicTimeLimitSeconds
+    }
     var readingTimeLimitSeconds by mutableStateOf(settings.readReadingTimeLimitSeconds())
         private set
     var scienceTimeLimitSeconds by mutableStateOf(normalizeTimeLimitSeconds(settings.getInt("science_time_limit_seconds", 0)))
@@ -354,6 +366,7 @@ class MathViewModel(
     fun openPracticeGame() {
         if (screen != Screen.SETUP || overlay != null) return
         mathGamesOpen = true
+        selectedOperation?.let(::loadPracticeDefaults)
         setupDialog = SetupDialog.PRACTICE
     }
 
@@ -456,7 +469,21 @@ class MathViewModel(
         screen = Screen.READY
     }
 
-    fun selectOperation(operation: Operation) { selectedOperation = operation }
+    fun selectOperation(operation: Operation) {
+        if (selectedOperation != operation) loadPracticeDefaults(operation)
+        selectedOperation = operation
+    }
+
+    private fun loadPracticeDefaults(operation: Operation) {
+        val defaults = rewardsDefaults.getValue(operation)
+        if (operation == Operation.DIVISION) {
+            divisionMaximumFirstText = defaults.firstText
+            divisionMaximumSecondText = defaults.secondText
+        } else {
+            minimumText = defaults.firstText
+            maximumText = defaults.secondText
+        }
+    }
 
     fun updateMinimum(text: String) { minimumText = text.take(6) }
 
@@ -1255,6 +1282,24 @@ class MathViewModel(
     fun chooseTimeLimitSeconds(value: Int) {
         timeLimitSeconds = normalizeTimeLimitSeconds(value)
         settings.edit().putInt("time_limit_seconds", timeLimitSeconds).apply()
+    }
+
+    fun chooseMathTimeLimitSeconds(game: MathRewardGame, value: Int) {
+        val seconds = normalizeTimeLimitSeconds(value)
+        when (game) {
+            MathRewardGame.BASIC -> {
+                chooseTimeLimitSeconds(seconds)
+                return
+            }
+            MathRewardGame.MATRIX -> matrixTimeLimitSeconds = seconds
+            MathRewardGame.LOGIC -> logicTimeLimitSeconds = seconds
+        }
+        settings.edit().putInt("${game.name.lowercase()}_time_limit_seconds", seconds).apply()
+    }
+
+    fun chooseAdminPinLockEnabled(value: Boolean) {
+        adminPinLockEnabled = value
+        settings.edit().putBoolean("admin_pin_lock_enabled", value).apply()
     }
 
     fun chooseReadingTimeLimitSeconds(value: Int) {

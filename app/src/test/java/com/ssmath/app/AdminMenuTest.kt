@@ -135,7 +135,7 @@ class AdminMenuTest {
         compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
     }
 
-    @Test fun changingPinRequiresAuthenticationAndSuccessRelocksWithOnlyTheNewPin() {
+    @Test fun changingPinReturnsToAdminAndReopeningRequiresOnlyTheNewPin() {
         val model = MathViewModel(application)
         compose.setContent { MathTheme { SettingsScreen(model) } }
         compose.onNodeWithTag("change-pin").assertDoesNotExist()
@@ -154,6 +154,8 @@ class AdminMenuTest {
         fillChangePin("4826", "00123456", "00123456")
         compose.onNodeWithTag("change-pin-submit").performClick()
         awaitChangeClosed()
+        compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
+        compose.onNodeWithText("Close").performClick()
         compose.onNodeWithTag("admin-dialog").assertDoesNotExist()
         compose.onNodeWithTag("change-pin").assertDoesNotExist()
         compose.onNodeWithTag("admin-menu").performScrollTo().performClick()
@@ -262,8 +264,78 @@ class AdminMenuTest {
         compose.onNodeWithText("Cancel").assertIsDisplayed()
         compose.onNodeWithTag("change-pin-submit").performClick()
         awaitChangeClosed()
-        compose.onNodeWithTag("admin-dialog").assertDoesNotExist()
+        compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
         assertEquals(AdminPinStore.Result.UNLOCKED, AdminPinStore(preferences).verify("0000"))
+    }
+
+    @Test fun debugPinBypassPersistsAndReenablingPreservesTheExistingPin() {
+        val model = MathViewModel(application)
+        AdminPinStore(preferences).create("4826")
+        val hash = preferences.getString("admin_pin_hash", null)
+        val salt = preferences.getString("admin_pin_salt", null)
+        compose.setContent { MathTheme { SettingsScreen(model) } }
+        compose.openDebugSettings()
+        compose.onNodeWithContentDescription("Disable Admin PIN lock").assertIsOff().performClick().assertIsOn()
+        assertFalse(MathViewModel(application).adminPinLockEnabled)
+        compose.onNodeWithText("Close").performClick()
+        repeat(2) {
+            compose.onNodeWithTag("admin-menu").performScrollTo().performClick()
+            compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
+            compose.onNodeWithTag("admin-pin-dialog").assertDoesNotExist()
+            compose.onNodeWithText("Close").performClick()
+        }
+        compose.openDebugSettings()
+        compose.onNodeWithContentDescription("Disable Admin PIN lock").performClick().assertIsOff()
+        compose.onNodeWithText("Close").performClick()
+        assertTrue(MathViewModel(application).adminPinLockEnabled)
+        assertEquals(hash, preferences.getString("admin_pin_hash", null))
+        assertEquals(salt, preferences.getString("admin_pin_salt", null))
+        compose.onNodeWithTag("admin-menu").performScrollTo().performClick()
+        compose.onNodeWithText("Enter Admin PIN").assertIsDisplayed()
+        submit("4826")
+        awaitTag("admin-dialog")
+    }
+
+    @Test fun debugBypassWithoutPinAllowsCreatingOneAndReturnsToAdmin() {
+        val model = MathViewModel(application)
+        model.chooseAdminPinLockEnabled(false)
+        compose.setContent { MathTheme { SettingsScreen(model) } }
+        compose.onNodeWithTag("admin-menu").performScrollTo().performClick()
+        compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
+        compose.onNodeWithText("Create PIN").performClick()
+        submit("4826", "4826")
+        awaitTag("admin-dialog")
+        assertEquals(AdminPinStore.Result.UNLOCKED, AdminPinStore(preferences).verify("4826"))
+        compose.onNodeWithText("Change PIN").assertIsDisplayed()
+    }
+
+    @Test fun adminDefaultsReturnOnSaveAndBackAndRelockAfterRestoration() {
+        val model = MathViewModel(application)
+        model.openSettings()
+        val restoration = StateRestorationTester(compose)
+        restoration.setContent { MathAppContent(model) }
+        compose.openGameSettings()
+        val sections = listOf("Basic Math Settings" to "rewards-setup",
+            "Multiplication Matrix Settings" to "matrix-rewards-setup",
+            "Logic Math Settings" to "logic-rewards-setup")
+        sections.forEach { (section, tag) ->
+            compose.onNodeWithText(section).performScrollTo().performClick()
+            compose.onNodeWithTag(tag).performScrollTo().performClick()
+            compose.onNodeWithTag("save-rewards-setup").performScrollTo().performClick()
+            compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
+            compose.onNodeWithTag(tag).performScrollTo().performClick()
+            compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }
+            compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
+            compose.onNodeWithTag("admin-pin-dialog").assertDoesNotExist()
+        }
+        compose.onNodeWithTag("logic-rewards-setup").performScrollTo().performClick()
+        restoration.emulateSavedInstanceStateRestore()
+        compose.onNodeWithTag("rewards-setup-screen").assertDoesNotExist()
+        compose.onNodeWithText("Enter Admin PIN").assertIsDisplayed()
+        submit("4826")
+        awaitTag("rewards-setup-screen")
+        compose.onNodeWithText("Back").performScrollTo().performClick()
+        compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
     }
 
     @Test
