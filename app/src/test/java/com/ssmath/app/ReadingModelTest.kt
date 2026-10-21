@@ -277,6 +277,7 @@ class ReadingModelTest {
             val result = readingSolve(readingFixture(content), rewardsEnabled = false)
             val rewarded = readingSolve(readingFixture(content))
             ReadingEngine.validate(result)
+            @Suppress("DEPRECATION") // Verify legacy checkpoint rewards stay disabled.
             assertTrue(content.id, requireNotNull(result.active).checkpoints.values.all { it.earned && !it.rewardGranted })
             assertEquals(content.id, rewarded.active?.checkpoints?.keys, result.active?.checkpoints?.keys)
             assertEquals(content.id, rewarded.stories, result.stories)
@@ -303,6 +304,7 @@ class ReadingModelTest {
                 rewardsEnabled = enabledAtCompletion)
             assertEquals(ReadingAccuracy(0, 1, 1, 1), data.accuracy("reader-a"))
             assertEquals(1, data.checkpointCount("reader-a"))
+            @Suppress("DEPRECATION") // Verify retries cannot award legacy checkpoint rewards.
             assertEquals(false, data.active?.checkpoints?.get("answer")?.rewardGranted)
             assertTrue(requireNotNull(data.active).earned("answer"))
             assertTrue(requireNotNull(data.active).feedback.contains("Correct! Correct answer:"))
@@ -323,6 +325,7 @@ class ReadingModelTest {
             data = ReadingEngine.submit(ReadingEngine.field(data, key, content.writingChoices[index][0]), key,
                 rewardsEnabled = enabled)
             assertEquals(index + 1, data.checkpointCount("reader-a"))
+            @Suppress("DEPRECATION") // Verify resumed stories cannot award legacy checkpoint rewards.
             assertEquals(false, data.active?.checkpoints?.get(key)?.rewardGranted)
             assertEquals(data, ReadingEngine.submit(data, key, rewardsEnabled = !enabled))
             data = ReadingEngine.selectProfile(ReadingEngine.selectProfile(data, "reader-b"), "reader-a")

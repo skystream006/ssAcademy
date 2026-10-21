@@ -11,6 +11,10 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class HistoryStoreTest {
+    private companion object {
+        val snapshotJson = Json { encodeDefaults = true }
+    }
+
     private val directory: File = File("build/test-data/history-${UUID.randomUUID()}").apply { mkdirs() }
     private val file = File(directory, "practice_history.json")
     private val store = HistoryStore(file)
@@ -567,7 +571,7 @@ class HistoryStoreTest {
         assertEquals(readingResults, remaining.readingResults)
         assertEquals(RewardBalance(0, 1), remaining.rewards[RewardType.LOLLIPOP])
         assertEquals(setOf(Celebration.PIKACHU), remaining.pokemons)
-        file.writeText(Json { encodeDefaults = true }.encodeToString(PracticeSnapshot.serializer(),
+        file.writeText(snapshotJson.encodeToString(PracticeSnapshot.serializer(),
             PracticeSnapshot(readingResults = listOf(reading()), recordedReadingSessionIds = setOf("reading-1"))))
         store.clear()
         assertEquals(listOf(reading()), store.loadSnapshot().readingResults)
@@ -629,7 +633,7 @@ class HistoryStoreTest {
 
     @Test fun readingRewardsRemainLinkedBeyondMathRetentionUntilExplicitDeletion() {
         val results = List(MAX_HISTORY_RESULTS) { reading("reading-$it") }
-        file.writeText(Json { encodeDefaults = true }.encodeToString(PracticeSnapshot.serializer(), PracticeSnapshot(
+        file.writeText(snapshotJson.encodeToString(PracticeSnapshot.serializer(), PracticeSnapshot(
             readingResults = results, recordedReadingSessionIds = results.map { it.sessionId }.toSet(),
             rewards = mapOf(RewardType.LOLLIPOP to RewardBalance(1, 0)), pokemons = setOf(Celebration.PIKACHU)
         )))
