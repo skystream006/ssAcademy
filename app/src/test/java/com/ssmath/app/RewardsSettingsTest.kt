@@ -905,7 +905,7 @@ class RewardsSettingsTest {
         compose.onNodeWithText("1 Video Games · 0/3 fragments").assertIsDisplayed()
     }
 
-    @Test fun adminCanCancelOrRemoveEitherUnitForEveryRewardWithEarningDisabled() {
+    @Test fun adminImmediatelyRemovesEitherUnitForEveryRewardWithEarningDisabled() {
         val file = File(application.filesDir, "practice_history.json")
         val store = HistoryStore(file)
         RewardType.entries.forEachIndexed { index, type ->
@@ -933,17 +933,11 @@ class RewardsSettingsTest {
             RewardType.entries.filter { it.tier == tier }.forEach { type ->
                 compose.onNodeWithContentDescription("Remove 1 ${type.label} fragment")
                     .performScrollTo().performClick()
-                compose.onNodeWithText("Permanently remove 1 ${type.label} fragment?").assertIsDisplayed()
-                compose.onNodeWithText("Cancel").performClick()
-                assertEquals(RewardBalance(1, 2), model.rewardBalances[type])
-                compose.onNodeWithContentDescription("Remove 1 ${type.label} fragment")
-                    .performScrollTo().performClick()
-                compose.onNodeWithText("Remove").performClick()
+                compose.onNodeWithText("Remove reward?").assertDoesNotExist()
                 assertEquals(RewardBalance(1, 1), model.rewardBalances[type])
                 compose.onNodeWithContentDescription("Remove 1 whole ${type.label} reward")
                     .performScrollTo().performClick()
-                compose.onNodeWithText("Permanently remove 1 whole ${type.label} reward?").assertIsDisplayed()
-                compose.onNodeWithText("Remove").performClick()
+                compose.onNodeWithText("Remove reward?").assertDoesNotExist()
                 compose.onNodeWithContentDescription("Remove 1 whole ${type.label} reward")
                     .performScrollTo().assertIsNotEnabled()
                 compose.onNodeWithTag("adjust-reward-${type.name}").onChildren()
@@ -993,8 +987,8 @@ class RewardsSettingsTest {
             }
         }
         compose.onNodeWithContentDescription("Remove 1 Lollipop fragment").performScrollTo().performClick()
-        compose.onNodeWithText("Remove").performClick()
         compose.onNodeWithText("Updating reward…").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(1, requests) }
         compose.onNodeWithContentDescription("Add 1 Lollipop fragment").performScrollTo().assertIsNotEnabled()
         compose.onNodeWithContentDescription("Add 1 whole Lollipop reward").performScrollTo().assertIsNotEnabled()
         compose.onNodeWithContentDescription("Remove 1 Lollipop fragment").performScrollTo().assertIsNotEnabled()
@@ -1005,11 +999,10 @@ class RewardsSettingsTest {
         }
         compose.onNodeWithText(error.value!!).assertIsDisplayed()
         compose.onNodeWithContentDescription("Remove 1 Lollipop fragment").performScrollTo().performClick()
-        compose.onNodeWithText("Remove").performClick()
         compose.runOnIdle { assertEquals(2, requests) }
     }
 
-    @Test fun adminCanAddBothUnitsForEveryRewardWithEarningDisabledAndKeepHistory() {
+    @Test fun adminImmediatelyAddsBothUnitsForEveryRewardWithEarningDisabledAndKeepsHistory() {
         val model = MathViewModel(application, ioDispatcher = Dispatchers.Main.immediate)
         model.chooseRewardsEnabled(false)
         RewardType.entries.forEach { model.chooseRewardEnabled(it, false) }
@@ -1020,16 +1013,11 @@ class RewardsSettingsTest {
         compose.onNodeWithText("Add/Remove Rewards").performScrollTo().performClick()
         RewardType.entries.forEach { type ->
             compose.onNodeWithContentDescription("Add 1 whole ${type.label} reward").performScrollTo().performClick()
-            compose.onNodeWithText("Add 1 whole ${type.label} reward?").assertIsDisplayed()
-            compose.onNodeWithText("Cancel").performClick()
-            assertNull(model.rewardBalances[type])
-            compose.onNodeWithContentDescription("Add 1 whole ${type.label} reward").performScrollTo().performClick()
-            compose.onNodeWithText("Add").performClick()
+            compose.onNodeWithText("Add reward?").assertDoesNotExist()
             assertEquals(RewardBalance(1, 0), model.rewardBalances[type])
             repeat(3) {
                 compose.onNodeWithContentDescription("Add 1 ${type.label} fragment").performScrollTo().performClick()
-                compose.onNodeWithText("Add 1 ${type.label} fragment?").assertIsDisplayed()
-                compose.onNodeWithText("Add").performClick()
+                compose.onNodeWithText("Add reward?").assertDoesNotExist()
             }
             compose.onNodeWithTag("adjust-reward-${type.name}").onChildren()
                 .filterToOne(hasText("Whole: 2 · Fragments: 0/3")).assertExists()
@@ -1044,7 +1032,7 @@ class RewardsSettingsTest {
         assertEquals(RewardType.entries.toSet(), model.disabledRewards)
     }
 
-    @Test fun additionsCanBeCancelledAtLargeTextSizeAndRetryAfterSaveFailure() {
+    @Test fun additionsAreImmediateAtLargeTextSizeAndRetryAfterSaveFailure() {
         val saving = mutableStateOf(false)
         val error = mutableStateOf<String?>(null)
         var requests = 0
@@ -1056,13 +1044,8 @@ class RewardsSettingsTest {
             }
         }
         compose.onNodeWithContentDescription("Add 1 Lollipop fragment").performScrollTo().performClick()
-        compose.runOnIdle {
-            (ShadowDialog.getLatestDialog() as ComponentDialog).onBackPressedDispatcher.onBackPressed()
-        }
         compose.onNodeWithText("Add/Remove Rewards").assertIsDisplayed()
-        assertEquals(0, requests)
-        compose.onNodeWithContentDescription("Add 1 Lollipop fragment").performScrollTo().performClick()
-        compose.onNodeWithText("Add").performClick()
+        compose.runOnIdle { assertEquals(1, requests) }
         compose.onNodeWithText("Updating reward…").assertIsDisplayed()
         compose.onNodeWithContentDescription("Add 1 Lollipop fragment").performScrollTo().assertIsNotEnabled()
         compose.onNodeWithContentDescription("Add 1 whole Lollipop reward").performScrollTo().assertIsNotEnabled()
@@ -1072,7 +1055,6 @@ class RewardsSettingsTest {
         }
         compose.onNodeWithText(error.value!!).assertIsDisplayed()
         compose.onNodeWithContentDescription("Add 1 Lollipop fragment").performScrollTo().performClick()
-        compose.onNodeWithText("Add").performClick()
         assertEquals(2, requests)
     }
 

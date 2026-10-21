@@ -753,19 +753,11 @@ internal fun AddRemoveRewardsDialog(
     onRemove: (RewardType, Boolean) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var selected by rememberSaveable { mutableStateOf<RewardType?>(null) }
-    var fragment by rememberSaveable { mutableStateOf(false) }
-    var adding by rememberSaveable { mutableStateOf(false) }
-    val choice = selected
-    val balance = balances[choice] ?: RewardBalance()
-    val canConfirm = if (adding) {
-        if (fragment) balance.canAddFragment else balance.canAddWhole
-    } else (if (fragment) balance.fragments else balance.whole) > 0
     SettingsDialog(
-        onDismissRequest = { if (choice != null) selected = null else onDismiss() },
-        title = { Text(if (choice == null) "Add/Remove Rewards" else if (adding) "Add reward?" else "Remove reward?") },
+        onDismissRequest = onDismiss,
+        title = { Text("Add/Remove Rewards") },
         status = {
-            if (choice == null && (updatingReward || error != null)) {
+            if (updatingReward || error != null) {
                 Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
                     if (updatingReward) {
                         Text("Updating reward…", modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
@@ -778,73 +770,40 @@ internal fun AddRemoveRewardsDialog(
             }
         },
         text = {
-            if (choice != null) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(if (adding) {
-                        if (fragment) "Add 1 ${choice.label} fragment?" else "Add 1 whole ${choice.label} reward?"
-                    } else {
-                        if (fragment) "Permanently remove 1 ${choice.label} fragment?"
-                        else "Permanently remove 1 whole ${choice.label} reward?"
-                    })
-                    if (adding && fragment) Text("Every 3 matching fragments become 1 whole reward.")
-                    Text("Practice history and My Pokémons will not change.")
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Add or remove one fragment or whole reward at a time. " +
+                    "3 matching fragments become 1 whole reward. Removing a fragment does not break a whole reward.")
+                if (balances.values.none { it.totalFragments > 0 }) {
+                    Text("No rewards or fragments available.")
                 }
-            } else {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("Add or remove one fragment or whole reward at a time. " +
-                            "3 matching fragments become 1 whole reward. Removing a fragment does not break a whole reward.")
-                        if (balances.values.none { it.totalFragments > 0 }) {
-                            Text("No rewards or fragments available.")
-                        }
-                        RewardTier.entries.forEach { tier ->
-                            Text(tier.label, style = MaterialTheme.typography.titleMedium)
-                            RewardType.entries.filter { it.tier == tier }.chunked(4).forEach { row ->
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    row.forEach { type ->
-                                        val available = balances[type] ?: RewardBalance()
-                                        Column(Modifier.weight(1f).testTag("adjust-reward-${type.name}"),
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            Text(type.label, style = MaterialTheme.typography.labelMedium,
-                                                textAlign = TextAlign.Center, modifier = Modifier.heightIn(min = 48.dp))
-                                            Text("Whole: ${available.whole} · Fragments: ${available.fragments}/3",
-                                                style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
-                                            listOf(false, true).forEach { part ->
-                                                RewardAdjustmentReel(type, part, available, updatingReward,
-                                                    onAdd = { selected = type; fragment = part; adding = true },
-                                                    onRemove = { selected = type; fragment = part; adding = false })
-                                            }
-                                        }
+                RewardTier.entries.forEach { tier ->
+                    Text(tier.label, style = MaterialTheme.typography.titleMedium)
+                    RewardType.entries.filter { it.tier == tier }.chunked(4).forEach { row ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            row.forEach { type ->
+                                val available = balances[type] ?: RewardBalance()
+                                Column(Modifier.weight(1f).testTag("adjust-reward-${type.name}"),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text(type.label, style = MaterialTheme.typography.labelMedium,
+                                        textAlign = TextAlign.Center, modifier = Modifier.heightIn(min = 48.dp))
+                                    Text("Whole: ${available.whole} · Fragments: ${available.fragments}/3",
+                                        style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+                                    listOf(false, true).forEach { part ->
+                                        RewardAdjustmentReel(type, part, available, updatingReward,
+                                            onAdd = { onAdd(type, part) },
+                                            onRemove = { onRemove(type, part) })
                                     }
-                                    repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
                                 }
                             }
+                            repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
                         }
                     }
                 }
             }
         },
         confirmButton = {
-            if (choice != null) {
-                TextButton(
-                    enabled = !updatingReward && canConfirm,
-                    onClick = {
-                        if (selected == choice) {
-                            selected = null
-                            if (adding) onAdd(choice, fragment) else onRemove(choice, fragment)
-                        }
-                    }
-                ) { Text(if (adding) "Add" else "Remove") }
-            } else {
-                TextButton(onClick = onDismiss) { Text("Back to Admin Menu") }
-            }
-        },
-        dismissButton = {
-            if (choice != null) {
-                TextButton(onClick = { selected = null }) { Text("Cancel") }
-            }
+            TextButton(onClick = onDismiss) { Text("Back to Admin Menu") }
         },
         modifier = Modifier.testTag("adjust-rewards-dialog")
     )
