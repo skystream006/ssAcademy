@@ -165,7 +165,10 @@ class MathAppTest {
         compose.onNodeWithTag("subject-Math").performScrollTo().performClick()
         compose.onNodeWithTag("math-games-screen").assertWidthIsEqualTo(width)
         compose.onNodeWithTag("practice-game").performScrollTo().assertWidthIsEqualTo(width - 48.dp)
-        compose.runOnIdle { model.openSettings(); model.openRewardsSetup() }
+        compose.runOnIdle { model.openSettings() }
+        compose.openGameSettings()
+        compose.onNodeWithText("Basic Math Settings").performScrollTo().performClick()
+        compose.onNodeWithTag("rewards-setup").performScrollTo().performClick()
         compose.onNodeWithTag("rewards-ADDITION-first").performScrollTo().assertWidthIsEqualTo(width - 80.dp)
         compose.onNodeWithTag("save-rewards-setup").performScrollTo().assertWidthIsEqualTo(width - 48.dp)
         compose.runOnIdle {
@@ -592,7 +595,7 @@ class MathAppTest {
         compose.onNodeWithTag("start-button").performScrollTo().assertIsDisplayed()
     }
 
-    @Test fun rewardsPickerUsesSavedDefaultsForEveryOperationWithoutChangingPracticeSetup() {
+    @Test fun rewardsAndPracticePickersUseSavedBasicDefaultsForEveryOperation() {
         val model = model()
         model.selectOperation(Operation.MULTIPLICATION)
         model.updateMinimum("2")
@@ -619,7 +622,8 @@ class MathAppTest {
         compose.onNodeWithTag("save-rewards-setup").performScrollTo().assertIsEnabled().performClick()
         assertEquals(Overlay.SETTINGS, model.overlay)
         compose.onNodeWithText("Settings").assertIsDisplayed()
-        compose.onNode(isDialog()).assertDoesNotExist()
+        compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
+        compose.onNodeWithText("Close").performClick()
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithTag("subject-Math").performClick()
         compose.onNodeWithTag("rewards-game").performClick()
@@ -652,8 +656,8 @@ class MathAppTest {
         compose.runOnIdle { model.backToSetup() }
         compose.onNodeWithTag("practice-game").performClick()
         compose.onNodeWithTag("operation-MULTIPLICATION").performScrollTo().assertIsSelected()
-        compose.onNodeWithTag("minimum-input").performScrollTo().assertTextContains("2")
-        compose.onNodeWithTag("maximum-input").performScrollTo().assertTextContains("5")
+        compose.onNodeWithTag("minimum-input").performScrollTo().assertTextContains("3")
+        compose.onNodeWithTag("maximum-input").performScrollTo().assertTextContains("12")
         compose.onNodeWithTag("question-count-input").performScrollTo().assertTextContains("3")
     }
 
@@ -681,7 +685,7 @@ class MathAppTest {
         assertNotEquals(basicDefaults, model.logicRewardsDefaults)
         val savedLogicDefaults = model.logicRewardsDefaults
         assertEquals(savedLogicDefaults, model().logicRewardsDefaults)
-        compose.openGameSettings()
+        compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
         compose.onNodeWithText("Basic Math Settings").performScrollTo().performClick()
         compose.onNodeWithTag("rewards-setup").performScrollTo().performClick()
         compose.onNodeWithText(MathRewardGame.BASIC.title).assertIsDisplayed()
@@ -690,8 +694,7 @@ class MathAppTest {
         compose.onNodeWithTag("save-rewards-setup").performScrollTo().performClick()
         assertEquals(savedLogicDefaults, model.logicRewardsDefaults)
         val savedBasicDefaults = model.rewardsDefaults
-        compose.openGameSettings()
-        compose.onNodeWithText("Logic Math Settings").performScrollTo().performClick()
+        compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
         compose.onNodeWithTag("logic-rewards-setup").performScrollTo().performClick()
         compose.onNodeWithTag("rewards-ADDITION-first").performScrollTo().assertTextContains("2")
             .performTextReplacement("")
@@ -699,8 +702,7 @@ class MathAppTest {
         compose.onNodeWithText("Back").performScrollTo().performClick()
         assertEquals(savedLogicDefaults, model.logicRewardsDefaults)
         assertEquals(savedBasicDefaults, model.rewardsDefaults)
-        compose.openGameSettings()
-        compose.onNodeWithText("Logic Math Settings").performScrollTo().performClick()
+        compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
         compose.onNodeWithTag("logic-rewards-setup").performScrollTo().performClick()
         compose.onNodeWithTag("rewards-ADDITION-first").performScrollTo().assertTextContains("2")
     }
@@ -719,16 +721,16 @@ class MathAppTest {
         compose.onNodeWithTag("rewards-DIVISION-first").performScrollTo().performTextReplacement("10001")
         compose.onNodeWithTag("save-rewards-setup").performScrollTo().assertIsNotEnabled()
         compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }
-        compose.onNode(isDialog()).assertDoesNotExist()
+        compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
         compose.onNodeWithText("Settings").assertIsDisplayed()
         assertEquals(Overlay.SETTINGS, model.overlay)
         assertEquals(defaults, model.rewardsDefaults)
-        compose.openGameSettings()
-        compose.onNodeWithText("Basic Math Settings").performScrollTo().performClick()
         compose.onNodeWithTag("rewards-setup").performScrollTo().performClick()
         compose.onNodeWithTag("rewards-ADDITION-first").performScrollTo().assertTextContains("1")
         compose.onNodeWithText("Back").performScrollTo().performClick()
         assertEquals(Overlay.SETTINGS, model.overlay)
+        compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
+        compose.onNodeWithText("Close").performClick()
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNode(isDialog()).assertDoesNotExist()
         compose.onNodeWithTag("subject-grid").assertIsDisplayed()
@@ -787,6 +789,8 @@ class MathAppTest {
             compose.onNodeWithTag("rewards-${it.name}-count").assertDoesNotExist()
         }
         compose.onNodeWithTag("save-rewards-setup").performScrollTo().assertIsEnabled().performClick()
+        compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
+        compose.onNodeWithText("Close").performClick()
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithTag("rewards-game").performScrollTo().performClick()
         assertEquals("", model.rewardsQuestionCountText)

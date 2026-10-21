@@ -25,7 +25,9 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    For **Division**, the two inputs instead ask **What is the Maximum First number?**
    and **What is the Maximum Second number?** Each is an independent limit from
    1 to 10,000, for the dividend and divisor respectively; either limit may be larger.
-   Your choices are remembered for next time, with division limits saved separately.
+   Number limits start from the selected operation's **Basic Math** defaults each time
+   you open Practice Game or switch operations. You can override them for that practice
+   game without changing the saved defaults. Your operation and question count are remembered.
    Practice Game never awards prize fragments or Pokémon; completing its questions
    gives only **Other** animations. Once all five Other scenes have been collected,
    practice can repeat them.
@@ -41,7 +43,7 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    **Settings > Admin Menu > Game Settings > Math Settings > Basic Math Settings > Default Activity Settings**.
    **Challenge - Logic Math** offers the same question-count choices and four math types,
    using its own number limits in **Logic Math Settings > Default Activity Settings**,
-   with the same timer, scoring, wrong-answer limit, and reward rules.
+   with its own timer duration and the same scoring, wrong-answer limit, and reward rules.
    Each question is a new offline picture puzzle: clue rows uniquely determine the hidden
    picture values, then you enter the answer to the final row. The same picture keeps the
    same value throughout that puzzle; different pictures may have equal values.
@@ -163,17 +165,22 @@ hash on this device. Five incorrect attempts pause access for 30 seconds.
 The PIN input is focused automatically when the menu opens, including first-time PIN creation.
 Closing the menu, leaving Settings, or recreating the screen locks it again.
 Use **Change PIN** inside Admin Menu to enter your current PIN and confirm a new
-**4–8 digit PIN**, then press **Save PIN**. Successful changes close and lock Admin Menu;
-the next entry requires the new PIN. Cancelling keeps the existing PIN. Incorrect current
+**4–8 digit PIN**, then press **Save PIN**. Successful changes return to the main Admin Menu;
+after closing the menu, the next entry requires the new PIN. Cancelling keeps the existing PIN. Incorrect current
 PINs share the same five-attempt, 30-second lockout.
+**Debug Menu > Disable Admin PIN lock** skips PIN entry and creation when enabled.
+It is off by default and remembered on this device. Anyone using the device can then
+open Admin Menu. Re-enabling the lock requires the existing PIN again (or creation if
+none was configured); disabling it never deletes the PIN.
 Admin Menu contains **Game Settings**, **My Rewards** (add/remove controls), and
 **Available Rewards**; every section starts collapsed. Settings subsections have
 darker backgrounds, including nested subject settings.
 **Math Settings** contains **Math Rewards System**,
-**Show timer** (and its conditional **Time limit per 5 questions**), **Show correct answers**,
+**Show timer**, **Show correct answers**,
 **Vertical equations**, and collapsed **Basic Math Settings**,
 **Multiplication Matrix Settings**, and **Logic Math Settings** sections.
-Each subject has its own **Default Activity Settings** entry.
+Each math section starts with **Default Activity Settings** and has its own
+**Time limit per 5 questions** when Math Rewards System and Show timer are on.
 **Logic Math Settings** provides **Minimum Number of Different Pictures** (default 2),
 **Maximum Number of Different Pictures** (default 3), **Minimum Equation Length** (default 3),
 and **Maximum Equation Length** (default 4). Picture counts range from 2 to 6 per puzzle;
@@ -253,8 +260,9 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   Basic Math and Logic Math number limits for all four math types, or the matrix's
   question order and reward tier. Matrix bounds remain 1–11 with 121 questions.
   **Save defaults** saves only the selected subject; **Back** discards unsaved edits.
-  Both return to Settings. Division's two maximums are independent. Limits are
-  remembered on this device separately from Practice Game choices, and initially
+  Both return to the unlocked Admin Menu, as does Back from Reading Progress.
+  Division's two maximums are independent. Limits are
+  remembered on this device; Practice Game uses Basic Math's defaults. They initially
   use your previous number limits (or 1–10 on a new install). Existing shared limits
   initialize both Basic Math and Logic Math once; later edits stay independent. Previously saved
   Rewards Game question counts are no longer used. Editing defaults during a game
@@ -293,10 +301,13 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   Reading checkpoint points have been removed; checkpoints still track activity progress.
 - **Show timer** – off by default. Show or hide the timer while practicing. The timer pauses while
   Settings, any subject's Practice History, My Rewards, or My Pokémons is open.
-  **Pause in background**, beside the Math time-limit dropdown, is on by default.
+  **Pause in background**, beside each Math time-limit dropdown, is shared across Math games and on by default.
   Turn it off to keep counting Math game time when the app is in the background, including time limits.
   This choice is remembered; Reading timers still pause in the background.
-  When both Math Rewards System and Show timer are enabled, **Time limit per 5 questions** offers
+  Basic Math, Multiplication Matrix, and Logic Math have separately saved durations under
+  their respective settings sections. On upgrade, each starts with the previously shared
+  Math limit, copied once; later edits do not change the other games or Reading.
+  When both Math Rewards System and Show timer are enabled, each **Time limit per 5 questions** offers
   **None**, **5, 10, 11, 12, 13, 14, 15, 20, 30, or 45 seconds**, **1, 2, 3, or 4 minutes**, or **5, 10, or 15 minutes**.
   Older saved selections above 15 minutes use 15 minutes for new games.
   **30 seconds per 5 questions** gives **1 minute 30 seconds for 15**,

@@ -152,7 +152,7 @@ internal fun ReadingProgressScreen(appModel: MathViewModel) {
     if (data?.profile != null && model.storageError == null) {
         ReadingProgress(data, model, appModel.textSizePercent, appModel::chooseTextSize,
             speaker.available, speaker::speak, speaker::stop, appModel::closeOverlay,
-            appModel.disabledReadingGames, backLabel = "Back to settings",
+            appModel.disabledReadingGames, backLabel = "Back to Admin Menu",
             onOpenAttempt = { attempt ->
                 speaker.stop()
                 model.act { ReadingEngine.resume(it, attempt.id) }
@@ -161,7 +161,7 @@ internal fun ReadingProgressScreen(appModel: MathViewModel) {
     } else ReadingColumn("reading-progress-loading") {
         Text(model.storageError ?: if (data == null) "Opening your private reading shelf…" else "Enter your name to get started.")
         if (model.storageError != null) ReadingButton("Retry storage", "reading-retry", action = model::retry)
-        ReadingButton("Back to settings", "reading-back", action = appModel::closeOverlay)
+        ReadingButton("Back to Admin Menu", "reading-back", action = appModel::closeOverlay)
     }
 }
 

@@ -236,7 +236,7 @@ class MegaRewardsTest {
         assertTrue(model.pokemons.isEmpty())
         model.done()
         model.chooseShowTimer(true)
-        model.chooseTimeLimitSeconds(30)
+        model.chooseMathTimeLimitSeconds(MathRewardGame.MATRIX, 30)
         model.openMultiplicationMatrixGame()
         model.start()
         now += 726_000

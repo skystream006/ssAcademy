@@ -66,6 +66,95 @@ class GameModesTest {
         shadowOf(Looper.getMainLooper()).idle()
     }
 
+    @Test fun mathTimersMigrateOnceAndRemainIndependentIncludingNone() {
+        listOf("time_limit_seconds" to 45, "time_limit_minutes" to 3).forEach { (legacyKey, value) ->
+            settings.edit().clear().putInt(legacyKey, value).commit()
+            val model = model()
+            val expected = if (legacyKey.endsWith("minutes")) value * 60 else value
+            MathRewardGame.entries.forEach { assertEquals(expected, model.mathTimeLimitSeconds(it)) }
+            model.chooseMathTimeLimitSeconds(MathRewardGame.BASIC, 5)
+            model.chooseMathTimeLimitSeconds(MathRewardGame.MATRIX, 13)
+            model.chooseMathTimeLimitSeconds(MathRewardGame.LOGIC, 0)
+            val restored = model()
+            assertEquals(5, restored.timeLimitSeconds)
+            assertEquals(13, restored.matrixTimeLimitSeconds)
+            assertEquals(0, restored.logicTimeLimitSeconds)
+            assertEquals(0, restored.readingTimeLimitSeconds)
+            restored.chooseTimeLimitSeconds(900)
+            assertEquals(13, model().matrixTimeLimitSeconds)
+            assertEquals(0, model().logicTimeLimitSeconds)
+        }
+    }
+
+    @Test fun mathTimersUseEachGamesDurationAndKeepTheActiveSnapshot() {
+        val model = model()
+        model.chooseShowTimer(true)
+        model.chooseMathTimeLimitSeconds(MathRewardGame.BASIC, 5)
+        model.chooseMathTimeLimitSeconds(MathRewardGame.MATRIX, 10)
+        model.chooseMathTimeLimitSeconds(MathRewardGame.LOGIC, 15)
+        MathRewardGame.entries.forEach { game ->
+            when (game) {
+                MathRewardGame.BASIC -> readyRewards(model, 15)
+                MathRewardGame.MATRIX -> model.openMultiplicationMatrixGame()
+                MathRewardGame.LOGIC -> {
+                    model.openLogicMathGame()
+                    model.updateRewardsQuestionCount("15")
+                    model.selectRewardsGame(Operation.ADDITION)
+                }
+            }
+            val expected = when (game) {
+                MathRewardGame.BASIC -> 15_000L
+                MathRewardGame.MATRIX -> 242_000L
+                MathRewardGame.LOGIC -> 45_000L
+            }
+            assertEquals(expected, model.readyTimeLimitMs)
+            model.start()
+            model.chooseMathTimeLimitSeconds(game, 0)
+            assertEquals(expected, model.activeTimeLimitMs)
+            now += expected
+            assertTrue(model.checkTimeLimit())
+            assertEquals(expected, model.lastResult?.durationMs)
+            assertTrue(model.lastResult!!.timedOut)
+            model.done()
+        }
+    }
+
+    @Test fun practiceLoadsBasicDefaultsForEveryOperationAndKeepsOverridesLocal() {
+        val model = model()
+        model.openSettings()
+        model.openRewardsSetup()
+        Operation.entries.forEachIndexed { index, operation ->
+            model.updateRewardsParameters(operation, RewardsGameDefaults("${index + 2}", "${index + 10}"))
+        }
+        model.saveRewardsSetup()
+        model.closeOverlay()
+        val defaults = model.rewardsDefaults
+        model.openPracticeGame()
+        Operation.entries.forEach { operation ->
+            model.selectOperation(operation)
+            model.updateQuestionCount("7")
+            model.submitSetup()
+            val saved = defaults.getValue(operation)
+            assertEquals(GameParameters(saved.firstText, saved.secondText, "7"), model.readyParameters)
+            model.backToSetup()
+        }
+        model.selectOperation(Operation.ADDITION)
+        model.updateMinimum("1")
+        model.updateMaximum("2")
+        model.submitSetup()
+        assertEquals(GameParameters("1", "2", "7"), model.readyParameters)
+        model.backToSetup()
+        model.dismissSetupDialog()
+        model.openPracticeGame()
+        assertEquals("2", model.minimumText)
+        assertEquals("10", model.maximumText)
+        assertEquals(defaults, model().rewardsDefaults)
+        val restored = model()
+        restored.openPracticeGame()
+        restored.submitSetup()
+        assertEquals(GameParameters("2", "10", "7"), restored.readyParameters)
+    }
+
     @Test fun logicMathUsesItsOwnOperationDefaultsAndReturnsToItsOwnSetup() {
         val model = model()
         val basicDefaults = model.rewardsDefaults
@@ -282,10 +371,10 @@ class GameModesTest {
         assertNull(model.game?.logicSettings)
     }
 
-    @Test fun logicMathUsesSharedTimeWrongAnswerAndDisabledRewardRules() {
+    @Test fun logicMathUsesItsOwnTimeAndSharedWrongAnswerAndDisabledRewardRules() {
         val model = model()
         model.chooseShowTimer(true)
-        model.chooseTimeLimitSeconds(30)
+        model.chooseMathTimeLimitSeconds(MathRewardGame.LOGIC, 30)
         model.openLogicMathGame()
         model.updateRewardsQuestionCount("15")
         model.selectRewardsGame(Operation.DIVISION)
@@ -567,7 +656,7 @@ class GameModesTest {
         model.start()
         model.openSettings()
         now += 60_000
-        model.chooseTimeLimitSeconds(60)
+        model.chooseMathTimeLimitSeconds(MathRewardGame.MATRIX, 60)
         assertEquals(726_000L, model.activeTimeLimitMs)
         model.closeOverlay()
         now += 725_999
@@ -749,7 +838,7 @@ class GameModesTest {
         assertEquals("10", model.questionCountText)
     }
 
-    @Test fun validLegacyDefaultsMigrateOnceAndRemainSeparateFromPractice() {
+    @Test fun validLegacyDefaultsMigrateOnceAndPracticeOverridesDoNotChangeThem() {
         settings.edit().putString("operation", "DIVISION").putInt("minimum", 3).putInt("maximum", 18)
             .putInt("division_maximum_first", 81).putInt("division_maximum_second", 9)
             .putInt("question_count", 50).commit()
@@ -759,13 +848,18 @@ class GameModesTest {
             assertEquals(if (operation == Operation.DIVISION) RewardsGameDefaults("81", "9")
                 else RewardsGameDefaults("3", "18"), original[operation])
         }
+        model.openPracticeGame()
+        model.selectOperation(Operation.ADDITION)
         model.updateMinimum("2")
         model.updateMaximum("7")
-        readyPractice(model, count = 4)
+        model.updateQuestionCount("4")
+        model.submitSetup()
         model.backToSetup()
+        model.selectOperation(Operation.DIVISION)
         model.updateDivisionMaximumFirst("100")
         model.updateDivisionMaximumSecond("20")
-        readyPractice(model, count = 5, operation = Operation.DIVISION)
+        model.updateQuestionCount("5")
+        model.submitSetup()
         val restored = model()
         assertEquals(original, restored.rewardsDefaults)
         assertEquals("2", restored.minimumText)
@@ -1319,7 +1413,7 @@ class GameModesTest {
     @Test fun practiceAndMatrixBothRespectTheBackgroundPauseSetting() {
         val model = model()
         model.chooseShowTimer(true)
-        model.chooseTimeLimitSeconds(30)
+        model.chooseMathTimeLimitSeconds(MathRewardGame.MATRIX, 30)
         model.choosePauseInBackground(false)
         readyPractice(model)
         model.start()
