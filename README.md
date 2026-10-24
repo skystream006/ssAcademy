@@ -182,8 +182,9 @@ darker backgrounds, including nested subject settings.
 **Show timer**, **Show correct answers**,
 **Vertical equations**, and collapsed **Basic Math Settings**,
 **Multiplication Matrix Settings**, and **Logic Math Settings** sections.
-Each math section starts with **Default Activity Settings** and has its own
-**Time limit per 5 questions** when Math Rewards System and Show timer are on.
+Each activity's **Time limit per 5 questions** appears directly below **Show timer**,
+labeled by activity, when Math Rewards System and Show timer are on.
+Each math section starts with **Default Activity Settings**.
 **Logic Math Settings** provides **Minimum Number of Different Pictures** (default 2),
 **Maximum Number of Different Pictures** (default 3), **Minimum Equation Length** (default 3),
 and **Maximum Equation Length** (default 4). Picture counts range from 2 to 6 per puzzle;
@@ -328,8 +329,8 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   **Pause in background**, beside each Math time-limit dropdown, is shared across Math games and on by default.
   Turn it off to keep counting Math game time when the app is in the background, including time limits.
   This choice is remembered; Reading timers still pause in the background.
-  Basic Math, Multiplication Matrix, and Logic Math have separately saved durations under
-  their respective settings sections. On upgrade, each starts with the previously shared
+  Basic Math, Multiplication Matrix, and Logic Math have separately saved durations directly
+  below **Show timer** in **Math Settings**. On upgrade, each starts with the previously shared
   Math limit, copied once; later edits do not change the other games or Reading.
   When both Math Rewards System and Show timer are enabled, each **Time limit per 5 questions** offers
   **None**, **5, 10, 11, 12, 13, 14, 15, 20, 30, or 45 seconds**, **1, 2, 3, or 4 minutes**, or **5, 10, or 15 minutes**.
