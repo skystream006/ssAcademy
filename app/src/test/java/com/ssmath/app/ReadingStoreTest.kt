@@ -107,6 +107,29 @@ class ReadingStoreTest {
         assertEquals(counts, ReadingStore(file).load().sessions.map { it.questionCount })
     }
 
+    @Test fun eachReadingGameFinishesWithItsOwnMinimumsAndPersistsTheSnapshot() {
+        val appModel = MathViewModel(application)
+        appModel.chooseRewardThresholds(MathRewardGame.BASIC, 999, 1000)
+        ReadingGame.entries.forEachIndexed { index, game ->
+            appModel.chooseRewardThresholds(game, 1, index + 2, index + 12)
+        }
+        ReadingGame.entries.forEach { game ->
+            val initial = if (game == ReadingGame.GRAMMAR) grammarSession(1, true)
+                else readingSessionFixture(game, count = 1)
+            val solved = readingSolve(initial)
+            val ready = initial.copy(attempts = solved.attempts.map { it.copy(finishedAt = null) })
+            val storage = RecordingStorage(ready)
+            val model = ReadingViewModel(application, storage)
+            await { model.data != null }
+            model.finishActivity()
+            await { model.data?.activeSession?.finishedAt != null && !model.saving }
+            val session = requireNotNull(storage.saved.activeSession)
+            assertEquals(appModel.rewardThresholds(game), session.rewardThresholds)
+            assertEquals(RewardTier.TIER_1, session.prizeType?.tier)
+            ReadingEngine.validate(storage.saved)
+        }
+    }
+
     @Test fun readingReadsNewThresholdsAtFinishAndReloadsTheRuleSnapshot() {
         for (count in listOf(15, 25)) for (completion in listOf("submit", "wrong-submit", "finish")) {
             settings.edit().clear().putBoolean("rewards_enabled", false).commit()
@@ -120,14 +143,14 @@ class ReadingStoreTest {
             store.save(data)
             val model = ReadingViewModel(application, store)
             await { model.data != null }
-            settings.edit().putInt("reward_tier_1_minimum", 15).putInt("reward_tier_2_minimum", 25).commit()
+            settings.saveRewardThresholds(ReadingGame.MISSING.rewardPreferencePrefix, RewardThresholds(15, 25))
             if (completion == "finish") model.finishActivity() else model.submit("answer")
             await { model.data?.activeSession?.finishedAt != null && !model.saving }
             val session = requireNotNull(model.data?.activeSession)
             assertEquals(RewardThresholds(15, 25), session.rewardThresholds)
             assertEquals(if (count == 15) RewardTier.TIER_1 else RewardTier.TIER_2, session.prizeType?.tier)
-            settings.edit().putInt("reward_tier_1_minimum", 200).putInt("reward_tier_2_minimum", 300)
-                .putBoolean("reading_rewards_enabled", false).commit()
+            settings.saveRewardThresholds(ReadingGame.MISSING.rewardPreferencePrefix, RewardThresholds(200, 300))
+            settings.edit().putBoolean("reading_rewards_enabled", false).commit()
             val restored = ReadingStore(file).load()
             assertEquals(session, restored.activeSession)
             ReadingEngine.validate(restored)
@@ -881,7 +904,7 @@ class ReadingStoreTest {
         for (game in ReadingGame.entries) for (atStart in listOf(false, true)) {
             for (atFinish in listOf(false, true)) for (completion in listOf("submit", "finish")) {
                 val math = MathViewModel(application)
-                math.chooseRewardThresholds(1, 2)
+                math.chooseRewardThresholds(game, 1, 2)
                 math.chooseReadingGameRewardsEnabled(game, atStart)
                 var data = if (game == ReadingGame.GRAMMAR)
                     grammarSession(1, settings.readReadingRewardsEnabled(game))

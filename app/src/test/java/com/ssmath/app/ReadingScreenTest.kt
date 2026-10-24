@@ -47,7 +47,6 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
-import org.robolectric.shadows.ShadowToast
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class, qualifiers = "w360dp-h800dp")
@@ -136,37 +135,42 @@ class ReadingScreenTest {
     }
 
     @Test fun giftChoicesUseSavedAdminMinimumsAndLaunchMatchingReadingSessions() {
-        MathViewModel(application).chooseRewardThresholds(20, 40)
+        MathViewModel(application).chooseRewardThresholds(ReadingGame.MISSING, 20, 40)
         val appModel = MathViewModel(application)
         show(readingFixture().copy(page = ReadingPage.MENU), appModel = appModel)
         for (thresholds in listOf(RewardThresholds(20, 40), RewardThresholds(1, 1000),
             RewardThresholds(15, 30), RewardThresholds(10, 15))) {
-            compose.runOnIdle { appModel.chooseRewardThresholds(thresholds.tier1Minimum, thresholds.tier2Minimum) }
+            compose.runOnIdle { appModel.chooseRewardThresholds(ReadingGame.MISSING,
+                thresholds.tier1Minimum, thresholds.tier2Minimum) }
             val choices = listOf(15 to "Poké Ball", thresholds.tier1Minimum to "Blue gift box",
                 thresholds.tier2Minimum to "Royal purple gift box", thresholds.tier3Minimum to "Pink gift box")
                 .filter { it.first <= MAX_QUESTION_COUNT }
             choices.forEach { (count, image) ->
+                click("reading-game-MISSING")
                 compose.onNodeWithContentDescription(image).performScrollTo()
                     .assertTextEquals(count.toString()).performClick().assertIsSelected()
                 choices.filterNot { it.second == image }.forEach {
                     compose.onNodeWithContentDescription(it.second).assertIsNotSelected()
                 }
-                click("reading-game-MISSING")
+                compose.onNodeWithTag("reading-start-game").performClick()
                 waitFor { it.page == ReadingPage.ACTIVITY && it.activeSession?.questionCount == count }
                 assertEquals(count, model.data?.activeSession?.attemptIds?.size)
                 assertEquals(count, ReadingStore(file).load().activeSession?.questionCount)
                 click("reading-back")
                 waitFor { it.page == ReadingPage.MENU }
             }
-            // An already selected old minimum must not silently launch after a settings update.
-            compose.onNodeWithContentDescription("Blue gift box").performScrollTo().performClick()
         }
-        compose.runOnIdle { appModel.chooseRewardThresholds(12, 24) }
+        click("reading-game-MISSING")
+        compose.onNodeWithContentDescription("Blue gift box").performScrollTo().performClick()
+        compose.runOnIdle { appModel.chooseRewardThresholds(ReadingGame.MISSING, 12, 24) }
         compose.onNodeWithContentDescription("Blue gift box").assertTextEquals("12").assertIsNotSelected()
         compose.onNodeWithContentDescription("Royal purple gift box").assertTextEquals("24").assertIsNotSelected()
-        click("reading-game-MISSING")
+        compose.onNodeWithTag("reading-start-game").assertIsNotEnabled()
         assertEquals(ReadingPage.MENU, model.data?.page)
-        assertEquals("Please select the number of questions.", ShadowToast.getTextOfLatestToast())
+        compose.onNodeWithText("Cancel").performClick()
+        click("reading-game-SEQUENCE")
+        compose.onNodeWithContentDescription("Blue gift box").assertTextEquals("25").assertIsNotSelected()
+        compose.onNodeWithContentDescription("Royal purple gift box").assertTextEquals("50").assertIsNotSelected()
     }
 
     @Test fun historyReviewsSavedGamesWithoutChangingTheActiveReaderDraftOrScores() {
@@ -798,8 +802,9 @@ class ReadingScreenTest {
             "reading-game-SCRAMBLE", "reading-game-GRAMMAR"), nodes.map {
             it.config[SemanticsProperties.TestTag]
         })
-        click("reading-question-count-15")
         click("reading-game-SEQUENCE")
+        click("reading-question-count-15")
+        compose.onNodeWithTag("reading-start-game").performClick()
         waitFor { it.page == ReadingPage.ACTIVITY && it.active?.content?.game == ReadingGame.SEQUENCE }
     }
 
@@ -960,7 +965,6 @@ class ReadingScreenTest {
 
     @Test fun gameStartWaitsForTheQueuedLevelSelectionToSave() {
         show(readingFixture().copy(page = ReadingPage.MENU))
-        click("reading-question-count-15")
         delayedWrites {
             compose.runOnIdle { model.act { ReadingEngine.level(it, ReadingLevel.TRAIL) } }
             waitForBlockedSave()
@@ -968,6 +972,8 @@ class ReadingScreenTest {
         }
         waitFor { it.profile?.level == ReadingLevel.TRAIL }
         click("reading-game-SEQUENCE")
+        click("reading-question-count-15")
+        compose.onNodeWithTag("reading-start-game").performClick()
         waitFor { it.page == ReadingPage.ACTIVITY && it.active?.content?.level == ReadingLevel.TRAIL }
         assertEquals(ReadingLevel.TRAIL, model.data?.profile?.level)
         assertEquals(ReadingLevel.SPROUT, model.data?.attempts?.first()?.content?.level)
@@ -1077,8 +1083,9 @@ class ReadingScreenTest {
     @Test fun gameTapStartsTheSelectedBatchAndRetainsLegacyDraftHistory() {
         show(readingFixture().copy(page = ReadingPage.MENU))
         compose.onNodeWithTag("reading-game-MISSING").assertIsEnabled()
-        click("reading-question-count-25")
         click("reading-game-MISSING")
+        click("reading-question-count-25")
+        compose.onNodeWithTag("reading-start-game").performClick()
         waitFor { it.activeSession?.questionCount == 25 }
         assertEquals(26, model.data?.attempts?.size)
         assertEquals("attempt-a", model.data?.attempts?.first()?.id)
@@ -1092,17 +1099,17 @@ class ReadingScreenTest {
         val data = readingFixture().copy(page = ReadingPage.MENU)
         show(data)
         ReadingGame.entries.forEach { game ->
-            ShadowToast.reset()
             click("reading-game-${game.name}")
-            assertEquals("Please select the number of questions.", ShadowToast.getTextOfLatestToast())
+            compose.onNodeWithTag("reading-game-setup").assertIsDisplayed()
+            compose.onNodeWithTag("reading-start-game").assertIsNotEnabled()
             assertEquals(data, model.data)
             assertEquals(data, ReadingStore(file).load())
+            compose.onNodeWithText("Cancel").performClick()
         }
-        click("reading-question-count-15")
-        ShadowToast.reset()
         click("reading-game-MISSING")
+        click("reading-question-count-15")
+        compose.onNodeWithTag("reading-start-game").performClick()
         waitFor { it.activeSession?.questionCount == 15 }
-        assertNull(ShadowToast.getTextOfLatestToast())
     }
 
     @Test fun submitStaysEnabledDuringUntimedSessionClockSaves() {
@@ -1214,8 +1221,9 @@ class ReadingScreenTest {
     @Test fun studioBatchSupportsFirstStartResumeAndCompletion() {
         val data = ReadingEngine.addProfile(ReadingData(), "Ari", "reader-a")
         show(data)
-        click("reading-question-count-15")
         click("reading-game-STUDIO")
+        click("reading-question-count-15")
+        compose.onNodeWithTag("reading-start-game").performClick()
         waitFor { it.active?.content?.game == ReadingGame.STUDIO }
         ReadingEngine.studioKeys.take(2).forEach { key ->
             click("reading-studio-$key-0")
@@ -1248,8 +1256,9 @@ class ReadingScreenTest {
         data = ReadingEngine.start(data, ReadingGame.STUDIO, ReadingLevel.SPROUT, id = "old-story")
         data = ReadingEngine.submit(ReadingEngine.field(data, "character", "A fox"), "character")
         show(data.copy(page = ReadingPage.MENU))
-        click("reading-question-count-15")
         click("reading-game-STUDIO")
+        click("reading-question-count-15")
+        compose.onNodeWithTag("reading-start-game").performClick()
         waitFor { it.active?.id != "old-story" }
         assertEquals(data.attempts.first().checkpoints, model.data?.attempts?.first()?.checkpoints)
         assertTrue(requireNotNull(model.data).attempts.first().earned("character"))
@@ -1259,12 +1268,13 @@ class ReadingScreenTest {
 
     @Test fun wrongAnswersEndTheSelectedBatchOnlyAfterMoreThanTenPercent() {
         show(ReadingEngine.addProfile(ReadingData(), "Ari", "reader-a"))
+        click("reading-game-MISSING")
         compose.onNodeWithText("How many questions would you like?").assertIsDisplayed()
         compose.onNodeWithText("reading points", substring = true).assertDoesNotExist()
         compose.onNodeWithText("Read, imagine, and make stories.", substring = true).assertDoesNotExist()
         listOf(15, 25, 50, 100).forEach { compose.onNodeWithTag("reading-question-count-$it").assertIsDisplayed() }
         click("reading-question-count-15")
-        click("reading-game-MISSING")
+        compose.onNodeWithTag("reading-start-game").performClick()
         waitFor { it.activeSession != null }
         repeat(2) { index ->
             val wrong = (readingCorrect(requireNotNull(model.data)) + 1) % requireNotNull(model.data?.active?.content?.question).choices.size

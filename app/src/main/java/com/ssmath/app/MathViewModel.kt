@@ -189,8 +189,15 @@ class MathViewModel(
     fun rewardsEnabled(game: MathRewardGame): Boolean = rewardsEnabled && game !in disabledMathGameRewards
     fun rewardsEnabled(game: ReadingGame): Boolean =
         rewardsEnabled(Subject.READING) && game !in disabledReadingGameRewards
-    var rewardThresholds by mutableStateOf(settings.readRewardThresholds())
-        private set
+    private var mathRewardThresholds by mutableStateOf(MathRewardGame.entries.associateWith {
+        settings.readRewardThresholds(it)
+    })
+    private var readingRewardThresholds by mutableStateOf(ReadingGame.entries.associateWith {
+        settings.readRewardThresholds(it)
+    })
+    val rewardThresholds: RewardThresholds get() = rewardThresholds(currentMathRewardGame)
+    fun rewardThresholds(game: MathRewardGame): RewardThresholds = mathRewardThresholds.getValue(game)
+    fun rewardThresholds(game: ReadingGame): RewardThresholds = readingRewardThresholds.getValue(game)
     var tier3RewardChances by mutableStateOf(settings.readTier3RewardChances())
         private set
     var matrixRewardTier by mutableStateOf(settings.readMatrixRewardTier())
@@ -229,8 +236,6 @@ class MathViewModel(
     var randomizeMatrixQuestions by mutableStateOf(settings.getBoolean("randomize_matrix_questions", false))
         private set
     var matrixSetupRandomize by mutableStateOf(randomizeMatrixQuestions)
-        private set
-    var matrixSetupRewardTier by mutableStateOf(matrixRewardTier)
         private set
     var logicMathSettings by mutableStateOf(loadLogicMathSettings())
         private set
@@ -410,7 +415,6 @@ class MathViewModel(
     private fun resetRewardsSetupDraft() {
         rewardsSetupDraft = if (rewardsSetupSubject == MathRewardGame.LOGIC) logicRewardsDefaults else rewardsDefaults
         matrixSetupRandomize = randomizeMatrixQuestions
-        matrixSetupRewardTier = matrixRewardTier
     }
 
     fun updateRewardsParameters(operation: Operation, parameters: RewardsGameDefaults) {
@@ -423,16 +427,10 @@ class MathViewModel(
         matrixSetupRandomize = value
     }
 
-    fun updateMatrixSetupRewardTier(value: RewardTier) {
-        if (overlay != Overlay.REWARDS_SETUP || rewardsSetupSubject != MathRewardGame.MATRIX) return
-        matrixSetupRewardTier = value
-    }
-
     fun saveRewardsSetup() {
         if (overlay != Overlay.REWARDS_SETUP || !canSaveRewardsSetup) return
         if (rewardsSetupSubject == MathRewardGame.MATRIX) {
             chooseRandomizeMatrixQuestions(matrixSetupRandomize)
-            chooseMatrixRewardTier(matrixSetupRewardTier)
             overlay = Overlay.SETTINGS
             return
         }
@@ -598,7 +596,7 @@ class MathViewModel(
         resetTimer()
         val finishedAt = wallClock()
         latestResultId = maxOf(Math.addExact(latestResultId, 1), finishedAt)
-        val thresholdsAtFinish = settings.readRewardThresholds()
+        val thresholdsAtFinish = settings.readRewardThresholds(currentMathRewardGame)
         val matrixTierAtFinish = settings.readMatrixRewardTier()
         val chancesAtFinish = settings.readTier3RewardChances()
         val disabledAtFinish = settings.getStringSet("disabled_rewards", emptySet()).orEmpty()
@@ -1270,27 +1268,27 @@ class MathViewModel(
         settings.edit().putStringSet("disabled_rewards", disabledRewards.map { it.name }.toSet()).apply()
     }
 
-    fun chooseRewardThresholds(tier1Minimum: Int, tier2Minimum: Int) {
-        val thresholds = try {
-            RewardThresholds(tier1Minimum, tier2Minimum)
-        } catch (_: IllegalArgumentException) { return }
-        saveRewardThresholds(thresholds)
+    fun chooseRewardThresholds(game: MathRewardGame, tier1Minimum: Int, tier2Minimum: Int,
+                               tier3Minimum: Int = maxOf(100, tier2Minimum + 1)) {
+        val thresholds = validatedRewardThresholds(tier1Minimum, tier2Minimum, tier3Minimum) ?: return
+        if (game == currentMathRewardGame && rewardThresholds(game) != thresholds) rewardsQuestionCountText = ""
+        mathRewardThresholds = mathRewardThresholds + (game to thresholds)
+        settings.saveRewardThresholds(game.rewardPreferencePrefix, thresholds)
     }
 
-    fun chooseRewardThresholds(tier1Minimum: Int, tier2Minimum: Int, tier3Minimum: Int) {
-        if (tier3Minimum !in 1..1000) return
-        val thresholds = try {
-            RewardThresholds(tier1Minimum, tier2Minimum, tier3Minimum)
-        } catch (_: IllegalArgumentException) { return }
-        saveRewardThresholds(thresholds)
+    fun chooseRewardThresholds(game: ReadingGame, tier1Minimum: Int, tier2Minimum: Int,
+                               tier3Minimum: Int = maxOf(100, tier2Minimum + 1)) {
+        val thresholds = validatedRewardThresholds(tier1Minimum, tier2Minimum, tier3Minimum) ?: return
+        readingRewardThresholds = readingRewardThresholds + (game to thresholds)
+        settings.saveRewardThresholds(game.rewardPreferencePrefix, thresholds)
     }
 
-    private fun saveRewardThresholds(thresholds: RewardThresholds) {
-        if (rewardThresholds != thresholds) rewardsQuestionCountText = ""
-        rewardThresholds = thresholds
-        settings.edit().putInt("reward_tier_1_minimum", thresholds.tier1Minimum)
-            .putInt("reward_tier_2_minimum", thresholds.tier2Minimum)
-            .putInt("reward_tier_3_minimum", thresholds.tier3Minimum).apply()
+    private fun validatedRewardThresholds(tier1: Int, tier2: Int, tier3: Int): RewardThresholds? = try {
+        require(tier3 <= MAX_QUESTION_COUNT || (tier2 == MAX_QUESTION_COUNT && tier3 == MAX_QUESTION_COUNT + 1))
+        RewardThresholds(tier1, tier2, tier3)
+    } catch (_: IllegalArgumentException) {
+        message = "Minimum questions must be increasing whole numbers from 1 to $MAX_QUESTION_COUNT."
+        null
     }
 
     fun chooseTier3RewardChances(toys1: Int, toys2: Int, toys3: Int) {

@@ -273,8 +273,7 @@ private fun RewardGiftDialog(
 }
 
 @Composable
-internal fun RewardInventory(balances: Map<RewardType, RewardBalance>, modifier: Modifier = Modifier,
-    thresholds: RewardThresholds = RewardThresholds()) {
+internal fun RewardInventory(balances: Map<RewardType, RewardBalance>, modifier: Modifier = Modifier) {
     LazyVerticalGrid(
         columns = GridCells.Fixed(4),
         modifier = modifier.fillMaxWidth().testTag("reward-inventory"),
@@ -291,7 +290,7 @@ internal fun RewardInventory(balances: Map<RewardType, RewardBalance>, modifier:
                 Text("Collect three matching fragments to complete a reward. Your collection stays on this device.")
             }
         }
-        rewardTierItems(thresholds) { type ->
+        rewardTierItems { type ->
             val balance = balances[type] ?: RewardBalance()
             Surface(
                 shape = RoundedCornerShape(16.dp),
@@ -321,8 +320,7 @@ internal fun UseRewardsDialog(
     usingReward: Boolean,
     error: String?,
     onUse: (RewardType) -> Unit,
-    onDismiss: () -> Unit,
-    thresholds: RewardThresholds = RewardThresholds()
+    onDismiss: () -> Unit
 ) {
     var selected by rememberSaveable { mutableStateOf<RewardType?>(null) }
     val choice = selected
@@ -351,7 +349,7 @@ internal fun UseRewardsDialog(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        rewardTierItems(thresholds) { type ->
+                        rewardTierItems { type ->
                             val whole = balances[type]?.whole ?: 0
                             Surface(
                                 shape = RoundedCornerShape(16.dp),
@@ -400,7 +398,7 @@ internal fun UseRewardsDialog(
     )
 }
 
-private fun LazyGridScope.rewardTierItems(thresholds: RewardThresholds,
+private fun LazyGridScope.rewardTierItems(
     content: @Composable LazyGridItemScope.(RewardType) -> Unit) {
     RewardTier.entries.forEach { tier ->
         item(key = tier.name, span = { GridItemSpan(maxLineSpan) }) {
@@ -409,8 +407,6 @@ private fun LazyGridScope.rewardTierItems(thresholds: RewardThresholds,
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(tier.label, modifier = Modifier.fillMaxWidth(), style = MaterialTheme.typography.titleMedium)
-                Text(thresholds.questionCountLabel(tier), modifier = Modifier.fillMaxWidth(),
-                    style = MaterialTheme.typography.bodySmall)
             }
         }
         items(RewardType.entries.filter { it.tier == tier }, key = { it.name }, itemContent = content)

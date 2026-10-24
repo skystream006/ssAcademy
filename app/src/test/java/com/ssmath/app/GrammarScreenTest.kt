@@ -68,8 +68,9 @@ class GrammarScreenTest {
 
     @Test fun menuStartsGrammarAndShowsHintsInstructionsAndExplanationsAfterAdvancing() {
         show(ReadingEngine.addProfile(ReadingData(), "Ari", "reader-a"))
-        click("reading-question-count-15")
         click("reading-game-GRAMMAR")
+        click("reading-question-count-15")
+        compose.onNodeWithTag("reading-start-game").performClick()
         waitFor { it.activeSession?.game == ReadingGame.GRAMMAR }
         compose.onNodeWithText(grammarExample().passage.single()).performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("reading-submit-answer").performScrollTo().assertIsNotEnabled()

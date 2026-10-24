@@ -97,7 +97,7 @@ class MathAppTest {
 
     @Test fun logicPictureCluesAndSubmittedAnswerRemainReviewableInResultsAndHistory() {
         val model = model(Dispatchers.Unconfined)
-        model.chooseRewardThresholds(1, 2)
+        model.chooseRewardThresholds(MathRewardGame.LOGIC, 1, 2)
         model.chooseShowCorrectAnswers(false)
         model.openLogicMathGame()
         compose.setContent { MathAppContent(model) }
@@ -865,7 +865,7 @@ class MathAppTest {
     }
 
     @Test fun giftChoicesUseSavedMinimumsAndRefreshWhenAdminSavesAgain() {
-        model().chooseRewardThresholds(20, 40)
+        model().chooseRewardThresholds(MathRewardGame.BASIC, 20, 40)
         val model = model()
         compose.setContent { MathAppContent(model) }
         compose.onNodeWithTag("subject-Math").performClick()
@@ -873,7 +873,7 @@ class MathAppTest {
         val allImages = listOf("Poké Ball", "Blue gift box", "Royal purple gift box", "Pink gift box")
         for (thresholds in listOf(RewardThresholds(20, 40), RewardThresholds(1, 1000),
             RewardThresholds(15, 30), RewardThresholds(10, 15))) {
-            compose.runOnIdle { model.chooseRewardThresholds(thresholds.tier1Minimum, thresholds.tier2Minimum) }
+            compose.runOnIdle { model.chooseRewardThresholds(MathRewardGame.BASIC, thresholds.tier1Minimum, thresholds.tier2Minimum) }
             compose.onNodeWithTag("rewards-operation-ADDITION").performScrollTo().assertIsNotEnabled()
             val counts = listOf(15, thresholds.tier1Minimum, thresholds.tier2Minimum, thresholds.tier3Minimum)
                 .filter { it <= MAX_QUESTION_COUNT }
@@ -910,7 +910,7 @@ class MathAppTest {
 
     @Test fun configuredRewardThresholdsAndMatrixTierAppearBeforePlay() {
         val model = model()
-        model.chooseRewardThresholds(15, 25)
+        model.chooseRewardThresholds(MathRewardGame.BASIC, 15, 25)
         model.chooseMatrixRewardTier(RewardTier.TIER_1)
         model.openRewardsGame()
         compose.setContent { MathAppContent(model) }

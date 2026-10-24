@@ -1,6 +1,7 @@
 package com.ssmath.app
 
 import android.content.SharedPreferences
+import android.util.Log
 
 enum class MathRewardGame(val title: String) {
     BASIC("Challenge- Basic Math"),
@@ -11,6 +12,38 @@ enum class MathRewardGame(val title: String) {
 internal fun SharedPreferences.readReadingRewardsEnabled(game: ReadingGame): Boolean =
     getBoolean(Subject.READING.rewardsPreference, true) &&
         game.name !in getStringSet("disabled_reading_game_rewards", emptySet()).orEmpty()
+
+internal val MathRewardGame.rewardPreferencePrefix: String get() = "math_${name.lowercase()}_reward"
+internal val ReadingGame.rewardPreferencePrefix: String get() = "reading_${name.lowercase()}_reward"
+
+internal fun SharedPreferences.readRewardThresholds(game: MathRewardGame): RewardThresholds =
+    readActivityRewardThresholds(game.rewardPreferencePrefix)
+
+internal fun SharedPreferences.readRewardThresholds(game: ReadingGame): RewardThresholds =
+    readActivityRewardThresholds(game.rewardPreferencePrefix)
+
+private fun SharedPreferences.readActivityRewardThresholds(prefix: String): RewardThresholds {
+    // Unedited activities inherit the old shared settings without changing saved results.
+    val legacy = readRewardThresholds()
+    if ((1..3).none { contains("${prefix}_tier_${it}_minimum") }) return legacy
+    return try {
+        RewardThresholds(getInt("${prefix}_tier_1_minimum", legacy.tier1Minimum),
+            getInt("${prefix}_tier_2_minimum", legacy.tier2Minimum),
+            getInt("${prefix}_tier_3_minimum", legacy.tier3Minimum))
+    } catch (error: IllegalArgumentException) {
+        Log.w("RewardSettings", "Invalid minimum questions for $prefix; using previous shared settings.", error)
+        legacy
+    } catch (error: ClassCastException) {
+        Log.w("RewardSettings", "Invalid minimum question preference type for $prefix; using previous shared settings.", error)
+        legacy
+    }
+}
+
+internal fun SharedPreferences.saveRewardThresholds(prefix: String, thresholds: RewardThresholds) {
+    edit().putInt("${prefix}_tier_1_minimum", thresholds.tier1Minimum)
+        .putInt("${prefix}_tier_2_minimum", thresholds.tier2Minimum)
+        .putInt("${prefix}_tier_3_minimum", thresholds.tier3Minimum).apply()
+}
 
 internal fun SharedPreferences.readRewardThresholds(): RewardThresholds = try {
     val tier1 = getInt("reward_tier_1_minimum", 25)

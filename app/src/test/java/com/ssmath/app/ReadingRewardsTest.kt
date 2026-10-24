@@ -90,7 +90,7 @@ class ReadingRewardsTest {
             val data = finished(id = "custom-$count", count = count, thresholds = RewardThresholds(15, 25),
                 disabled = RewardType.entries.toSet() - type)
             val model = model()
-            model.chooseRewardThresholds(999, 1000)
+            model.chooseRewardThresholds(ReadingGame.MISSING, 999, 1000)
             model.chooseMatrixRewardTier(RewardTier.TIER_1)
             model.chooseSubjectRewardsEnabled(Subject.READING, false)
             RewardType.entries.forEach { model.chooseRewardEnabled(it, false) }
@@ -127,7 +127,7 @@ class ReadingRewardsTest {
             open(model, data)
             model.dismissReadingSessionReward()
             model.chooseTier3RewardChances(0, 0, 100)
-            model.chooseRewardThresholds(998, 999, 1000)
+            model.chooseRewardThresholds(ReadingGame.MISSING, 998, 999, 1000)
             model.chooseSubjectRewardsEnabled(Subject.READING, false)
             RewardType.entries.forEach { model.chooseRewardEnabled(it, false) }
             val restored = model()
