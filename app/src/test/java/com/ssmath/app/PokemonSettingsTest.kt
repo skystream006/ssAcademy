@@ -402,7 +402,7 @@ class PokemonSettingsTest {
         compose.openAdminSettings()
         compose.onNodeWithText("Available Rewards").performScrollTo().performClick()
         RewardTier.entries.forEach { tier ->
-            val heading = "${tier.label} · ${tier.questionCountLabel}"
+            val heading = tier.label
             compose.onNodeWithText(heading).performScrollTo()
             assertTextFits(heading)
             RewardType.entries.filter { it.tier == tier }.forEach { type ->
