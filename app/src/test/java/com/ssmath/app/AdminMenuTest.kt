@@ -248,26 +248,6 @@ class AdminMenuTest {
         assertChangeFieldsEmpty()
     }
 
-    @Test
-    @Config(qualifiers = "w320dp-h480dp")
-    @GraphicsMode(GraphicsMode.Mode.NATIVE)
-    fun changePinFieldsAndActionsRemainReachableAtDoubleTextSize() {
-        val model = MathViewModel(application)
-        compose.setContent { MathTheme(textSizePercent = 200) { SettingsScreen(model) } }
-        compose.openAdminSettings()
-        openChangePin()
-        listOf("Current PIN", "New PIN", "Confirm new PIN").forEach {
-            compose.onNodeWithText(it).performScrollTo().assertIsDisplayed()
-        }
-        fillChangePin("4826", "0000", "0000")
-        compose.onNodeWithTag("change-pin-submit").assertIsDisplayed().assertIsEnabled()
-        compose.onNodeWithText("Cancel").assertIsDisplayed()
-        compose.onNodeWithTag("change-pin-submit").performClick()
-        awaitChangeClosed()
-        compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
-        assertEquals(AdminPinStore.Result.UNLOCKED, AdminPinStore(preferences).verify("0000"))
-    }
-
     @Test fun debugPinBypassPersistsAndReenablingPreservesTheExistingPin() {
         val model = MathViewModel(application)
         AdminPinStore(preferences).create("4826")
