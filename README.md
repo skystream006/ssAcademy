@@ -42,7 +42,7 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    Question counts are chosen per game, not saved in challenge defaults, and
    do not change your Practice Game choices. Change the number limits in
    **Settings > Admin Menu > Game Settings > Math Settings > Basic Math Settings > Default Activity Settings**.
-   **Challenge - Logic Math** offers the same question-count choices and four math types,
+   **Challenge - Logic Math** offers its own saved tier minimums as question-count choices and the same four math types,
    using its own number limits in **Logic Math Settings > Default Activity Settings**,
    with its own timer duration and the same scoring, wrong-answer limit, and reward rules.
    Each question is a new offline picture puzzle: clue rows uniquely determine the hidden
@@ -63,7 +63,9 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    It does not change your other games' saved number limits or question counts.
    The same rewards rules apply: finish all questions with **more than 90% correct** for an
    enabled prize fragment, with Math Rewards System enabled at start and finish.
-   **Matrix Reward Tier** in the same activity settings chooses **Tier 1**, **Tier 2** (the default), or **Tier 3**,
+   **Matrix Reward Tier** under **Math Rewards System > Multiplication Matrix Rewards Game**
+   appears only when Math rewards and that game's rewards are enabled. It chooses
+   **Tier 1**, **Tier 2** (the default), or **Tier 3**,
    independently of the usual minimum-question thresholds. The selected tier is used when
    the game finishes; no prize is awarded if all rewards in that tier are disabled.
    The configured time limit per 5 questions scales to all 121 questions, and the game stops
@@ -198,6 +200,11 @@ use the subject's master rewards switch and separate game switches. Math has swi
 **Challenge- Basic Math**, **Challenge - Logic Math**, and **Multiplication Matrix Rewards Game**;
 Reading has one for every reading game. Game reward switches default to on and are saved
 independently. Turning a subject's master switch off preserves its individual game choices.
+Each enabled Basic Math, Logic Math, and reading game shows its own **Tier minimum questions**
+directly beneath its rewards switch. The three tier fields are horizontal (scroll sideways on
+narrow screens or with enlarged text), and **Save minimum questions** saves only that activity.
+Disabled games hide these controls without losing their saved minimums. Matrix instead shows
+its **Matrix Reward Tier** selector here; changes to that selector save automatically.
 These switches control prize fragments and time limits, not game availability or celebrations,
 and never remove earned rewards. Turning rewards off for a subject or game removes its current
 game's time limit without changing the saved duration for future games.
@@ -259,7 +266,8 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   are kept, as are unrelated celebrations added through Debug Menu.
 - **Default Activity Settings** – under each math subject's settings, set independent
   Basic Math and Logic Math number limits for all four math types, or the matrix's
-  question order and reward tier. Matrix bounds remain 1–11 with 121 questions.
+  question order. Its reward tier is under **Math Rewards System > Multiplication Matrix Rewards Game**.
+  Matrix bounds remain 1–11 with 121 questions.
   **Save defaults** saves only the selected subject; **Back** discards unsaved edits.
   Both return to the unlocked Admin Menu, as does Back from Reading Progress.
   Division's two maximums are independent. Limits are
@@ -283,10 +291,13 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   when revealed and in My Rewards and Use rewards. All three toy rewards also have
   distinct looping animations, including their one-third fragments.
   Individual rewards can be enabled or disabled in **Settings > Admin Menu > Available Rewards**.
-  In the same section, set **Tier 1 minimum questions**, **Tier 2 minimum questions**, and
-  **Tier 3 minimum questions**, then choose **Save minimum questions**. All must be whole numbers
+  Under **Game Settings > Math Settings > Math Rewards System** or
+  **Reading Settings > Reading Rewards System**, enable an activity and set its horizontal
+  **Tier 1**, **Tier 2**, and **Tier 3** minimum questions, then choose **Save minimum questions**.
+  All must be whole numbers
   from **1 to 1,000**, with each tier higher than the previous tier. Defaults are **25**, **50**,
-  and **100**. These saved thresholds apply to both Math and Reading when a game finishes:
+  and **100**. Existing installations initially retain their previous shared minimums for every
+  activity; subsequent edits are independent. Each game's own thresholds apply when it finishes:
   Tier 3 at or above its minimum, Tier 2 from its minimum to below Tier 3's minimum, Tier 1 from its
   minimum to below Tier 2's minimum, and no prize below Tier 1's minimum. Matrix games use their
   separately selected tier instead. Changing these settings never changes saved prizes or claims.
@@ -306,7 +317,8 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   A gift dismissed before opening can still be claimed from its history entry.
   All reward illustrations and animations are drawn in the app and work offline.
 - **Reading Rewards System** – under Reading Settings, enables the same prize fragments
-  as math challenges, using the shared minimum-question settings and Rewards inventory.
+  as math challenges, using independent minimum-question settings for each reading game
+  and the shared Rewards inventory.
   Complete all selected activities and meet a tier's minimum with **more than 90% correct**
   to qualify; both the subject and the selected game's rewards must be on at start and finish.
   Disabled reward types are excluded from new prizes. Existing gifts remain claimable.
@@ -392,11 +404,12 @@ restarting or updating the activity library, using the activity revision assigne
 Older single-activity results show their latest saved response, not every earlier retry.
 Use **Settings → Admin Menu → Game Settings → Reading Settings →
 Set Reading Level** to choose a level, and **Reading Progress** to view the private dashboard.
-Under **How many questions would you like?**, the Poké Ball selects **15** questions,
+Tap a reading game to open its **How many questions would you like?** dialog.
+The Poké Ball selects **15** questions,
 while the blue, purple, and pink gift buttons select the saved Admin **Tier 1**, **Tier 2**, and **Tier 3**
-minimums (defaults **25** and **50**), just like Math. Then tap a game to
-reserve that many activities at your selected reading level.
-Tapping a game before choosing a count shows a reminder toast.
+minimums for that activity (defaults **25**, **50**, and **100**), just like Math.
+Choose a count, then tap **Start** to reserve that many activities at your selected reading level.
+**Cancel** or Android Back closes the dialog without changing saved drafts.
 Tap **Submit Answer** to save your response and move straight to the next question;
 the previous correct answer appears below the bordered activity. Activities with
 multiple parts advance through their required checkpoints before the next activity.

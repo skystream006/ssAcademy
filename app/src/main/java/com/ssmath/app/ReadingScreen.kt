@@ -2,7 +2,6 @@ package com.ssmath.app
 
 import android.content.Context
 import android.content.ContextWrapper
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
@@ -325,7 +324,7 @@ internal fun ReadingModule(
     val profile = data.profile
     when (page) {
         ReadingPage.MENU, ReadingPage.PROFILES -> ReadingMenu(data, model, onExit, stop, disabledGames,
-            onRewards, onPokemons, appModel?.rewardThresholds ?: RewardThresholds())
+            onRewards, onPokemons) { game -> appModel?.rewardThresholds(game) ?: model.rewardThresholds(game) }
         ReadingPage.PROGRESS -> ReadingProgress(data, model, textSizePercent, onTextSizeChange,
             narrationAvailable, speak, stop, back, disabledGames)
         ReadingPage.ACTIVITY -> {
@@ -424,10 +423,9 @@ private fun ReadingPictureView(picture: ReadingPicture) {
 @Composable
 private fun ReadingMenu(data: ReadingData, model: ReadingViewModel, onExit: () -> Unit, stop: () -> Unit,
                         disabledGames: Set<ReadingGame>, onRewards: () -> Unit, onPokemons: () -> Unit,
-                        thresholds: RewardThresholds) {
-    val context = LocalContext.current
+                        rewardThresholds: (ReadingGame) -> RewardThresholds) {
     val profile = data.profile
-    var questionCount by rememberSaveable(thresholds) { mutableStateOf<Int?>(null) }
+    var selectedGame by rememberSaveable { mutableStateOf<ReadingGame?>(null) }
     val games = listOf(ReadingGame.MISSING, ReadingGame.SEQUENCE, ReadingGame.STUDIO, ReadingGame.SCRAMBLE,
         ReadingGame.DETECTIVE, ReadingGame.GRAMMAR)
         .filterNot { it in disabledGames }
@@ -437,9 +435,7 @@ private fun ReadingMenu(data: ReadingData, model: ReadingViewModel, onExit: () -
             .verticalScroll(rememberScrollState()).padding(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 64.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             ReadingHeading("Reading adventures")
-            Text("How many questions would you like?", style = MaterialTheme.typography.titleLarge)
-            RewardsQuestionCountChoices(questionCount, { questionCount = it }, "reading",
-                enabled = !model.saving && !model.importing, thresholds = thresholds)
+            Text("Choose an activity, then choose how many questions to play.")
             model.message?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
             if (model.packStatus?.counts?.values?.sum() == 0)
                 Text("Import reading activities in Settings > Admin Menu > Game Settings > Reading Settings to begin. Saved drafts can still be resumed.")
@@ -462,14 +458,8 @@ private fun ReadingMenu(data: ReadingData, model: ReadingViewModel, onExit: () -
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                                 row.forEach { game ->
                                     SubjectButton(game.title, game.backgroundImage, {
-                                       val count = questionCount
-                                       if (count == null) {
-                                           Toast.makeText(context, "Please select the number of questions.",
-                                               Toast.LENGTH_SHORT).show()
-                                       } else {
-                                           stop()
-                                           model.startSession(game, count)
-                                       }
+                                        stop()
+                                        selectedGame = game
                                     }, Modifier.weight(1f), "reading-game-${game.name}",
                                         enabled = !model.saving && !model.importing)
                                 }
@@ -481,6 +471,30 @@ private fun ReadingMenu(data: ReadingData, model: ReadingViewModel, onExit: () -
             }
             ReadingButton("Back to learning menu", "reading-exit") { stop(); onExit() }
         }
+    }
+    selectedGame?.takeIf { it in games && profile != null }?.let { game ->
+        val thresholds = rewardThresholds(game)
+        var questionCount by rememberSaveable(game, thresholds) { mutableStateOf<Int?>(null) }
+        SettingsDialog(
+            onDismissRequest = { selectedGame = null },
+            title = { Text(game.title) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Text("How many questions would you like?", style = MaterialTheme.typography.titleLarge)
+                    RewardsQuestionCountChoices(questionCount, { questionCount = it }, "reading",
+                        enabled = !model.saving && !model.importing, thresholds = thresholds)
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    model.startSession(game, requireNotNull(questionCount))
+                    selectedGame = null
+                }, enabled = questionCount != null && !model.saving && !model.importing,
+                    modifier = Modifier.testTag("reading-start-game")) { Text("Start") }
+            },
+            dismissButton = { TextButton(onClick = { selectedGame = null }) { Text("Cancel") } },
+            modifier = Modifier.testTag("reading-game-setup")
+        )
     }
 }
 

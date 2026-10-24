@@ -301,6 +301,8 @@ class ReadingViewModel(
             Command.Start(game, null, true, count, enabled, limit)))
     }
 
+    fun rewardThresholds(game: ReadingGame): RewardThresholds = settings.readRewardThresholds(game)
+
     private fun isDisabled(game: ReadingGame) =
         game.name in settings.getStringSet("disabled_reading_games", emptySet()).orEmpty()
 
@@ -310,11 +312,12 @@ class ReadingViewModel(
 
     fun finishActivity() {
         act { current ->
-            if (current.active?.let { isDisabled(it.game) } == true) current
+            val game = current.active?.game
+            if (game == null || isDisabled(game)) current
             else ReadingEngine.nextSessionActivity(ReadingEngine.finish(current,
-                rewardsEnabled = current.active?.game?.let(settings::readReadingRewardsEnabled) == true,
+                rewardsEnabled = settings.readReadingRewardsEnabled(game),
                 disabledRewards = disabledRewards(), random = rewardRandom,
-                rewardThresholds = settings.readRewardThresholds(),
+                rewardThresholds = settings.readRewardThresholds(game),
                 tier3RewardChances = settings.readTier3RewardChances()))
         }
     }
@@ -380,7 +383,7 @@ class ReadingViewModel(
         })
         if (expired)
             next = ReadingEngine.endSession(next, session.id, timedOut = true,
-                rewardThresholds = settings.readRewardThresholds(),
+                rewardThresholds = settings.readRewardThresholds(session.game),
                 tier3RewardChances = settings.readTier3RewardChances())
         // Routine clock saves must not toggle the enabled state of answer controls.
         persist(next, blockInteraction = expired)
@@ -416,11 +419,12 @@ class ReadingViewModel(
 
     fun submit(key: String) {
         act { current ->
-            if (current.active?.let { isDisabled(it.game) } == true) current
+            val game = current.active?.game
+            if (game == null || isDisabled(game)) current
             else {
-                val rewardsEnabled = current.active?.game?.let(settings::readReadingRewardsEnabled) == true
+                val rewardsEnabled = settings.readReadingRewardsEnabled(game)
                 val disabled = disabledRewards()
-                val thresholds = settings.readRewardThresholds()
+                val thresholds = settings.readRewardThresholds(game)
                 val chances = settings.readTier3RewardChances()
                 val submitted = ReadingEngine.submit(current, key,
                     rewardsEnabled = rewardsEnabled, disabledRewards = disabled, random = rewardRandom,

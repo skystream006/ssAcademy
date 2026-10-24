@@ -403,8 +403,8 @@ class RewardUiTest {
         RewardTier.entries.forEach { tier ->
             compose.onNodeWithTag("reward-inventory").performScrollToKey(tier.name)
             compose.mainClock.advanceTimeByFrame()
-            compose.onNodeWithText(tier.label).assertIsDisplayed().assert(hasText(tier.questionCountLabel))
-            listOf(tier.label, tier.questionCountLabel).forEach { text ->
+            compose.onNodeWithText(tier.label).assertIsDisplayed()
+            listOf(tier.label).forEach { text ->
                 val layouts = mutableListOf<TextLayoutResult>()
                 compose.onNodeWithText(text, useUnmergedTree = true)
                     .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
@@ -471,23 +471,24 @@ class RewardUiTest {
         }
     }
 
-    @Test fun inventoryAndUsePickerDisplayConfiguredRewardMinimums() {
+    @Test fun sharedInventoryAndUsePickerDoNotDisplayOneActivitysMinimums() {
         compose.mainClock.autoAdvance = true
         val application = ApplicationProvider.getApplicationContext<Application>()
         application.getSharedPreferences("settings", 0).edit().clear().commit()
         val model = MathViewModel(application)
-        model.chooseRewardThresholds(15, 25)
+        model.chooseRewardThresholds(MathRewardGame.BASIC, 15, 25)
+        model.chooseRewardThresholds(ReadingGame.MISSING, 10, 20)
         compose.setContent { MathTheme { RewardsScreen(model) } }
         RewardTier.entries.forEach { tier ->
             compose.onNodeWithTag("reward-inventory").performScrollToKey(tier.name)
             compose.onNodeWithText(tier.label).assertIsDisplayed()
-                .assert(hasText(model.rewardThresholds.questionCountLabel(tier)))
+                .assertTextEquals(tier.label)
         }
         compose.onNodeWithText("Use rewards").performClick()
         RewardTier.entries.forEach { tier ->
             compose.onNodeWithTag("use-rewards-grid").performScrollToKey(tier.name)
             compose.onNode(hasText(tier.label) and hasAnyAncestor(hasTestTag("use-rewards-grid"))).assertIsDisplayed()
-                .assert(hasText(model.rewardThresholds.questionCountLabel(tier)))
+                .assertTextEquals(tier.label)
         }
     }
 
@@ -501,7 +502,7 @@ class RewardUiTest {
         compose.onNodeWithText("What reward would you like to use?").assertIsDisplayed()
         RewardTier.entries.forEach { tier ->
             compose.onNodeWithTag("use-rewards-grid").performScrollToKey(tier.name)
-            compose.onNodeWithText(tier.label).assertIsDisplayed().assert(hasText(tier.questionCountLabel))
+            compose.onNodeWithText(tier.label).assertIsDisplayed().assertTextEquals(tier.label)
                 .assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading))
             val header = compose.onNodeWithText(tier.label).fetchSemanticsNode().boundsInRoot
             val firstReward = RewardType.entries.first { it.tier == tier }
@@ -688,7 +689,6 @@ class RewardUiTest {
         assertEquals(firstRow.first().left, header.left, 1f)
         assertEquals(firstRow.last().right, header.right, 1f)
         val tierOne = compose.onNodeWithText("Tier 1").assertIsDisplayed()
-            .assert(hasText("25–49 questions"))
             .assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading))
             .fetchSemanticsNode().boundsInRoot
         assertTrue(header.bottom <= tierOne.top)
@@ -698,7 +698,6 @@ class RewardUiTest {
         compose.onNodeWithTag("reward-inventory").performScrollToKey(RewardTier.TIER_2.name)
         compose.mainClock.advanceTimeByFrame()
         val tierTwo = compose.onNodeWithText("Tier 2").assertIsDisplayed()
-            .assert(hasText("50–99 questions"))
             .assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading))
             .fetchSemanticsNode().boundsInRoot
         val nextRow = compose.onNodeWithTag("reward-card-${RewardType.entries[4].name}")
@@ -710,7 +709,6 @@ class RewardUiTest {
         compose.onNodeWithTag("reward-inventory").performScrollToKey(RewardTier.TIER_3.name)
         compose.mainClock.advanceTimeByFrame()
         val tierThree = compose.onNodeWithText("Tier 3").assertIsDisplayed()
-            .assert(hasText("100 or more questions"))
             .assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading))
             .fetchSemanticsNode().boundsInRoot
         val toys = listOf(RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3).map { type ->

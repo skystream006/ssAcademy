@@ -126,8 +126,9 @@ class ReadingEntryTest {
         val app = show()
         await { reading.data != null && reading.packStatus != null && !reading.saving }
         compose.onNodeWithTag("subject-Reading").performClick()
-        compose.onNodeWithTag("reading-question-count-25").performClick()
         compose.onNodeWithTag("reading-game-MISSING").performScrollTo().performClick()
+        compose.onNodeWithTag("reading-question-count-25").performClick()
+        compose.onNodeWithTag("reading-start-game").performClick()
         await { reading.data?.activeSession?.questionCount == 25 && !reading.saving }
         val assigned = requireNotNull(reading.data?.activeSession).attemptIds
         repeat(25) { index ->

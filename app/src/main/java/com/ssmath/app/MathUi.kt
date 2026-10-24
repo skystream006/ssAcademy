@@ -37,7 +37,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -61,7 +60,6 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -564,22 +562,6 @@ private fun MatrixActivitySettings(model: MathViewModel) {
         }
         Switch(model.matrixSetupRandomize, model::updateMatrixSetupRandomize,
             modifier = Modifier.semantics { contentDescription = "Randomize matrix question order" })
-    }
-    Text("Matrix Reward Tier", style = MaterialTheme.typography.titleSmall)
-    Text("Use this tier instead of the question minimums for Multiplication Matrix Rewards Game. " +
-        "Saved changes apply when the game finishes. Accuracy, timer, and enabled-reward rules still apply.",
-        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    Column(Modifier.selectableGroup()) {
-        RewardTier.entries.forEach { tier ->
-            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).selectable(
-                selected = model.matrixSetupRewardTier == tier, role = Role.RadioButton,
-                onClick = { model.updateMatrixSetupRewardTier(tier) }
-            ).testTag("matrix-reward-${tier.name}"),
-                verticalAlignment = Alignment.CenterVertically) {
-                RadioButton(selected = model.matrixSetupRewardTier == tier, onClick = null)
-                Text(tier.label, Modifier.padding(start = 8.dp))
-            }
-        }
     }
 }
 

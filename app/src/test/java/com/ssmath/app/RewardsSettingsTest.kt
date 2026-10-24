@@ -5,7 +5,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.ComponentDialog
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.core.app.ApplicationProvider
@@ -18,6 +20,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowDialog
 
 @RunWith(RobolectricTestRunner::class)
@@ -152,56 +155,106 @@ class RewardsSettingsTest {
         compose.onNodeWithContentDescription("Math Rewards System").assertDoesNotExist()
     }
 
-    @Test fun rewardMinimumQuestionsSaveTogetherAndUpdateTierDescriptions() {
+    @Test fun rewardMinimumQuestionsSaveIndependentlyUnderEnabledActivities() {
         val model = MathViewModel(application)
         compose.setContent { MathTheme(textSizePercent = 200) { SettingsScreen(model) } }
-        compose.onNodeWithTag("reward-tier-1-minimum").assertDoesNotExist()
-        compose.openAdminSettings()
-        compose.onNodeWithTag("reward-tier-1-minimum").assertDoesNotExist()
-        compose.onNodeWithText("Available Rewards").performScrollTo().performClick()
-        compose.onNodeWithTag("reward-tier-1-minimum").performScrollTo().assertTextContains("25")
+        compose.onNodeWithTag("math-LOGIC-reward-tier-1-minimum").assertDoesNotExist()
+        compose.openGameSettings()
+        compose.onNodeWithText("Math Rewards System").performScrollTo().performClick()
+        compose.onNodeWithTag("math-LOGIC-reward-tier-1-minimum").performScrollTo().assertTextContains("25")
             .performTextReplacement("15")
-        compose.onNodeWithTag("reward-tier-2-minimum").performScrollTo().assertTextContains("50")
+        compose.onNodeWithTag("math-LOGIC-reward-tier-2-minimum").performScrollTo().assertTextContains("50")
             .performTextReplacement("25")
-        compose.onNodeWithTag("reward-tier-3-minimum").performScrollTo().assertTextContains("100")
+        compose.onNodeWithTag("math-LOGIC-reward-tier-3-minimum").performScrollTo().assertTextContains("100")
             .performTextReplacement("50")
-        assertEquals(RewardThresholds(), model.rewardThresholds)
-        compose.onNodeWithTag("save-reward-minimums").performScrollTo().assertIsEnabled().performClick()
+        assertEquals(RewardThresholds(), model.rewardThresholds(MathRewardGame.LOGIC))
+        compose.onNodeWithTag("math-LOGIC-save-reward-minimums").performScrollTo().assertIsEnabled().performClick()
             .assertIsNotEnabled()
-        compose.onNodeWithText("Tier 1 · 15–24 questions").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Tier 2 · 25–49 questions").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Tier 3 · 50 or more questions").performScrollTo().assertIsDisplayed()
-        assertEquals(RewardThresholds(15, 25, 50), MathViewModel(application).rewardThresholds)
+        assertEquals(RewardThresholds(15, 25, 50), MathViewModel(application).rewardThresholds(MathRewardGame.LOGIC))
+        assertEquals(RewardThresholds(), model.rewardThresholds(MathRewardGame.BASIC))
+        ReadingGame.entries.forEach { assertEquals(RewardThresholds(), model.rewardThresholds(it)) }
         assertTrue(model.disabledRewards.isEmpty())
-        compose.onNodeWithText("Available Rewards").performScrollTo().performClick()
-        compose.onNodeWithTag("reward-tier-1-minimum").assertDoesNotExist()
-        compose.onNodeWithText("Available Rewards").performScrollTo().performClick()
-        compose.onNodeWithTag("reward-tier-1-minimum").performScrollTo().assertTextContains("15")
-        compose.onNodeWithTag("reward-tier-2-minimum").performScrollTo().assertTextContains("25")
-        compose.onNodeWithTag("reward-tier-3-minimum").performScrollTo().assertTextContains("50")
+        val toggle = compose.onNodeWithContentDescription("${MathRewardGame.LOGIC.title} rewards")
+        toggle.performScrollTo().performClick().assertIsOff()
+        compose.onNodeWithTag("math-LOGIC-reward-tier-1-minimum").assertDoesNotExist()
+        compose.onNodeWithTag("math-BASIC-reward-tier-1-minimum").assertExists()
+        toggle.performClick().assertIsOn()
+        compose.onNodeWithTag("math-LOGIC-reward-tier-1-minimum").performScrollTo().assertTextContains("15")
+        compose.onNodeWithTag("math-LOGIC-reward-tier-2-minimum").performScrollTo().assertTextContains("25")
+        compose.onNodeWithTag("math-LOGIC-reward-tier-3-minimum").performScrollTo().assertTextContains("50")
+        compose.onNodeWithContentDescription("Math Rewards System").performScrollTo().performClick()
+        compose.onNodeWithTag("math-BASIC-reward-tier-1-minimum").assertDoesNotExist()
+        compose.onNodeWithTag("math-LOGIC-reward-tier-1-minimum").assertDoesNotExist()
+        compose.onNodeWithText("Matrix Reward Tier").assertDoesNotExist()
+    }
+
+    @Test
+    @Config(qualifiers = "w320dp-h800dp")
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun readingMinimumsAreHorizontalReadableAndIndependentAtDoubleTextSize() {
+        val model = MathViewModel(application)
+        compose.setContent { MathTheme(textSizePercent = 200) { SettingsScreen(model) } }
+        compose.openGameSettings(Subject.READING)
+        compose.onNodeWithText("Reading Rewards System").performScrollTo().performClick()
+        ReadingGame.entries.forEachIndexed { index, game ->
+            val prefix = "reading-${game.name}"
+            val values = listOf(index + 1, index + 11, 1000)
+            compose.onNodeWithTag("$prefix-reward-minimums").performScrollTo()
+            values.forEachIndexed { tier, value ->
+                val field = compose.onNodeWithTag("$prefix-reward-tier-${tier + 1}-minimum")
+                field.performScrollTo().assertIsDisplayed()
+                    .assert(hasAnyAncestor(hasTestTag("$prefix-reward-settings")))
+                    .performTextReplacement(value.toString())
+                val layouts = mutableListOf<TextLayoutResult>()
+                field.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+                assertTrue(layouts.isNotEmpty())
+                assertTrue(layouts.none { it.hasVisualOverflow })
+            }
+            val bounds = (1..3).map {
+                compose.onNodeWithTag("$prefix-reward-tier-$it-minimum").getUnclippedBoundsInRoot()
+            }
+            bounds.zipWithNext().forEach { (left, right) ->
+                assertEquals(left.top, right.top)
+                assertTrue(left.right <= right.left)
+            }
+            compose.onNodeWithTag("$prefix-save-reward-minimums").performScrollTo().performClick()
+            assertEquals(RewardThresholds(values[0], values[1], values[2]), model.rewardThresholds(game))
+            val toggle = compose.onNodeWithContentDescription("${game.title} rewards")
+            toggle.performScrollTo().performClick()
+            compose.onNodeWithTag("$prefix-reward-minimums").assertDoesNotExist()
+            toggle.performClick()
+            compose.onNodeWithTag("$prefix-reward-tier-1-minimum").performScrollTo().assertTextContains(values[0].toString())
+        }
+        val restored = MathViewModel(application)
+        ReadingGame.entries.forEach { assertEquals(model.rewardThresholds(it), restored.rewardThresholds(it)) }
+        assertEquals(RewardThresholds(), restored.rewardThresholds(MathRewardGame.BASIC))
+        compose.onNodeWithContentDescription("Reading Rewards System").performScrollTo().performClick()
+        ReadingGame.entries.forEach {
+            compose.onNodeWithTag("reading-${it.name}-reward-minimums").assertDoesNotExist()
+        }
     }
 
     @Test fun invalidRewardMinimumsCannotReplaceSavedChoices() {
         val model = MathViewModel(application)
         compose.setContent { MathTheme { SettingsScreen(model) } }
-        compose.openAdminSettings()
-        compose.onNodeWithText("Available Rewards").performScrollTo().performClick()
+        compose.openGameSettings()
+        compose.onNodeWithText("Math Rewards System").performScrollTo().performClick()
         listOf("", "0", "-1", "2.5", "abc", "1001", "50", "51").forEach { invalid ->
-            compose.onNodeWithTag("reward-tier-1-minimum").performScrollTo().performTextReplacement(invalid)
-            compose.onNodeWithTag("save-reward-minimums").performScrollTo().assertIsNotEnabled()
+            compose.onNodeWithTag("math-BASIC-reward-tier-1-minimum").performScrollTo().performTextReplacement(invalid)
+            compose.onNodeWithTag("math-BASIC-save-reward-minimums").performScrollTo().assertIsNotEnabled()
             assertEquals(RewardThresholds(), model.rewardThresholds)
         }
-        compose.onNodeWithTag("reward-tier-1-minimum").performScrollTo().performTextReplacement("1")
-        compose.onNodeWithTag("reward-tier-2-minimum").performScrollTo().performTextReplacement("1")
-        compose.onNodeWithTag("save-reward-minimums").performScrollTo().assertIsNotEnabled()
-        compose.onNodeWithTag("reward-tier-2-minimum").performScrollTo().performTextReplacement("999")
+        compose.onNodeWithTag("math-BASIC-reward-tier-1-minimum").performScrollTo().performTextReplacement("1")
+        compose.onNodeWithTag("math-BASIC-reward-tier-2-minimum").performScrollTo().performTextReplacement("1")
+        compose.onNodeWithTag("math-BASIC-save-reward-minimums").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithTag("math-BASIC-reward-tier-2-minimum").performScrollTo().performTextReplacement("999")
         listOf("", "0", "-1", "2.5", "abc", "999", "1001").forEach { invalid ->
-            compose.onNodeWithTag("reward-tier-3-minimum").performScrollTo().performTextReplacement(invalid)
-            compose.onNodeWithTag("save-reward-minimums").performScrollTo().assertIsNotEnabled()
+            compose.onNodeWithTag("math-BASIC-reward-tier-3-minimum").performScrollTo().performTextReplacement(invalid)
+            compose.onNodeWithTag("math-BASIC-save-reward-minimums").performScrollTo().assertIsNotEnabled()
             assertEquals(RewardThresholds(), model.rewardThresholds)
         }
-        compose.onNodeWithTag("reward-tier-3-minimum").performScrollTo().performTextReplacement("1000")
-        compose.onNodeWithTag("save-reward-minimums").performScrollTo().assertIsEnabled().performClick()
+        compose.onNodeWithTag("math-BASIC-reward-tier-3-minimum").performScrollTo().performTextReplacement("1000")
+        compose.onNodeWithTag("math-BASIC-save-reward-minimums").performScrollTo().assertIsEnabled().performClick()
         assertEquals(RewardThresholds(1, 999, 1000), MathViewModel(application).rewardThresholds)
     }
 
@@ -255,6 +308,19 @@ class RewardsSettingsTest {
         val matrix = compose.onNodeWithText("Multiplication Matrix Settings")
         matrix.performScrollTo().assert(collapsed)
         compose.onNodeWithTag("matrix-reward-TIER_2").assertDoesNotExist()
+        compose.onNodeWithText("Math Rewards System").performScrollTo().performClick()
+        compose.onNodeWithTag("matrix-reward-TIER_2").performScrollTo().assertIsSelected()
+        compose.onNodeWithTag("matrix-reward-TIER_1").performScrollTo()
+            .assert(hasAnyAncestor(hasTestTag("math-MATRIX-reward-settings")))
+            .performClick().assertIsSelected()
+        assertEquals(RewardTier.TIER_1, MathViewModel(application).matrixRewardTier)
+        val toggle = compose.onNodeWithContentDescription("${MathRewardGame.MATRIX.title} rewards")
+        toggle.performScrollTo().performClick().assertIsOff()
+        compose.onNodeWithText("Matrix Reward Tier").assertDoesNotExist()
+        toggle.performClick().assertIsOn()
+        compose.onNodeWithTag("matrix-reward-TIER_1").performScrollTo().assertIsSelected()
+        compose.onNodeWithText("Math Rewards System").performScrollTo().performClick()
+        matrix.performScrollTo()
         matrix.performClick().assert(expanded)
         compose.onNodeWithTag("matrix-rewards-setup").performScrollTo()
             .assert(hasText("Default Activity Settings")).performClick()
@@ -263,12 +329,10 @@ class RewardsSettingsTest {
         compose.onNodeWithText("The matrix is fixed: 1 × 1 through 11 × 11, with 121 questions.")
             .performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("rewards-ADDITION-first").assertDoesNotExist()
-        compose.onNodeWithTag("matrix-reward-TIER_2").performScrollTo().assertIsSelected()
-        compose.onNodeWithTag("matrix-reward-TIER_1").performScrollTo()
-            .assertIsDisplayed().assertIsNotSelected().performClick().assertIsSelected()
+        compose.onNodeWithText("Matrix Reward Tier").assertDoesNotExist()
         compose.onNodeWithContentDescription("Randomize matrix question order").performScrollTo()
             .assertIsOff().performClick().assertIsOn()
-        assertEquals(RewardTier.TIER_2, MathViewModel(application).matrixRewardTier)
+        assertEquals(RewardTier.TIER_1, MathViewModel(application).matrixRewardTier)
         assertFalse(model.randomizeMatrixQuestions)
         compose.onNodeWithTag("save-rewards-setup").performScrollTo().assertIsEnabled().performClick()
         assertEquals(RewardTier.TIER_1, MathViewModel(application).matrixRewardTier)
@@ -278,22 +342,20 @@ class RewardsSettingsTest {
         compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
         matrix.performScrollTo().assert(expanded)
         compose.onNodeWithTag("matrix-rewards-setup").performScrollTo().performClick()
-        compose.onNodeWithTag("matrix-reward-TIER_1").performScrollTo().assertIsSelected()
         compose.onNodeWithContentDescription("Randomize matrix question order").performScrollTo()
             .assertIsOn().performClick().assertIsOff()
-        compose.onNodeWithTag("matrix-reward-TIER_2").performScrollTo().performClick().assertIsSelected()
         compose.onNodeWithText("Back").performScrollTo().performClick()
         assertEquals(RewardTier.TIER_1, MathViewModel(application).matrixRewardTier)
         assertTrue(model.randomizeMatrixQuestions)
         compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
         compose.onNodeWithTag("matrix-rewards-setup").performScrollTo().performClick()
-        compose.onNodeWithTag("matrix-reward-TIER_1").performScrollTo().assertIsSelected()
         compose.onNodeWithContentDescription("Randomize matrix question order").performScrollTo().assertIsOn()
-        compose.onNodeWithTag("matrix-reward-TIER_3").performScrollTo().performClick().assertIsSelected()
         compose.onNodeWithTag("save-rewards-setup").performScrollTo().performClick()
+        compose.onNodeWithText("Math Rewards System").performScrollTo().performClick()
+        compose.onNodeWithTag("matrix-reward-TIER_3").performScrollTo().performClick().assertIsSelected()
         assertEquals(RewardTier.TIER_3, MathViewModel(application).matrixRewardTier)
         compose.onNodeWithTag("matrix-rewards-setup").performScrollTo().performClick()
-        compose.onNodeWithTag("matrix-reward-TIER_2").performScrollTo().performClick().assertIsSelected()
+        compose.onNodeWithText("Matrix Reward Tier").assertDoesNotExist()
         compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }
         assertEquals(Overlay.SETTINGS, model.overlay)
         assertEquals(RewardTier.TIER_3, MathViewModel(application).matrixRewardTier)
@@ -607,7 +669,7 @@ class RewardsSettingsTest {
         compose.setContent { MathTheme { SettingsScreen(model) } }
         compose.openGameSettings()
         compose.onNodeWithText("Math Rewards System").performScrollTo().performClick()
-        compose.onNodeWithText("Earn prize fragments in math challenges by completing 25 or more questions with over 90% correct")
+        compose.onNodeWithText("Earn prize fragments in math challenges by meeting each game's reward requirements with over 90% correct.")
             .performScrollTo().assertIsDisplayed()
         compose.onNodeWithContentDescription("Math Rewards System").performScrollTo().assertIsOn()
         compose.onNodeWithContentDescription("Show correct answers").performScrollTo().assertIsOn()
@@ -921,7 +983,7 @@ class RewardsSettingsTest {
         compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
         compose.onNodeWithText("Available Rewards").performScrollTo().performClick()
         RewardTier.entries.forEach { tier ->
-            compose.onNodeWithText("${tier.label} · ${tier.questionCountLabel}").performScrollTo().assertIsDisplayed()
+            compose.onNodeWithText(tier.label).performScrollTo().assertIsDisplayed()
             RewardType.entries.filter { it.tier == tier }.forEach { type ->
                 compose.onNodeWithContentDescription("${type.label} reward")
                     .performScrollTo().assertIsOn().performClick().assertIsOff()

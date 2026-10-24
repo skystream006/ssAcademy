@@ -267,7 +267,6 @@ class GameModesTest {
         model.openSettings()
         model.openRewardsSetup(MathRewardGame.MATRIX)
         model.updateMatrixSetupRandomize(true)
-        model.updateMatrixSetupRewardTier(RewardTier.TIER_1)
         model.updateRewardsParameters(Operation.MULTIPLICATION, RewardsGameDefaults("2", "5"))
         assertEquals(basic, model.rewardsSetupDraft)
         model.cancelRewardsSetup()
@@ -275,9 +274,8 @@ class GameModesTest {
         assertEquals(RewardTier.TIER_2, model.matrixRewardTier)
         model.openRewardsSetup(MathRewardGame.MATRIX)
         assertFalse(model.matrixSetupRandomize)
-        assertEquals(RewardTier.TIER_2, model.matrixSetupRewardTier)
         model.updateMatrixSetupRandomize(true)
-        model.updateMatrixSetupRewardTier(RewardTier.TIER_1)
+        model.chooseMatrixRewardTier(RewardTier.TIER_1)
         model.saveRewardsSetup()
         assertEquals(Overlay.SETTINGS, model.overlay)
         val restored = model()
@@ -414,7 +412,7 @@ class GameModesTest {
         val model = model()
         for (thresholds in listOf(RewardThresholds(15, 25), RewardThresholds(200, 300))) {
             for (tier in RewardTier.entries) {
-                model.chooseRewardThresholds(thresholds.tier1Minimum, thresholds.tier2Minimum)
+                model.chooseRewardThresholds(MathRewardGame.MATRIX, thresholds.tier1Minimum, thresholds.tier2Minimum)
                 model.chooseMatrixRewardTier(RewardTier.entries.first { it != tier })
                 model.openMultiplicationMatrixGame()
                 model.start()
@@ -431,7 +429,7 @@ class GameModesTest {
                 assertNotNull(model.celebration)
                 model.dismissCelebration()
                 model.chooseMatrixRewardTier(RewardTier.entries.first { it != tier })
-                model.chooseRewardThresholds(999, 1000)
+                model.chooseRewardThresholds(MathRewardGame.MATRIX, 999, 1000)
                 model.claimReward()
                 shadowOf(Looper.getMainLooper()).idle()
                 val claimed = requireNotNull(model.lastResult)
@@ -446,7 +444,7 @@ class GameModesTest {
     @Test fun disabledSelectedMatrixTierDoesNotFallBackOrRemoveCelebrations() {
         val model = model()
         for (tier in RewardTier.entries) {
-            model.chooseRewardThresholds(200, 300)
+            model.chooseRewardThresholds(MathRewardGame.MATRIX, 200, 300)
             model.chooseMatrixRewardTier(tier)
             RewardType.entries.forEach { model.chooseRewardEnabled(it, it.tier != tier) }
             model.openMultiplicationMatrixGame()
@@ -462,7 +460,7 @@ class GameModesTest {
 
     @Test fun lowThresholdsAndMatrixTierDoNotChangePracticeOrOrdinaryMultiplication() {
         val model = model()
-        model.chooseRewardThresholds(1, 2)
+        model.chooseRewardThresholds(MathRewardGame.BASIC, 1, 2)
         model.chooseMatrixRewardTier(RewardTier.TIER_1)
         val defaults = model.rewardsDefaults
         readyPractice(model, count = 25, operation = Operation.MULTIPLICATION)

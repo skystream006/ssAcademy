@@ -8,6 +8,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -58,6 +59,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.rememberTextMeasurer
 import kotlin.math.roundToInt
 
 @Composable
@@ -459,9 +461,9 @@ private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit) {
                     HorizontalDivider()
                     CollapsibleSettingsSection("Available Rewards", defaultExpanded = false) {
                         Text("Choose which rewards can be awarded when Math and Reading games finish. Existing prizes and fragments stay available.")
-                        RewardMinimumSettings(model)
+                        Text("Set minimum questions separately for each activity under Game Settings.")
                         RewardTier.entries.forEach { tier ->
-                            Text("${tier.label} · ${model.rewardThresholds.questionCountLabel(tier)}", Modifier.fillMaxWidth(),
+                            Text(tier.label, Modifier.fillMaxWidth(),
                                 style = MaterialTheme.typography.titleSmall)
                             RewardType.entries.filter { it.tier == tier }.forEach { type ->
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -493,49 +495,82 @@ private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun RewardMinimumSettings(model: MathViewModel) {
-    var tier1Text by rememberSaveable(model.rewardThresholds) {
-        mutableStateOf(model.rewardThresholds.tier1Minimum.toString())
+private fun RewardMinimumSettings(saved: RewardThresholds, activityTitle: String, tagPrefix: String,
+                                  onSave: (Int, Int, Int) -> Unit) {
+    var tier1Text by rememberSaveable(saved) {
+        mutableStateOf(saved.tier1Minimum.toString())
     }
-    var tier2Text by rememberSaveable(model.rewardThresholds) {
-        mutableStateOf(model.rewardThresholds.tier2Minimum.toString())
+    var tier2Text by rememberSaveable(saved) {
+        mutableStateOf(saved.tier2Minimum.toString())
     }
-    var tier3Text by rememberSaveable(model.rewardThresholds) {
-        mutableStateOf(model.rewardThresholds.tier3Minimum.toString())
+    var tier3Text by rememberSaveable(saved) {
+        mutableStateOf(saved.tier3Minimum.toString())
     }
     val tier1 = parseQuestionCount(tier1Text)
     val tier2 = parseQuestionCount(tier2Text)
     val tier3 = parseQuestionCount(tier3Text)
     val valid = tier1 != null && tier2 != null && tier3 != null && tier1 < tier2 && tier2 < tier3
-    Text("Minimum questions for Math and Reading rewards. Each tier must be higher than the previous tier. " +
-        "Changes apply when a game finishes; saved prizes keep their original rules.")
-    Text("Tier 1 minimum questions", style = MaterialTheme.typography.bodyMedium)
-    OutlinedTextField(tier1Text, { tier1Text = it.take(6) },
-        supportingText = { Text("Whole number from 1 to $MAX_QUESTION_COUNT") },
-        isError = tier1 == null, singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-        modifier = Modifier.fillMaxWidth().testTag("reward-tier-1-minimum")
-            .semantics { contentDescription = "Tier 1 minimum questions" })
-    Text("Tier 2 minimum questions", style = MaterialTheme.typography.bodyMedium)
-    OutlinedTextField(tier2Text, { tier2Text = it.take(6) },
-        supportingText = { Text("Whole number from 1 to $MAX_QUESTION_COUNT, higher than Tier 1") },
-        isError = tier2 == null || (tier1 != null && tier2 <= tier1), singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-        modifier = Modifier.fillMaxWidth().testTag("reward-tier-2-minimum")
-            .semantics { contentDescription = "Tier 2 minimum questions" })
-    Text("Tier 3 minimum questions", style = MaterialTheme.typography.bodyMedium)
-    OutlinedTextField(tier3Text, { tier3Text = it.take(6) },
-        supportingText = { Text("Whole number from 1 to $MAX_QUESTION_COUNT, higher than Tier 2") },
-        isError = tier3 == null || (tier2 != null && tier3 <= tier2), singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-        modifier = Modifier.fillMaxWidth().testTag("reward-tier-3-minimum")
-            .semantics { contentDescription = "Tier 3 minimum questions" })
+    Text("Tier minimum questions", style = MaterialTheme.typography.titleSmall)
+    Text("Whole numbers from 1 to $MAX_QUESTION_COUNT, increasing from Tier 1 to Tier 3. " +
+        "Changes apply only to this activity when a game finishes; saved prizes keep their original rules.",
+        style = MaterialTheme.typography.bodySmall)
+    val textMeasurer = rememberTextMeasurer()
+    val inputWidth = with(LocalDensity.current) {
+        textMeasurer.measure("1000", MaterialTheme.typography.bodyLarge, softWrap = false).size.width.toDp()
+    } + 40.dp
+    val labelWidth = with(LocalDensity.current) {
+        textMeasurer.measure("Tier 3", MaterialTheme.typography.bodyMedium, softWrap = false).size.width.toDp()
+    }
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val fieldWidth = maxOf((maxWidth - 16.dp) / 3, inputWidth, labelWidth)
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+            .testTag("$tagPrefix-reward-minimums"), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val texts = listOf(tier1Text, tier2Text, tier3Text)
+            val errors = listOf(tier1 == null, tier2 == null || (tier1 != null && tier2 <= tier1),
+                tier3 == null || (tier2 != null && tier3 <= tier2))
+            RewardTier.entries.forEachIndexed { index, tier ->
+                Column(Modifier.width(fieldWidth), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(tier.label, style = MaterialTheme.typography.bodyMedium)
+                    OutlinedTextField(texts[index], {
+                        when (tier) {
+                            RewardTier.TIER_1 -> tier1Text = it.take(6)
+                            RewardTier.TIER_2 -> tier2Text = it.take(6)
+                            RewardTier.TIER_3 -> tier3Text = it.take(6)
+                        }
+                    }, isError = errors[index], singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth().testTag("$tagPrefix-reward-tier-${index + 1}-minimum")
+                            .semantics { contentDescription = "$activityTitle ${tier.label} minimum questions" })
+                }
+            }
+        }
+    }
     Button(onClick = {
-        if (valid) model.chooseRewardThresholds(requireNotNull(tier1), requireNotNull(tier2), requireNotNull(tier3))
-    }, enabled = valid && (tier1 != model.rewardThresholds.tier1Minimum ||
-        tier2 != model.rewardThresholds.tier2Minimum || tier3 != model.rewardThresholds.tier3Minimum),
-        modifier = Modifier.fillMaxWidth().testTag("save-reward-minimums")) {
+        onSave(requireNotNull(tier1), requireNotNull(tier2), requireNotNull(tier3))
+    }, enabled = valid && (tier1 != saved.tier1Minimum ||
+        tier2 != saved.tier2Minimum || tier3 != saved.tier3Minimum),
+        modifier = Modifier.fillMaxWidth().testTag("$tagPrefix-save-reward-minimums")) {
         Text("Save minimum questions", textAlign = TextAlign.Center)
+    }
+}
+
+@Composable
+private fun MatrixRewardTierSettings(model: MathViewModel) {
+    Text("Matrix Reward Tier", style = MaterialTheme.typography.titleSmall)
+    Text("Use this tier for the fixed 121-question matrix instead of minimum questions. " +
+        "Changes save automatically and apply when the game finishes. Accuracy, timer, and enabled-reward rules still apply.",
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Column(Modifier.selectableGroup()) {
+        RewardTier.entries.forEach { tier ->
+            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).selectable(
+                selected = model.matrixRewardTier == tier, role = Role.RadioButton,
+                onClick = { model.chooseMatrixRewardTier(tier) }
+            ).testTag("matrix-reward-${tier.name}"),
+                verticalAlignment = Alignment.CenterVertically) {
+                RadioButton(selected = model.matrixRewardTier == tier, onClick = null)
+                Text(tier.label, Modifier.padding(start = 8.dp))
+            }
+        }
     }
 }
 
@@ -671,13 +706,24 @@ private fun GameSettings(
     CollapsibleSettingsSection("Math Settings", defaultExpanded = false) {
         CollapsibleSettingsSection("Math Rewards System", defaultExpanded = false) {
             SubjectRewardsSetting(model, Subject.MATH,
-                "Earn prize fragments in math challenges by completing ${model.rewardThresholds.tier1Minimum} " +
-                    "or more questions with over 90% correct", title = "Enable math rewards")
+                "Earn prize fragments in math challenges by meeting each game's reward requirements " +
+                    "with over 90% correct.", title = "Enable math rewards")
             Text("Choose rewards for each game. Games and earned rewards remain available when rewards are off.",
                 style = MaterialTheme.typography.bodySmall)
             MathRewardGame.entries.forEach { game ->
-                GameRewardsSetting(game.title, game !in model.disabledMathGameRewards, model.rewardsEnabled) {
-                    model.chooseMathGameRewardsEnabled(game, it)
+                key(game) {
+                    Column(Modifier.fillMaxWidth().testTag("math-${game.name}-reward-settings"),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        GameRewardsSetting(game.title, game !in model.disabledMathGameRewards, model.rewardsEnabled) {
+                            model.chooseMathGameRewardsEnabled(game, it)
+                        }
+                        if (model.rewardsEnabled(game)) {
+                            if (game == MathRewardGame.MATRIX) MatrixRewardTierSettings(model)
+                            else RewardMinimumSettings(model.rewardThresholds(game), game.title, "math-${game.name}") { a, b, c ->
+                                model.chooseRewardThresholds(game, a, b, c)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -715,7 +761,7 @@ private fun GameSettings(
             MathTimeLimitSetting(model, MathRewardGame.BASIC)
         }
         CollapsibleSettingsSection("Multiplication Matrix Settings", defaultExpanded = false) {
-            DefaultActivitySettingsLink("matrix-rewards-setup", "Question order and reward tier for Multiplication Matrix") {
+            DefaultActivitySettingsLink("matrix-rewards-setup", "Question order for Multiplication Matrix") {
                 onRewardsSetup(MathRewardGame.MATRIX)
             }
             MathTimeLimitSetting(model, MathRewardGame.MATRIX)
@@ -733,14 +779,24 @@ private fun GameSettings(
         ReadingPackSettings()
         CollapsibleSettingsSection("Reading Rewards System", defaultExpanded = false) {
             SubjectRewardsSetting(model, Subject.READING,
-                "Earn prize fragments by completing ${model.rewardThresholds.tier1Minimum} " +
-                    "or more questions with over 90% correct.", title = "Enable reading rewards")
+                "Earn prize fragments by meeting each reading game's minimum questions " +
+                    "with over 90% correct.", title = "Enable reading rewards")
             Text("Choose rewards for each game. Games and earned rewards remain available when rewards are off.",
                 style = MaterialTheme.typography.bodySmall)
             ReadingGame.entries.forEach { game ->
-                GameRewardsSetting(game.title, game !in model.disabledReadingGameRewards,
-                    model.rewardsEnabled(Subject.READING)) {
-                    model.chooseReadingGameRewardsEnabled(game, it)
+                key(game) {
+                    Column(Modifier.fillMaxWidth().testTag("reading-${game.name}-reward-settings"),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        GameRewardsSetting(game.title, game !in model.disabledReadingGameRewards,
+                            model.rewardsEnabled(Subject.READING)) {
+                            model.chooseReadingGameRewardsEnabled(game, it)
+                        }
+                        if (model.rewardsEnabled(game)) {
+                            RewardMinimumSettings(model.rewardThresholds(game), game.title, "reading-${game.name}") { a, b, c ->
+                                model.chooseRewardThresholds(game, a, b, c)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -957,12 +1013,12 @@ fun RewardsScreen(model: MathViewModel) {
     ScreenScaffold("My Rewards", model::closeOverlay, actions = {
         TextButton(onClick = { usingRewards = true }) { Text("Use rewards") }
     }) {
-        RewardInventory(model.rewardBalances, thresholds = model.rewardThresholds)
+        RewardInventory(model.rewardBalances)
     }
     if (usingRewards) {
         UseRewardsDialog(
             model.rewardBalances, model.usingReward, model.rewardUseError,
-            model::useReward, { usingRewards = false }, thresholds = model.rewardThresholds
+            model::useReward, { usingRewards = false }
         )
     }
 }
