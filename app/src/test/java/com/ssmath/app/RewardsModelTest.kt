@@ -786,14 +786,15 @@ class RewardsModelTest {
         val model = model()
         listOf(Triple(24, 0, false), Triple(25, 0, true), Triple(25, 2, true), Triple(25, 3, false),
             Triple(26, 2, true), Triple(49, 4, true), Triple(50, 0, true), Triple(50, 4, true),
-            Triple(50, 5, false), Triple(51, 4, true), Triple(100, 10, false)).forEach { (count, wrong, eligible) ->
+            Triple(50, 5, false), Triple(51, 4, true), Triple(99, 0, true), Triple(100, 0, true),
+            Triple(100, 9, true), Triple(100, 10, false)).forEach { (count, wrong, eligible) ->
             start(model, count)
             finish(model, count, wrong)
             assertEquals(count, model.lastResult!!.questionCount)
             assertEquals(eligible, model.lastResult!!.prizeType != null)
             if (eligible) {
                 val type = model.lastResult!!.prizeType!!
-                assertEquals(if (count >= 50) RewardTier.TIER_2 else RewardTier.TIER_1, type.tier)
+                assertEquals(rewardTierForQuestionCount(count), type.tier)
                 model.dismissCelebration()
                 model.claimReward()
                 assertEquals(type, model.lastResult!!.prize!!.type)

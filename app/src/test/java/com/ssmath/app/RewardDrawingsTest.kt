@@ -46,7 +46,8 @@ class RewardDrawingsTest {
     }
 
     @Test fun newRewardAnimationsMoveWholeAndFragmentDetailsAndLoopSmoothly() {
-        listOf(RewardType.BED_TIME, RewardType.RESTAURANT).forEach { type ->
+        listOf(RewardType.BED_TIME, RewardType.RESTAURANT,
+            RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3).forEach { type ->
             listOf(false, true).forEach { fragment ->
                 fun frame(progress: Float) = render(200, 200) { drawRewardArtwork(type, fragment, progress) }
                 val first = frame(0f)
@@ -62,6 +63,55 @@ class RewardDrawingsTest {
                     first.indices.count { first[it] != last[it] } < 10)
                 assertArrayEquals(first, frame(-1f))
                 assertArrayEquals(last, frame(2f))
+            }
+        }
+    }
+
+    @Test fun toyWholeArtworkHasDistinctStablePriceBadgesThatAreNotCopiedOntoFragments() {
+        val badges = mutableSetOf<Int>()
+        listOf(RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3).forEach { type ->
+            val badgePixels = (23..69).flatMap { y ->
+                (132..178).filter { x -> (x - 155) * (x - 155) + (y - 46) * (y - 46) < 23 * 23 }
+                    .map { x -> y * 200 + x }
+            }
+            fun badge(progress: Float): IntArray {
+                val pixels = render(200, 200) { drawRewardArtwork(type, false, progress) }
+                return badgePixels.map { pixels[it] }.toIntArray()
+            }
+            val first = badge(0f)
+            assertTrue("$type badge is solid and legible", first.all { it ushr 24 == 255 })
+            assertTrue("$type badge includes dark denomination lettering",
+                first.count { it == Color(0xFF38324F).toArgb() } > 150)
+            listOf(0.25f, 0.5f, 0.75f, 1f).forEach { assertArrayEquals(first, badge(it)) }
+            badges += first.contentHashCode()
+            val fragment = artwork(type, true)
+            assertTrue("A $type fragment does not contain a whole price badge",
+                badgePixels.all { fragment[it] ushr 24 == 0 })
+        }
+        assertEquals("Each price is drawn with a different numeral", 3, badges.size)
+    }
+
+    @Test fun toyFragmentsKeepFullSizeDetailsAndJaggedCutEdgesThroughoutTheirAnimations() {
+        listOf(RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3).forEach { type ->
+            val cutX = if (type == RewardType.TOYS_1) 78 else 83
+            listOf(0f, 0.25f, 0.5f, 0.75f).forEach { progress ->
+                val whole = render(200, 200) { drawRewardArtwork(type, false, progress) }
+                val fragment = render(200, 200) { drawRewardArtwork(type, true, progress) }
+                val source = whole.indices.filter { it % 200 < cutX - 5 && whole[it] ushr 24 > 64 }
+                assertTrue("$type retains a substantial full-size piece", source.size > 1_000)
+                val matching = source.count { pixel ->
+                    listOf(0, 8, 16, 24).all { shift ->
+                        abs((whole[pixel] ushr shift and 255) -
+                            (fragment[pixel + 32] ushr shift and 255)) <= 2
+                    }
+                }
+                assertTrue("$type fragment keeps the original scale and animated details",
+                    matching >= source.size * 0.995f)
+                val rows = if (type == RewardType.TOYS_3) 108..136 else 88..120
+                val edges = rows.map { y ->
+                    (0 until 200).last { x -> fragment[y * 200 + x] ushr 24 > 128 }
+                }
+                assertTrue("$type has a visibly broken edge at $progress", edges.toSet().size >= 5)
             }
         }
     }

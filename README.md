@@ -33,7 +33,7 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    practice can repeat them.
    **Challenge- Basic Math** (formerly Rewards Game) asks **How many questions would you like?** each time you open
    its dialog. Select **15** (Poké Ball), the saved Admin **Tier 1 minimum**
-   (blue gift box, default **25**), or **Tier 2 minimum**
+   (blue gift box, default **25**), **Tier 2 minimum**
    (royal purple gift box, default **50**), or **Tier 3 minimum**
    (pink gift box, default **100**) questions, review the obtainable reward criteria,
    then choose a math type to use its saved number limits. The list explains

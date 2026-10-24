@@ -8,6 +8,7 @@ import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -68,6 +69,17 @@ internal fun legacyReadingPayload(data: ReadingData, activateRetired: Boolean = 
         "sessions" to JsonArray((root.getValue("sessions") as JsonArray) + retiredSessions),
         "profiles" to JsonArray(profiles)
     ))
+}
+
+internal fun withoutTierThreeRules(data: ReadingData, entireRules: Boolean): JsonObject {
+    val json = Json { encodeDefaults = true }
+    val root = json.encodeToJsonElement(ReadingData.serializer(), data).jsonObject
+    return JsonObject(root + ("sessions" to JsonArray((root.getValue("sessions") as JsonArray).map {
+        val session = it.jsonObject
+        if (entireRules) JsonObject(session - "rewardThresholds")
+        else JsonObject(session + ("rewardThresholds" to JsonObject(
+            session.getValue("rewardThresholds").jsonObject - "tier3Minimum")))
+    })))
 }
 
 @RunWith(RobolectricTestRunner::class)
@@ -144,6 +156,71 @@ class ReadingStoreTest {
         model.finishActivity()
         await { !model.saving }
         assertEquals(finished, storage.saved)
+    }
+
+    @Test fun allReadingCompletionPathsReadLatestToyChancesAndDisabledWeights() {
+        for (completion in listOf("submit", "wrong-submit", "finish", "studio-finish"))
+            for (disableWinner in listOf(false, true)) {
+                settings.edit().clear().putInt("reward_tier_3_toys_1_percentage", 100)
+                    .putInt("reward_tier_3_toys_2_percentage", 0).putInt("reward_tier_3_toys_3_percentage", 0).commit()
+                val game = if (completion == "studio-finish") ReadingGame.STUDIO else ReadingGame.MISSING
+                var data = readingSessionFixture(game = game, count = 25)
+                repeat(24) { data = ReadingEngine.nextSessionActivity(readingSolve(data)) }
+                data = when (completion) {
+                    "studio-finish" -> {
+                        val content = requireNotNull(data.active).content
+                        ReadingEngine.studioKeys.forEachIndexed { index, key ->
+                            data = ReadingEngine.submit(ReadingEngine.field(data, key, content.writingChoices[index][0]), key)
+                        }
+                        data
+                    }
+                    "finish" -> readingAnswer(data, readingCorrect(data))
+                    else -> ReadingEngine.field(data, "answer",
+                        (if (completion == "wrong-submit") readingWrong(data) else readingCorrect(data)).toString())
+                }
+                val storage = RecordingStorage(data)
+                val model = ReadingViewModel(application, storage)
+                await { model.data != null }
+                settings.edit().putInt("reward_tier_1_minimum", 1).putInt("reward_tier_2_minimum", 2)
+                    .putInt("reward_tier_3_minimum", 3).putInt("reward_tier_3_toys_1_percentage", 0)
+                    .putInt("reward_tier_3_toys_2_percentage", 0).putInt("reward_tier_3_toys_3_percentage", 100)
+                    .putStringSet("disabled_rewards", if (disableWinner) setOf("TOYS_3") else emptySet()).commit()
+                if (completion.endsWith("finish")) model.finishActivity() else model.submit("answer")
+                await { model.data?.activeSession?.finishedAt != null && !model.saving }
+                val finished = requireNotNull(model.data)
+                assertEquals(if (disableWinner) null else RewardType.TOYS_3, finished.activeSession?.prizeType)
+                assertEquals(RewardThresholds(1, 2, 3), finished.activeSession?.rewardThresholds)
+                ReadingEngine.validate(finished)
+                val store = ReadingStore(file)
+                store.load()
+                store.save(finished)
+                assertEquals(finished, ReadingStore(file).load())
+                settings.edit().putInt("reward_tier_3_toys_1_percentage", 100)
+                    .putInt("reward_tier_3_toys_3_percentage", 0).commit()
+                model.submit("answer")
+                model.finishActivity()
+                await { !model.saving }
+                assertEquals(finished, storage.saved)
+            }
+    }
+
+    @Test fun legacyCompletedReadingSessionsRetainTierTwoAwardsWithMissingThresholdFields() {
+        var data = readingSessionFixture(count = 100)
+        repeat(100) { data = ReadingEngine.nextSessionActivity(readingSolve(data)) }
+        val original = requireNotNull(data.activeSession)
+        data = data.copy(sessions = listOf(original.copy(prizeType = RewardType.VIDEO_GAME,
+            rewardThresholds = RewardThresholds(tier3Minimum = 1001))))
+        for (entireRules in listOf(false, true)) {
+            file.writeText(withoutTierThreeRules(data, entireRules).toString())
+            val restored = ReadingStore(file).load()
+            assertEquals(data, restored)
+            ReadingEngine.validate(restored)
+            ReadingStore(file).apply { load(); save(restored) }
+            assertEquals(restored, ReadingStore(file).load())
+            assertTrue(file.readText().contains("\"tier3Minimum\":1001"))
+            assertEquals(restored, ReadingEngine.endSession(restored, original.id,
+                rewardsEnabled = true, tier3RewardChances = Tier3RewardChances(0, 100, 0)))
+        }
     }
 
     @Test fun retiredGamesArePurgedBeforeLegacyDecodingWithoutChangingOtherReadersOrStories() {

@@ -15,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -49,8 +50,8 @@ class RewardUiTest {
                 Column {
                     RewardType.entries.forEach { type ->
                         Row {
-                            RewardImage(type, false, Modifier.size(90.dp))
-                            RewardImage(type, true, Modifier.size(90.dp))
+                            RewardImage(type, false, Modifier.size(70.dp))
+                            RewardImage(type, true, Modifier.size(70.dp))
                         }
                     }
                 }
@@ -58,7 +59,7 @@ class RewardUiTest {
         }
         compose.mainClock.advanceTimeByFrame()
         RewardType.entries.forEach { type ->
-            compose.onNodeWithContentDescription(type.label).assertIsDisplayed()
+            compose.onNodeWithContentDescription(rewardImageDescription(type, false)).assertIsDisplayed()
                 .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Image))
             compose.onNodeWithContentDescription(rewardImageDescription(type, true)).assertIsDisplayed()
                 .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Image))
@@ -68,6 +69,12 @@ class RewardUiTest {
         compose.onNodeWithContentDescription("One third of a video game controller").assertExists()
         compose.onNodeWithContentDescription("One third of a bedtime scene").assertExists()
         compose.onNodeWithContentDescription("One third of a restaurant").assertExists()
+        compose.onNodeWithContentDescription("\$1 Toys: a colorful spinning top").assertExists()
+        compose.onNodeWithContentDescription("\$2 Toys: a colorful toy train").assertExists()
+        compose.onNodeWithContentDescription("\$3 Toys: a friendly toy robot").assertExists()
+        compose.onNodeWithContentDescription("One third of a \$1 toy spinning top").assertExists()
+        compose.onNodeWithContentDescription("One third of a \$2 toy train").assertExists()
+        compose.onNodeWithContentDescription("One third of a \$3 toy robot").assertExists()
         compose.onAllNodesWithText("1/3").assertCountEquals(RewardType.entries.size)
     }
 
@@ -168,13 +175,15 @@ class RewardUiTest {
         }
     }
 
-    @Test fun bedTimeAndRestaurantGiftsRevealTheirAnimatedFragmentsAfterSaving() {
+    @Test fun animatedRewardsRevealTheirGiftFragmentsAfterSaving() {
         var saved by mutableStateOf(result())
         var opens = 0
         compose.setContent {
             MathTheme { RewardGiftDialog(saved, false, null, { opens++ }, {}) }
         }
-        listOf(RewardType.BED_TIME to 25, RewardType.RESTAURANT to 50).forEachIndexed { index, (type, count) ->
+        listOf(RewardType.BED_TIME to 25, RewardType.RESTAURANT to 50,
+            RewardType.TOYS_1 to 100, RewardType.TOYS_2 to 100, RewardType.TOYS_3 to 100)
+            .forEachIndexed { index, (type, count) ->
             compose.runOnIdle {
                 saved = result().copy(id = index.toLong(), prizeType = type, questionCount = count,
                     attempts = List(count) { Attempt(Problem(1, 1, Operation.ADDITION), 2) })
@@ -197,41 +206,64 @@ class RewardUiTest {
     @Test
     @GraphicsMode(GraphicsMode.Mode.NATIVE)
     fun newRewardImagesAnimateOnlyWhileResumed() {
+        val types = listOf(RewardType.BED_TIME, RewardType.RESTAURANT,
+            RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3)
+        val tags = types.flatMap { type -> listOf("${type.name}-whole", "${type.name}-fragment") }
         compose.setContent {
             MathTheme {
                 Column {
-                    listOf(RewardType.BED_TIME, RewardType.RESTAURANT).forEach { type ->
+                    types.forEach { type ->
                         Row {
-                            RewardImage(type, false)
-                            RewardImage(type, true)
+                            RewardImage(type, false, Modifier.size(120.dp).testTag("${type.name}-whole"))
+                            RewardImage(type, true, Modifier.size(120.dp).testTag("${type.name}-fragment"))
                         }
                     }
                 }
             }
         }
         compose.mainClock.advanceTimeBy(64)
-        fun pixels(): IntArray = compose.runOnIdle {
+        val bounds = tags.associateWith { tag ->
+            compose.onNodeWithTag(tag).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        }
+        fun pixels(): Map<String, IntArray> = compose.runOnIdle {
             val view = compose.activity.findViewById<View>(android.R.id.content)
             val image = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
             view.draw(Canvas(image))
-            IntArray(image.width * image.height).also {
-                image.getPixels(it, 0, image.width, 0, 0, image.width, image.height)
+            try {
+                bounds.mapValues { (_, rect) ->
+                    val width = rect.width.toInt()
+                    val height = rect.height.toInt()
+                    IntArray(width * height).also {
+                        image.getPixels(it, 0, width, rect.left.toInt(), rect.top.toInt(), width, height)
+                    }
+                }
+            } finally {
                 image.recycle()
             }
         }
         val first = pixels()
         compose.mainClock.advanceTimeBy(800)
-        assertFalse("Artwork animates on the Compose clock", first.contentEquals(pixels()))
+        val animated = pixels()
+        tags.forEach { tag ->
+            assertFalse("$tag animates on the Compose clock", first.getValue(tag).contentEquals(animated.getValue(tag)))
+        }
         compose.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
         compose.mainClock.advanceTimeBy(64)
         val paused = pixels()
         compose.mainClock.advanceTimeBy(800)
-        assertArrayEquals("Artwork is static in the background", paused, pixels())
+        val stillPaused = pixels()
+        tags.forEach { tag ->
+            assertArrayEquals("$tag is static in the background", paused.getValue(tag), stillPaused.getValue(tag))
+        }
         compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
         compose.mainClock.advanceTimeBy(64)
         val resumed = pixels()
         compose.mainClock.advanceTimeBy(800)
-        assertFalse("Artwork animates again after resuming", resumed.contentEquals(pixels()))
+        val animatedAgain = pixels()
+        tags.forEach { tag ->
+            assertFalse("$tag animates again after resuming",
+                resumed.getValue(tag).contentEquals(animatedAgain.getValue(tag)))
+        }
     }
 
     @Test fun aPersistenceErrorOffersOneRetryAndCanStillBeDismissed() {
@@ -400,7 +432,7 @@ class RewardUiTest {
                     assertTrue(layouts.isNotEmpty())
                     assertFalse("$text overflows", layouts.single().hasVisualOverflow)
                 }
-            compose.onNodeWithContentDescription(type.label).assertIsDisplayed()
+            compose.onNodeWithContentDescription(rewardImageDescription(type, false)).assertIsDisplayed()
             compose.onNodeWithContentDescription(rewardImageDescription(type, true)).assertIsDisplayed()
         }
     }
@@ -483,7 +515,7 @@ class RewardUiTest {
                 .assertIsDisplayed().assert(hasText("Whole: $index"))
                 .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
             if (index == 0) card.assertIsNotEnabled() else card.assertIsEnabled()
-            compose.onNodeWithContentDescription(type.label).assertIsDisplayed()
+            compose.onNodeWithContentDescription(rewardImageDescription(type, false)).assertIsDisplayed()
             compose.onNodeWithContentDescription(rewardImageDescription(type, true)).assertDoesNotExist()
         }
         compose.onNodeWithText("1/3").assertDoesNotExist()
@@ -540,6 +572,32 @@ class RewardUiTest {
         compose.onNodeWithText("No whole rewards available yet.").assertIsDisplayed()
         compose.onNodeWithTag("use-reward-LOLLIPOP").assertIsNotEnabled().assert(hasText("Whole: 0"))
         compose.onNodeWithText("Yes").assertDoesNotExist()
+    }
+
+    @Test fun tierThreeToysUseTheSharedConfirmationAndPreserveTheirFragments() {
+        compose.mainClock.autoAdvance = true
+        val types = listOf(RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3)
+        var balances by mutableStateOf(types.associateWith { RewardBalance(1, 2) })
+        val used = mutableListOf<RewardType>()
+        compose.setContent {
+            MathTheme {
+                UseRewardsDialog(balances, false, null, { type ->
+                    used += type
+                    balances = balances + (type to balances.getValue(type).copy(whole = 0))
+                }, {})
+            }
+        }
+        types.forEach { type ->
+            compose.onNodeWithTag("use-rewards-grid").performScrollToKey(type.name)
+            compose.onNodeWithTag("use-reward-${type.name}").assertIsEnabled()
+                .assert(hasText(type.label)).assert(hasText("Whole: 1")).performClick()
+            compose.onNodeWithText("You would like to use 1 ${type.label}?").assertIsDisplayed()
+            compose.onNodeWithText("Yes").performClick()
+            compose.onNodeWithTag("use-rewards-grid").performScrollToKey(type.name)
+            compose.onNodeWithTag("use-reward-${type.name}").assertIsNotEnabled().assert(hasText("Whole: 0"))
+            compose.runOnIdle { assertEquals(RewardBalance(0, 2), balances.getValue(type)) }
+        }
+        compose.runOnIdle { assertEquals(types, used) }
     }
 
     @Test fun emptyPickerCannotRequestAnyReward() {
@@ -640,7 +698,7 @@ class RewardUiTest {
         compose.onNodeWithTag("reward-inventory").performScrollToKey(RewardTier.TIER_2.name)
         compose.mainClock.advanceTimeByFrame()
         val tierTwo = compose.onNodeWithText("Tier 2").assertIsDisplayed()
-            .assert(hasText("50 or more questions"))
+            .assert(hasText("50–99 questions"))
             .assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading))
             .fetchSemanticsNode().boundsInRoot
         val nextRow = compose.onNodeWithTag("reward-card-${RewardType.entries[4].name}")
@@ -649,6 +707,23 @@ class RewardUiTest {
         assertTrue(tierTwo.bottom <= nextRow.top)
         assertEquals(header.left, tierTwo.left, 1f)
         assertEquals(header.right, tierTwo.right, 1f)
+        compose.onNodeWithTag("reward-inventory").performScrollToKey(RewardTier.TIER_3.name)
+        compose.mainClock.advanceTimeByFrame()
+        val tierThree = compose.onNodeWithText("Tier 3").assertIsDisplayed()
+            .assert(hasText("100 or more questions"))
+            .assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading))
+            .fetchSemanticsNode().boundsInRoot
+        val toys = listOf(RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3).map { type ->
+            compose.onNodeWithTag("reward-card-${type.name}").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        }
+        toys.forEach { card ->
+            assertTrue(tierThree.bottom <= card.top)
+            assertEquals(toys.first().top, card.top, 1f)
+            assertEquals(firstRow.first().width, card.width, 1f)
+        }
+        assertEquals(header.left, toys.first().left, 1f)
+        assertEquals(header.left, tierThree.left, 1f)
+        assertEquals(header.right, tierThree.right, 1f)
     }
 
     private fun assertScoreText(correct: Int, count: Int, expected: String) {
