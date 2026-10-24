@@ -746,6 +746,9 @@ private fun GameSettings(
             Switch(model.showTimer, model::chooseShowTimer,
                 modifier = Modifier.semantics { contentDescription = "Show timer" })
         }
+        listOf(MathRewardGame.BASIC, MathRewardGame.MATRIX, MathRewardGame.LOGIC).forEach { game ->
+            MathTimeLimitSetting(model, game)
+        }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Show correct answers")
@@ -768,19 +771,16 @@ private fun GameSettings(
             DefaultActivitySettingsLink("rewards-setup", "Default number limits for Basic Math and Practice Game") {
                 onRewardsSetup(MathRewardGame.BASIC)
             }
-            MathTimeLimitSetting(model, MathRewardGame.BASIC)
         }
         CollapsibleSettingsSection("Multiplication Matrix Settings", defaultExpanded = false) {
             DefaultActivitySettingsLink("matrix-rewards-setup", "Question order for Multiplication Matrix") {
                 onRewardsSetup(MathRewardGame.MATRIX)
             }
-            MathTimeLimitSetting(model, MathRewardGame.MATRIX)
         }
         CollapsibleSettingsSection("Logic Math Settings", defaultExpanded = false) {
             DefaultActivitySettingsLink("logic-rewards-setup", "Default number limits for Logic Math") {
                 onRewardsSetup(MathRewardGame.LOGIC)
             }
-            MathTimeLimitSetting(model, MathRewardGame.LOGIC)
             LogicMathSettingsFields(model)
         }
     }
@@ -956,9 +956,13 @@ private fun RewardAdjustmentReel(
 @Composable
 private fun MathTimeLimitSetting(model: MathViewModel, game: MathRewardGame) {
     if (model.rewardsEnabled && model.showTimer) {
-        TimeLimitSetting(model.mathTimeLimitSeconds(game), { model.chooseMathTimeLimitSeconds(game, it) },
-            model.pauseInBackground, model::choosePauseInBackground,
-            tag = if (game == MathRewardGame.BASIC) "time-limit" else "${game.name.lowercase()}-time-limit")
+        Column(Modifier.testTag("math-${game.name}-timer-settings"),
+            verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(game.title, style = MaterialTheme.typography.titleSmall)
+            TimeLimitSetting(model.mathTimeLimitSeconds(game), { model.chooseMathTimeLimitSeconds(game, it) },
+                model.pauseInBackground, model::choosePauseInBackground,
+                tag = if (game == MathRewardGame.BASIC) "time-limit" else "${game.name.lowercase()}-time-limit")
+        }
     }
 }
 
