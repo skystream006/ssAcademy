@@ -802,7 +802,7 @@ class MathAppTest {
         assertEquals(50, model.readyParameters!!.questionCount)
     }
 
-    @Test fun rewardsLaunchRequiresOneOfThreeImageChoicesAndUsesTheSelectedCount() {
+    @Test fun rewardsLaunchRequiresOneOfFourImageChoicesAndUsesTheSelectedCount() {
         val model = model()
         model.updateQuestionCount("37")
         compose.setContent { MathAppContent(model) }
@@ -811,9 +811,9 @@ class MathAppTest {
         assertRewardsLaunchHeader()
         compose.onNodeWithTag("rewards-question-count-input").assertDoesNotExist()
         compose.onNodeWithText("Number of questions").assertDoesNotExist()
-        val choices = listOf(15 to "Poké Ball", 25 to "Blue gift box", 50 to "Royal purple gift box")
+        val choices = listOf(15 to "Poké Ball", 25 to "Blue gift box", 50 to "Royal purple gift box", 100 to "Pink gift box")
         compose.onAllNodes(hasAnyAncestor(hasTestTag("rewards-question-count-choices")) and hasClickAction())
-            .assertCountEquals(3)
+            .assertCountEquals(4)
         choices.forEach { (count, image) ->
             compose.onNodeWithTag("rewards-question-count-$count").performScrollTo().assertIsNotSelected()
                 .assertTextEquals(count.toString()).assertContentDescriptionEquals("$count questions", image)
@@ -840,7 +840,7 @@ class MathAppTest {
         }
         compose.onNodeWithTag("rewards-operation-ADDITION").performScrollTo().performClick()
         compose.onNodeWithTag("start-button").performClick()
-        assertEquals(50, model.game!!.questionCount)
+        assertEquals(100, model.game!!.questionCount)
         compose.runOnIdle { model.backToSetup() }
         compose.onNodeWithTag("rewards-game").performClick()
         choices.forEach { (count, _) ->
@@ -870,12 +870,14 @@ class MathAppTest {
         compose.setContent { MathAppContent(model) }
         compose.onNodeWithTag("subject-Math").performClick()
         compose.onNodeWithTag("rewards-game").performClick()
-        val images = listOf("Poké Ball", "Blue gift box", "Royal purple gift box")
+        val allImages = listOf("Poké Ball", "Blue gift box", "Royal purple gift box", "Pink gift box")
         for (thresholds in listOf(RewardThresholds(20, 40), RewardThresholds(1, 1000),
             RewardThresholds(15, 30), RewardThresholds(10, 15))) {
             compose.runOnIdle { model.chooseRewardThresholds(thresholds.tier1Minimum, thresholds.tier2Minimum) }
             compose.onNodeWithTag("rewards-operation-ADDITION").performScrollTo().assertIsNotEnabled()
-            val counts = listOf(15, thresholds.tier1Minimum, thresholds.tier2Minimum)
+            val counts = listOf(15, thresholds.tier1Minimum, thresholds.tier2Minimum, thresholds.tier3Minimum)
+                .filter { it <= MAX_QUESTION_COUNT }
+            val images = allImages.take(counts.size)
             images.forEachIndexed { index, image ->
                 compose.onNodeWithContentDescription(image).performScrollTo()
                     .assertTextEquals(counts[index].toString()).performClick().assertIsSelected()
@@ -913,7 +915,8 @@ class MathAppTest {
         model.openRewardsGame()
         compose.setContent { MathAppContent(model) }
         compose.onNodeWithText("• Tier 1: 15–24 questions").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("• Tier 2: 25 or more questions").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("• Tier 2: 25–99 questions").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("• Tier 3: 100 or more questions").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("25–49 questions", substring = true).assertDoesNotExist()
         compose.onNodeWithText("Cancel").assertIsDisplayed().performClick()
         compose.onNodeWithTag("multiplication-matrix-game").performScrollTo().performClick()
@@ -925,6 +928,13 @@ class MathAppTest {
         compose.runOnIdle { model.chooseMatrixRewardTier(RewardTier.TIER_2) }
         compose.onNodeWithText("Eligible for enabled Tier 2 prize fragments.").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Unavailable: no rewards enabled in this tier.").assertDoesNotExist()
+        compose.runOnIdle {
+            model.chooseMatrixRewardTier(RewardTier.TIER_3)
+            model.chooseTier3RewardChances(100, 0, 0)
+            model.chooseRewardEnabled(RewardType.TOYS_1, false)
+        }
+        compose.onNodeWithText("Eligible for enabled Tier 3 prize fragments.").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Unavailable: no rewards enabled in this tier.").performScrollTo().assertIsDisplayed()
     }
 
     @Test fun rewardsLaunchExplainsThresholdsAndShowsIndependentAvailabilityWarnings() {

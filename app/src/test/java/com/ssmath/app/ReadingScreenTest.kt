@@ -143,7 +143,8 @@ class ReadingScreenTest {
             RewardThresholds(15, 30), RewardThresholds(10, 15))) {
             compose.runOnIdle { appModel.chooseRewardThresholds(thresholds.tier1Minimum, thresholds.tier2Minimum) }
             val choices = listOf(15 to "Poké Ball", thresholds.tier1Minimum to "Blue gift box",
-                thresholds.tier2Minimum to "Royal purple gift box")
+                thresholds.tier2Minimum to "Royal purple gift box", thresholds.tier3Minimum to "Pink gift box")
+                .filter { it.first <= MAX_QUESTION_COUNT }
             choices.forEach { (count, image) ->
                 compose.onNodeWithContentDescription(image).performScrollTo()
                     .assertTextEquals(count.toString()).performClick().assertIsSelected()

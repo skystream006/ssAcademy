@@ -34,7 +34,8 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    **Challenge- Basic Math** (formerly Rewards Game) asks **How many questions would you like?** each time you open
    its dialog. Select **15** (Poké Ball), the saved Admin **Tier 1 minimum**
    (blue gift box, default **25**), or **Tier 2 minimum**
-   (royal purple gift box, default **50**) questions, review the obtainable reward criteria,
+   (royal purple gift box, default **50**), or **Tier 3 minimum**
+   (pink gift box, default **100**) questions, review the obtainable reward criteria,
    then choose a math type to use its saved number limits. The list explains
    Other animations, Pokémon eligibility, and both prize tiers with their enabled
    reward types; unavailable prizes are indicated when rewards are disabled.
@@ -62,7 +63,7 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    It does not change your other games' saved number limits or question counts.
    The same rewards rules apply: finish all questions with **more than 90% correct** for an
    enabled prize fragment, with Math Rewards System enabled at start and finish.
-   **Matrix Reward Tier** in the same activity settings chooses **Tier 1** or **Tier 2** (the default),
+   **Matrix Reward Tier** in the same activity settings chooses **Tier 1**, **Tier 2** (the default), or **Tier 3**,
    independently of the usual minimum-question thresholds. The selected tier is used when
    the game finishes; no prize is awarded if all rewards in that tier are disabled.
    The configured time limit per 5 questions scales to all 121 questions, and the game stops
@@ -230,7 +231,7 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
 - **Change Name** – edit the name used for all games on this device. Save a name of
   1–40 characters, or cancel to keep the current name. Progress, stories, and rewards stay intact.
 - **My Rewards** – under Rewards, view your collected prizes and
-  one-third fragments in a four-column grid grouped by **Tier 1** and **Tier 2**,
+  one-third fragments in a four-column grid grouped by **Tier 1**, **Tier 2**, and **Tier 3**,
   even when the rewards system is disabled.
   Tap **Use rewards** in the upper-right corner to see whole reward pictures and
   available counts grouped by tier. Tap a reward and confirm **Yes** to use one; **No** cancels.
@@ -274,19 +275,30 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   After the celebration, tap the hopping gift box to open it and release confetti.
   By default, **Tier 1** rewards are for sessions of **25–49 questions**: a random Lollipop,
   Ice Cream Cone, Gummi Bear, Ramen, or Bed Time Fragment. **Tier 2** rewards are for sessions
-  of **50 or more questions**: a random Video Game or Restaurant Fragment.
+  of **50–99 questions**: a random Video Game or Restaurant Fragment.
+  **Tier 3** rewards are for sessions of **100 or more questions**: a **$1 Toys**,
+  **$2 Toys**, or **$3 Toys** Fragment, selected using the saved Tier 3 chances.
   Bed Time features a sleeping child, floating Zs, and twinkling stars; Restaurant
   features a swaying striped awning and a steaming meal. Their artwork animates
-  when revealed and in My Rewards and Use rewards.
+  when revealed and in My Rewards and Use rewards. All three toy rewards also have
+  distinct looping animations, including their one-third fragments.
   Individual rewards can be enabled or disabled in **Settings > Admin Menu > Available Rewards**.
-  In the same section, set **Tier 1 minimum questions** and **Tier 2 minimum questions**, then
-  choose **Save minimum questions**. Both must be whole numbers from **1 to 1,000**, and Tier 2
-  must be higher than Tier 1. Defaults are **25** and **50**. These saved thresholds apply to
-  both Math and Reading when a game finishes: Tier 2 at or above its minimum, Tier 1 from its
+  In the same section, set **Tier 1 minimum questions**, **Tier 2 minimum questions**, and
+  **Tier 3 minimum questions**, then choose **Save minimum questions**. All must be whole numbers
+  from **1 to 1,000**, with each tier higher than the previous tier. Defaults are **25**, **50**,
+  and **100**. These saved thresholds apply to both Math and Reading when a game finishes:
+  Tier 3 at or above its minimum, Tier 2 from its minimum to below Tier 3's minimum, Tier 1 from its
   minimum to below Tier 2's minimum, and no prize below Tier 1's minimum. Matrix games use their
   separately selected tier instead. Changing these settings never changes saved prizes or claims.
-  Only enabled rewards from the qualifying tier are selected; if none are enabled in
-  that tier, no prize is awarded. Existing prizes and fragments remain available.
+  **Tier 3 chances** in Available Rewards are whole percentages from **0 to 100** and must
+  add up to **100% across all three toys** before **Save Tier 3 chances** is enabled.
+  Defaults are **34%**, **33%**, and **33%**, respectively. Saving applies all three values
+  together; invalid or unsaved edits leave the previous chances intact. **0%** excludes a toy.
+  Only enabled rewards from the qualifying tier are selected. Disabled Tier 3 rewards are excluded,
+  and remaining positive chances are scaled proportionally (for example, 60% and 40% become
+  100% and 0% if the second toy is disabled). If no enabled reward has a positive chance,
+  no prize is awarded; the app never falls back to another tier. Tier 1 and Tier 2 remain uniformly random.
+  Existing prizes and fragments remain available, including after changing chances.
   Fewer than the configured Tier 1 minimum (except matrix games) and exactly 90% correct do not qualify.
   Every 3 fragments of the same type automatically become 1 whole prize, with the
   fragment counter returning to 0. Prizes and their cumulative totals are saved
@@ -381,7 +393,7 @@ Older single-activity results show their latest saved response, not every earlie
 Use **Settings → Admin Menu → Game Settings → Reading Settings →
 Set Reading Level** to choose a level, and **Reading Progress** to view the private dashboard.
 Under **How many questions would you like?**, the Poké Ball selects **15** questions,
-while the blue and purple gift buttons select the saved Admin **Tier 1** and **Tier 2**
+while the blue, purple, and pink gift buttons select the saved Admin **Tier 1**, **Tier 2**, and **Tier 3**
 minimums (defaults **25** and **50**), just like Math. Then tap a game to
 reserve that many activities at your selected reading level.
 Tapping a game before choosing a count shows a reminder toast.

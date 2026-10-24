@@ -81,7 +81,8 @@ data class ReadingRewardResult(
     val prize: PrizeAward? = null,
     val celebration: Celebration? = null,
     val pokemonReward: Celebration? = null,
-    val rewardThresholds: RewardThresholds = RewardThresholds()
+    @Serializable(with = HistoricalRewardThresholdsSerializer::class)
+    val rewardThresholds: RewardThresholds = RewardThresholds(tier3Minimum = 1001)
 ) {
     val percentCorrectText: String
         get() {

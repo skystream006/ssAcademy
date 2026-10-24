@@ -458,7 +458,7 @@ private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit) {
                     }
                     HorizontalDivider()
                     CollapsibleSettingsSection("Available Rewards", defaultExpanded = false) {
-                        Text("Choose which rewards can be awarded when math challenges finish. Existing prizes and fragments stay available.")
+                        Text("Choose which rewards can be awarded when Math and Reading games finish. Existing prizes and fragments stay available.")
                         RewardMinimumSettings(model)
                         RewardTier.entries.forEach { tier ->
                             Text("${tier.label} · ${model.rewardThresholds.questionCountLabel(tier)}", Modifier.fillMaxWidth(),
@@ -471,8 +471,9 @@ private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit) {
                                         modifier = Modifier.semantics { contentDescription = "${type.label} reward" })
                                 }
                             }
+                            if (tier == RewardTier.TIER_3) Tier3ChanceSettings(model)
                         }
-                        Text("If all rewards in a tier are disabled, math challenges in that tier give no prize.")
+                        Text("If no enabled reward has a positive chance in a tier, games in that tier give no prize.")
                     }
                     HorizontalDivider()
                     CollapsibleSettingsSection("Game Settings", defaultExpanded = false) {
@@ -499,10 +500,14 @@ private fun RewardMinimumSettings(model: MathViewModel) {
     var tier2Text by rememberSaveable(model.rewardThresholds) {
         mutableStateOf(model.rewardThresholds.tier2Minimum.toString())
     }
+    var tier3Text by rememberSaveable(model.rewardThresholds) {
+        mutableStateOf(model.rewardThresholds.tier3Minimum.toString())
+    }
     val tier1 = parseQuestionCount(tier1Text)
     val tier2 = parseQuestionCount(tier2Text)
-    val valid = tier1 != null && tier2 != null && tier1 < tier2
-    Text("Minimum questions for Math and Reading rewards. Tier 2 must be higher than Tier 1. " +
+    val tier3 = parseQuestionCount(tier3Text)
+    val valid = tier1 != null && tier2 != null && tier3 != null && tier1 < tier2 && tier2 < tier3
+    Text("Minimum questions for Math and Reading rewards. Each tier must be higher than the previous tier. " +
         "Changes apply when a game finishes; saved prizes keep their original rules.")
     Text("Tier 1 minimum questions", style = MaterialTheme.typography.bodyMedium)
     OutlinedTextField(tier1Text, { tier1Text = it.take(6) },
@@ -514,16 +519,60 @@ private fun RewardMinimumSettings(model: MathViewModel) {
     Text("Tier 2 minimum questions", style = MaterialTheme.typography.bodyMedium)
     OutlinedTextField(tier2Text, { tier2Text = it.take(6) },
         supportingText = { Text("Whole number from 1 to $MAX_QUESTION_COUNT, higher than Tier 1") },
-        isError = !valid, singleLine = true,
+        isError = tier2 == null || (tier1 != null && tier2 <= tier1), singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         modifier = Modifier.fillMaxWidth().testTag("reward-tier-2-minimum")
             .semantics { contentDescription = "Tier 2 minimum questions" })
+    Text("Tier 3 minimum questions", style = MaterialTheme.typography.bodyMedium)
+    OutlinedTextField(tier3Text, { tier3Text = it.take(6) },
+        supportingText = { Text("Whole number from 1 to $MAX_QUESTION_COUNT, higher than Tier 2") },
+        isError = tier3 == null || (tier2 != null && tier3 <= tier2), singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        modifier = Modifier.fillMaxWidth().testTag("reward-tier-3-minimum")
+            .semantics { contentDescription = "Tier 3 minimum questions" })
     Button(onClick = {
-        if (tier1 != null && tier2 != null && tier1 < tier2) model.chooseRewardThresholds(tier1, tier2)
+        if (valid) model.chooseRewardThresholds(requireNotNull(tier1), requireNotNull(tier2), requireNotNull(tier3))
     }, enabled = valid && (tier1 != model.rewardThresholds.tier1Minimum ||
-        tier2 != model.rewardThresholds.tier2Minimum),
+        tier2 != model.rewardThresholds.tier2Minimum || tier3 != model.rewardThresholds.tier3Minimum),
         modifier = Modifier.fillMaxWidth().testTag("save-reward-minimums")) {
         Text("Save minimum questions", textAlign = TextAlign.Center)
+    }
+}
+
+@Composable
+private fun Tier3ChanceSettings(model: MathViewModel) {
+    val saved = model.tier3RewardChances
+    var toys1Text by rememberSaveable(saved) { mutableStateOf(saved.toys1.toString()) }
+    var toys2Text by rememberSaveable(saved) { mutableStateOf(saved.toys2.toString()) }
+    var toys3Text by rememberSaveable(saved) { mutableStateOf(saved.toys3.toString()) }
+    val texts = listOf(toys1Text, toys2Text, toys3Text)
+    val percentages = texts.map { it.trim().toIntOrNull()?.takeIf { value -> value in 0..100 } }
+    val total = if (percentages.all { it != null }) percentages.sumOf { requireNotNull(it) } else null
+    Text("Tier 3 chances must total 100%. Use whole percentages from 0 to 100; 0% never awards that toy. " +
+        "Disabled rewards are excluded and the remaining enabled chances are scaled proportionally. " +
+        "Changes apply when a game finishes.")
+    listOf(RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3).forEachIndexed { index, type ->
+        Text("${type.label} chance (%)", style = MaterialTheme.typography.bodyMedium)
+        OutlinedTextField(texts[index], { value ->
+            when (index) {
+                0 -> toys1Text = value.take(6)
+                1 -> toys2Text = value.take(6)
+                else -> toys3Text = value.take(6)
+            }
+        }, isError = percentages[index] == null, singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.fillMaxWidth().testTag("reward-chance-${type.name}")
+                .semantics { contentDescription = "${type.label} chance (%)" })
+    }
+    Text(total?.let { "Tier 3 total: $it% (must equal 100%)" } ?: "Enter a whole percentage from 0 to 100 for every toy.",
+        color = if (total == 100) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error,
+        modifier = Modifier.testTag("tier-3-chance-total"))
+    Button(onClick = {
+        if (total == 100) model.chooseTier3RewardChances(
+            requireNotNull(percentages[0]), requireNotNull(percentages[1]), requireNotNull(percentages[2]))
+    }, enabled = total == 100 && percentages != listOf(saved.toys1, saved.toys2, saved.toys3),
+        modifier = Modifier.fillMaxWidth().testTag("save-tier-3-chances")) {
+        Text("Save Tier 3 chances", textAlign = TextAlign.Center)
     }
 }
 

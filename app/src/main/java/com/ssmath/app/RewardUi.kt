@@ -66,7 +66,12 @@ import kotlinx.coroutines.isActive
 internal const val REWARD_OPEN_DURATION_MS = 1_600
 
 internal fun rewardImageDescription(type: RewardType, fragment: Boolean): String {
-    if (!fragment) return type.label
+    if (!fragment) return when (type) {
+        RewardType.TOYS_1 -> "\$1 Toys: a colorful spinning top"
+        RewardType.TOYS_2 -> "\$2 Toys: a colorful toy train"
+        RewardType.TOYS_3 -> "\$3 Toys: a friendly toy robot"
+        else -> type.label
+    }
     return when (type) {
         RewardType.LOLLIPOP -> "One third of a lollipop"
         RewardType.ICE_CREAM -> "One third of an ice cream cone"
@@ -75,6 +80,9 @@ internal fun rewardImageDescription(type: RewardType, fragment: Boolean): String
         RewardType.VIDEO_GAME -> "One third of a video game controller"
         RewardType.BED_TIME -> "One third of a bedtime scene"
         RewardType.RESTAURANT -> "One third of a restaurant"
+        RewardType.TOYS_1 -> "One third of a \$1 toy spinning top"
+        RewardType.TOYS_2 -> "One third of a \$2 toy train"
+        RewardType.TOYS_3 -> "One third of a \$3 toy robot"
     }
 }
 
@@ -85,7 +93,12 @@ internal fun RewardImage(
     modifier: Modifier = Modifier,
     showFragmentBadge: Boolean = true
 ) {
-    val animation = if (type == RewardType.BED_TIME || type == RewardType.RESTAURANT) {
+    val animated = when (type) {
+        RewardType.BED_TIME, RewardType.RESTAURANT,
+        RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3 -> true
+        else -> false
+    }
+    val animation = if (animated) {
         val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
         if (lifecycleState.isAtLeast(Lifecycle.State.RESUMED)) {
             rememberInfiniteTransition(label = "reward-artwork").animateFloat(
@@ -418,6 +431,9 @@ private fun RewardInventoryPart(type: RewardType, fragment: Boolean, count: Stri
                 RewardType.VIDEO_GAME -> Color(0xFFEAE5FF)
                 RewardType.BED_TIME -> Color(0xFFE3E6FF)
                 RewardType.RESTAURANT -> Color(0xFFFFE5D7)
+                RewardType.TOYS_1 -> Color(0xFFFFF1D2)
+                RewardType.TOYS_2 -> Color(0xFFDDF4F5)
+                RewardType.TOYS_3 -> Color(0xFFF0E6FF)
             }
         ) {
             RewardImage(type, fragment, Modifier.fillMaxWidth().aspectRatio(1f).padding(6.dp),

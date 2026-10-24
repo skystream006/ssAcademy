@@ -97,7 +97,8 @@ data class ReadingSession(
     val timedOut: Boolean = false,
     val timeLimitMs: Long? = null,
     val elapsedMs: Long = 0,
-    val rewardThresholds: RewardThresholds = RewardThresholds()
+    @Serializable(with = HistoricalRewardThresholdsSerializer::class)
+    val rewardThresholds: RewardThresholds = RewardThresholds(tier3Minimum = 1001)
 ) {
     val questionCount: Int get() = attemptIds.size
 }
@@ -243,7 +244,8 @@ object ReadingEngine {
             next = endSession(next, it.id, now, abandoned = true)
         }
         val session = ReadingSession(id, owner.id, game, level, attempts.map { it.id }, now,
-            rewardsEnabledAtStart = rewardsEnabledAtStart, timeLimitMs = timeLimitMs)
+            rewardsEnabledAtStart = rewardsEnabledAtStart, timeLimitMs = timeLimitMs,
+            rewardThresholds = RewardThresholds())
         return next.copy(attempts = next.attempts + attempts, sessions = next.sessions + session,
             profiles = next.profiles.map {
                 if (it.id == owner.id) it.copy(activeAttemptId = attempts.first().id) else it
@@ -386,13 +388,15 @@ object ReadingEngine {
     fun submit(data: ReadingData, key: String, now: Long = System.currentTimeMillis(),
                rewardsEnabled: Boolean = true,
                disabledRewards: Set<RewardType> = emptySet(), random: Random = Random.Default,
-               rewardThresholds: RewardThresholds = RewardThresholds()): ReadingData {
+               rewardThresholds: RewardThresholds = RewardThresholds(),
+               tier3RewardChances: Tier3RewardChances = Tier3RewardChances()): ReadingData {
         val session = data.activeSession
         if (session != null && key == "bonus") return data
         val updated = submitCheckpoint(data, key, now)
         if (session == null || updated == data || updated.active?.let(::wrong) != true) return updated
         val finished = edit(updated) { it.copy(finishedAt = now) }
-        return completeSessionIfNeeded(finished, now, rewardsEnabled, disabledRewards, random, rewardThresholds)
+        return completeSessionIfNeeded(finished, now, rewardsEnabled, disabledRewards, random, rewardThresholds,
+            tier3RewardChances)
     }
 
     private fun submitCheckpoint(data: ReadingData, key: String, now: Long): ReadingData = edit(data) { a ->
@@ -442,16 +446,18 @@ object ReadingEngine {
 
     fun finish(data: ReadingData, now: Long = System.currentTimeMillis(), rewardsEnabled: Boolean = true,
                disabledRewards: Set<RewardType> = emptySet(), random: Random = Random.Default,
-               rewardThresholds: RewardThresholds = RewardThresholds()): ReadingData {
+               rewardThresholds: RewardThresholds = RewardThresholds(),
+               tier3RewardChances: Tier3RewardChances = Tier3RewardChances()): ReadingData {
         val a = data.active ?: return data
         if (!a.open || !ready(a)) return data
         val updated = edit(data) { it.copy(finishedAt = now) }
         if (updated == data) return data
         if (a.game != ReadingGame.STUDIO)
-            return completeSessionIfNeeded(updated, now, rewardsEnabled, disabledRewards, random, rewardThresholds)
+            return completeSessionIfNeeded(updated, now, rewardsEnabled, disabledRewards, random, rewardThresholds,
+                tier3RewardChances)
         val story = ReadingStory(a.id, a.content.title, storyText(a), a.content.picture.symbol, listOf(a.ownerId), now)
         return completeSessionIfNeeded(updated.copy(stories = updated.stories.filterNot { it.attemptId == a.id } + story),
-            now, rewardsEnabled, disabledRewards, random, rewardThresholds)
+            now, rewardsEnabled, disabledRewards, random, rewardThresholds, tier3RewardChances)
     }
 
     fun nextSessionActivity(data: ReadingData): ReadingData {
@@ -466,19 +472,22 @@ object ReadingEngine {
 
     private fun completeSessionIfNeeded(data: ReadingData, now: Long, rewardsEnabled: Boolean,
                                        disabledRewards: Set<RewardType>, random: Random,
-                                       rewardThresholds: RewardThresholds): ReadingData {
+                                       rewardThresholds: RewardThresholds,
+                                       tier3RewardChances: Tier3RewardChances): ReadingData {
         val session = data.activeSession ?: return data
         return if (data.sessionWrong(session) * 10 > session.questionCount ||
             data.sessionAnswered(session) == session.questionCount)
             endSession(data, session.id, now, rewardsEnabled = rewardsEnabled,
-                disabledRewards = disabledRewards, random = random, rewardThresholds = rewardThresholds)
+                disabledRewards = disabledRewards, random = random, rewardThresholds = rewardThresholds,
+                tier3RewardChances = tier3RewardChances)
         else data
     }
 
     fun endSession(data: ReadingData, id: String, now: Long = System.currentTimeMillis(),
                    abandoned: Boolean = false, timedOut: Boolean = false, rewardsEnabled: Boolean = false,
                    disabledRewards: Set<RewardType> = emptySet(), random: Random = Random.Default,
-                   rewardThresholds: RewardThresholds = RewardThresholds()): ReadingData {
+                   rewardThresholds: RewardThresholds = RewardThresholds(),
+                   tier3RewardChances: Tier3RewardChances = Tier3RewardChances()): ReadingData {
         val session = data.sessions.first { it.id == id }
         if (session.finishedAt != null) return data
         require(!timedOut || (session.timeLimitMs != null && session.elapsedMs >= session.timeLimitMs))
@@ -486,7 +495,7 @@ object ReadingEngine {
             data.sessionWrong(session) * 10 > session.questionCount)
         val prize = if (abandoned) null else selectPrize(session.questionCount, data.sessionCorrect(session),
             data.sessionAnswered(session), session.rewardsEnabledAtStart, rewardsEnabled, timedOut, random, disabledRewards,
-            rewardThresholds)
+            rewardThresholds, tier3RewardChances = tier3RewardChances)
         return data.copy(sessions = data.sessions.map {
             if (it.id == id) it.copy(finishedAt = now, abandoned = abandoned, timedOut = timedOut, prizeType = prize,
                 rewardThresholds = rewardThresholds) else it
