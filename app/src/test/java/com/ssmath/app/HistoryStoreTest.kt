@@ -6,6 +6,8 @@ import java.time.ZoneOffset
 import java.util.UUID
 import java.util.Locale
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Test
@@ -95,7 +97,7 @@ class HistoryStoreTest {
             file.writeText(legacy)
             val before = store.loadSnapshot()
             assertEquals(GameMode.REWARDS, before.history.single().gameMode)
-            assertEquals(RewardThresholds(), before.history.single().rewardThresholds)
+            assertEquals(RewardThresholds(tier3Minimum = 1001), before.history.single().rewardThresholds)
             assertEquals(RewardTier.TIER_2, before.history.single().matrixRewardTier)
             assertEquals(pending, before.history.single())
             val claimed = store.claimReward(1)
@@ -317,7 +319,7 @@ class HistoryStoreTest {
 
     private fun eligible(id: Long, type: RewardType = RewardType.LOLLIPOP) = PracticeResult(
         id, id, Operation.ADDITION, 10, 1_000,
-        List(if (type.tier == RewardTier.TIER_2) 50 else 26) { Attempt(Problem(1, 1, Operation.ADDITION), 2) },
+        List(maxOf(26, RewardThresholds().minimum(type.tier))) { Attempt(Problem(1, 1, Operation.ADDITION), 2) },
         prizeType = type
     )
 
@@ -328,7 +330,8 @@ class HistoryStoreTest {
 
     @Test fun customMathAndReadingRuleSnapshotsRoundTripAndClaimOnlyOnce() {
         val thresholds = RewardThresholds(15, 25)
-        listOf(15 to RewardType.LOLLIPOP, 25 to RewardType.VIDEO_GAME).forEach { (count, type) ->
+        listOf(15 to RewardType.LOLLIPOP, 25 to RewardType.VIDEO_GAME, 100 to RewardType.TOYS_1,
+            101 to RewardType.TOYS_2, 102 to RewardType.TOYS_3).forEach { (count, type) ->
             val math = eligible(count.toLong(), type).copy(
                 attempts = List(count) { Attempt(Problem(1, 1, Operation.ADDITION), 2) },
                 questionCount = count, rewardThresholds = thresholds)
@@ -410,7 +413,7 @@ class HistoryStoreTest {
         val encoded = Json.encodeToString(ReadingRewardResult.serializer(), old)
         assertFalse(encoded.contains("rewardThresholds"))
         file.writeText("""{"history":[],"rewards":{},"readingResults":[$encoded]}""")
-        assertEquals(RewardThresholds(), store.loadSnapshot().readingResults.single().rewardThresholds)
+        assertEquals(RewardThresholds(tier3Minimum = 1001), store.loadSnapshot().readingResults.single().rewardThresholds)
         val claimed = store.claimReadingReward(old.sessionId)
         assertEquals(RewardBalance(0, 1), claimed.rewards[RewardType.LOLLIPOP])
         assertEquals(claimed, HistoryStore(file).claimReadingReward(old.sessionId))
@@ -425,6 +428,75 @@ class HistoryStoreTest {
             rewardThresholds = RewardThresholds(15, 25))
         assertNull(store.addReadingResult(wrongTier).readingResults.first().prizeType)
         assertEquals(before.rewards, store.claimReadingReward(wrongTier.sessionId).rewards)
+    }
+
+    @Test fun historicalReadingReceiptsKeepTierTwoAboveOneHundredWithEitherMissingRuleShape() {
+        for (count in listOf(100, 1000)) for (missingRules in listOf(false, true)) {
+            val result = reading().copy(questionCount = count, correct = count, answered = count,
+                prizeType = RewardType.VIDEO_GAME, rewardThresholds = RewardThresholds(tier3Minimum = 1001))
+            val encoded = snapshotJson.encodeToJsonElement(ReadingRewardResult.serializer(), result).jsonObject
+            val old = if (missingRules) JsonObject(encoded - "rewardThresholds")
+                else JsonObject(encoded + ("rewardThresholds" to JsonObject(
+                    encoded.getValue("rewardThresholds").jsonObject - "tier3Minimum")))
+            file.writeText("""{"history":[],"rewards":{},"readingResults":[$old]}""")
+            assertEquals(result, store.loadSnapshot().readingResults.single())
+            val claimed = store.claimReadingReward(result.sessionId)
+            assertEquals(PrizeAward(RewardType.VIDEO_GAME, RewardBalance(0, 1)),
+                claimed.readingResults.single().prize)
+            assertEquals(claimed, HistoryStore(file).claimReadingReward(result.sessionId))
+            assertTrue(file.readText().contains("\"tier3Minimum\":1001"))
+        }
+    }
+
+    @Test fun historicalMathThresholdsRetainTheirTierTwoRangeAndPrizesInBothHistoryFormats() {
+        for (missingRules in listOf(false, true)) for (array in listOf(false, true)) {
+            val thresholds = if (missingRules) RewardThresholds(tier3Minimum = 1001)
+                else RewardThresholds(15, 25, 1001)
+            val original = eligible(1, RewardType.VIDEO_GAME).copy(
+                attempts = List(100) { Attempt(Problem(1, 1, Operation.ADDITION), 2) },
+                questionCount = 100, rewardThresholds = thresholds)
+            val encoded = snapshotJson.encodeToJsonElement(PracticeResult.serializer(), original).jsonObject
+            val old = if (missingRules) JsonObject(encoded - "rewardThresholds")
+                else JsonObject(encoded + ("rewardThresholds" to JsonObject(
+                    encoded.getValue("rewardThresholds").jsonObject - "tier3Minimum")))
+            file.writeText(if (array) "[$old]" else """{"history":[$old],"rewards":{}}""")
+            val restored = store.load().single()
+            assertEquals(original, restored)
+            assertEquals(RewardTier.TIER_2, restored.rewardThresholds.tierForQuestionCount(100))
+            assertEquals("${thresholds.tier2Minimum} or more questions",
+                restored.rewardThresholds.questionCountLabel(RewardTier.TIER_2))
+            val claimed = store.claimReward(original.id)
+            assertEquals(PrizeAward(RewardType.VIDEO_GAME, RewardBalance(0, 1)), claimed.history.single().prize)
+            assertEquals(claimed, HistoryStore(file).claimReward(original.id))
+        }
+    }
+
+    @Test fun legacyMathKeepsItsAwardButCurrentReadingRequiresTheExactTier() {
+        val math = eligible(1, RewardType.VIDEO_GAME).copy(
+            attempts = List(100) { Attempt(Problem(1, 1, Operation.ADDITION), 2) }, questionCount = 100)
+        store.add(math)
+        assertEquals(RewardType.VIDEO_GAME, store.claimReward(1).history.single().prize?.type)
+        val invalid = reading().copy(questionCount = 100, correct = 100, answered = 100,
+            prizeType = RewardType.VIDEO_GAME, rewardThresholds = RewardThresholds())
+        assertNull(store.addReadingResult(invalid).readingResults.single().prizeType)
+        assertNull(store.claimReadingReward(invalid.sessionId).readingResults.single().prize)
+        val snapshot = PracticeSnapshot(readingResults = listOf(invalid))
+        file.writeText(snapshotJson.encodeToString(PracticeSnapshot.serializer(), snapshot))
+        assertEquals(snapshot, store.claimReadingReward(invalid.sessionId))
+    }
+
+    @Test fun newReadingThresholdsRemainExplicitWhenDefaultValuesAreOmittedDuringSerialization() {
+        for (thresholds in listOf(RewardThresholds(), RewardThresholds(15, 25), RewardThresholds(200, 300),
+            RewardThresholds(999, 1000), RewardThresholds(10, 20, 30))) {
+            val receipt = reading().copy(rewardThresholds = thresholds)
+            val encoded = Json.encodeToString(ReadingRewardResult.serializer(), receipt)
+            assertEquals(receipt, Json.decodeFromString(ReadingRewardResult.serializer(), encoded))
+            val root = Json.parseToJsonElement(encoded).jsonObject
+            if ("rewardThresholds" in root) assertTrue("tier3Minimum" in root.getValue("rewardThresholds").jsonObject)
+            val math = eligible(1).copy(rewardThresholds = thresholds)
+            val mathEncoded = Json.encodeToString(PracticeResult.serializer(), math)
+            assertEquals(math, Json.decodeFromString(PracticeResult.serializer(), mathEncoded))
+        }
     }
 
     @Test fun retiredReadingReceiptsMigrateBeforeEnumDecodingAndPreserveUnrelatedInventory() {

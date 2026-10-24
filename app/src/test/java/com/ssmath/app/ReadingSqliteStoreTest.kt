@@ -96,7 +96,7 @@ class ReadingSqliteStoreTest {
         install()
         var data = reader()
         for ((count, thresholds) in listOf(25 to RewardThresholds(), 15 to RewardThresholds(15, 25),
-            25 to RewardThresholds(15, 25))) {
+            25 to RewardThresholds(15, 25), 100 to RewardThresholds(), 15 to RewardThresholds(1, 2, 3))) {
             data = store.startSession(data, ReadingGame.MISSING, ReadingLevel.SPROUT, count, true)
             repeat(count) {
                 data = ReadingEngine.submit(ReadingEngine.field(data, "answer", readingCorrect(data).toString()), "answer",
@@ -113,10 +113,28 @@ class ReadingSqliteStoreTest {
         store = ReadingSqliteStore(application, database, legacy)
         val restored = store.load()
         assertEquals(sessions, restored.sessions)
-        assertEquals(listOf(RewardTier.TIER_1, RewardTier.TIER_1, RewardTier.TIER_2),
+        assertEquals(listOf(RewardTier.TIER_1, RewardTier.TIER_1, RewardTier.TIER_2, RewardTier.TIER_3, RewardTier.TIER_3),
             restored.sessions.map { it.prizeType?.tier })
         assertEquals(restored, ReadingEngine.endSession(restored, sessions.first().id,
             rewardThresholds = RewardThresholds(999, 1000)))
+    }
+
+    @Test fun legacyTierTwoReadingSessionMigrationSurvivesSqliteImportAndReload() {
+        var data = readingSessionFixture(count = 100)
+        repeat(100) { data = ReadingEngine.nextSessionActivity(readingSolve(data)) }
+        data = data.copy(sessions = listOf(requireNotNull(data.activeSession).copy(
+            prizeType = RewardType.RESTAURANT, rewardThresholds = RewardThresholds(tier3Minimum = 1001))))
+        legacy.writeText(withoutTierThreeRules(data, entireRules = true).toString())
+        val imported = store.load()
+        assertEquals(data.sessions, imported.sessions)
+        database.close()
+        database = ReadingDatabase(application, "rotation.db")
+        store = ReadingSqliteStore(application, database, legacy)
+        val restored = store.load()
+        assertEquals(data.sessions, restored.sessions)
+        assertEquals(RewardType.RESTAURANT, restored.activeSession?.prizeType)
+        store.save(restored)
+        assertEquals(restored, store.load())
     }
 
     @Test fun freshInstallIsEmptyAndEmptySelectionDoesNotConsumeAnything() {

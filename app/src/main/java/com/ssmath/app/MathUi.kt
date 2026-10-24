@@ -427,11 +427,12 @@ internal fun RewardsQuestionCountChoices(questionCount: Int?, onSelect: (Int) ->
     val choices = listOf(
         Triple(15, R.drawable.ic_pokeball, "Poké Ball"),
         Triple(thresholds.tier1Minimum, R.drawable.ic_gift_box_blue, "Blue gift box"),
-        Triple(thresholds.tier2Minimum, R.drawable.ic_gift_box_royal_purple, "Royal purple gift box")
-    )
+        Triple(thresholds.tier2Minimum, R.drawable.ic_gift_box_royal_purple, "Royal purple gift box"),
+        Triple(thresholds.tier3Minimum, R.drawable.ic_gift_box, "Pink gift box")
+    ).filter { it.first in 1..MAX_QUESTION_COUNT }
     // A tier minimum can equal the Poké Ball count; keep only the clicked choice selected.
     var selectedChoice by rememberSaveable { mutableStateOf<Int?>(null) }
-    val selectedIndex = selectedChoice?.takeIf { choices[it].first == questionCount }
+    val selectedIndex = selectedChoice?.takeIf { choices.getOrNull(it)?.first == questionCount }
         ?: choices.indexOfFirst { it.first == questionCount }
     val textMeasurer = rememberTextMeasurer()
     val labelWidth = choices.maxOf { (count, _, _) ->
@@ -440,7 +441,7 @@ internal fun RewardsQuestionCountChoices(questionCount: Int?, onSelect: (Int) ->
     val minimumButtonWidth = maxOf(64.dp, with(LocalDensity.current) { labelWidth.toDp() } + 16.dp)
     FlowRow(Modifier.fillMaxWidth().selectableGroup().testTag("$tagPrefix-question-count-choices"),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp), maxItemsInEachRow = 3) {
+        verticalArrangement = Arrangement.spacedBy(8.dp), maxItemsInEachRow = 4) {
         choices.forEachIndexed { index, (count, image, description) ->
             val selected = selectedIndex == index
             OutlinedButton(onClick = { selectedChoice = index; onSelect(count) }, enabled = enabled,
@@ -476,7 +477,8 @@ private fun RewardsCriteria(model: MathViewModel) {
             Text("Prize fragments are unavailable while rewards for this game are OFF.")
         }
         RewardTier.entries.forEach { tier ->
-            val available = RewardType.entries.filter { it.tier == tier && it !in model.disabledRewards }
+            val available = RewardType.entries.filter { it.tier == tier && it !in model.disabledRewards &&
+                (tier != RewardTier.TIER_3 || model.tier3RewardChances.percentage(it) > 0) }
             Text("• ${tier.label}: ${model.rewardThresholds.questionCountLabel(tier)}",
                 style = MaterialTheme.typography.titleSmall)
             if (!model.rewardsEnabled) {
@@ -665,7 +667,8 @@ private fun ReadyDialog(model: MathViewModel) {
             Text("Complete the matrix to collect both a Mega Pokémon and a Pokémon or Other animation.")
             if (model.currentGameRewardsEnabled) {
                 Text("Eligible for enabled ${model.matrixRewardTier.label} prize fragments.")
-                if (RewardType.entries.none { it.tier == model.matrixRewardTier && it !in model.disabledRewards }) {
+                if (RewardType.entries.none { it.tier == model.matrixRewardTier && it !in model.disabledRewards &&
+                    (it.tier != RewardTier.TIER_3 || model.tier3RewardChances.percentage(it) > 0) }) {
                     Text("Unavailable: no rewards enabled in this tier.")
                 }
             }

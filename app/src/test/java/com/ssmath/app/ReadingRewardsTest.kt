@@ -58,7 +58,8 @@ class ReadingRewardsTest {
         enabledAtStart: Boolean = true,
         enabledAtFinish: Boolean = true,
         disabled: Set<RewardType> = RewardType.entries.toSet() - RewardType.LOLLIPOP,
-        thresholds: RewardThresholds = RewardThresholds()
+        thresholds: RewardThresholds = RewardThresholds(),
+        chances: Tier3RewardChances = Tier3RewardChances()
     ): ReadingData {
         val attempts = List(count) { index ->
             ReadingAttempt("$id-$index", "reader", "missing-cup", 1,
@@ -74,7 +75,8 @@ class ReadingRewardsTest {
         val data = ReadingData(profiles = listOf(ReadingProfile("reader", "Reader")),
             selectedProfileId = "reader", attempts = attempts, sessions = listOf(session))
         return ReadingEngine.endSession(data, id, 3, timedOut = timedOut, rewardsEnabled = enabledAtFinish,
-            disabledRewards = disabled, random = Random(3), rewardThresholds = thresholds)
+            disabledRewards = disabled, random = Random(3), rewardThresholds = thresholds,
+            tier3RewardChances = chances)
     }
 
     private fun open(model: MathViewModel, data: ReadingData) {
@@ -107,6 +109,41 @@ class ReadingRewardsTest {
             assertEquals(RewardThresholds(15, 25), restored.readingRewardResult?.rewardThresholds)
             assertTrue(restored.history.isEmpty())
             assertEquals(restored.readingRewardResults, HistoryStore(file).loadSnapshot().readingResults)
+        }
+    }
+
+    @Test fun toyAwardsAndLegacyTierTwoAwardsSurviveChangedSettingsReplayAndRepeatedClaims() {
+        val cases = listOf(
+            Triple("old-tier-two", RewardType.VIDEO_GAME, RewardThresholds(tier3Minimum = 1001)),
+            Triple("new-toy-one", RewardType.TOYS_1, RewardThresholds()),
+            Triple("new-toy-two", RewardType.TOYS_2, RewardThresholds()),
+            Triple("new-toy-three", RewardType.TOYS_3, RewardThresholds())
+        )
+        for ((id, type, thresholds) in cases) {
+            val data = finished(id, count = 100, disabled = RewardType.entries.toSet() - type,
+                thresholds = thresholds)
+            assertEquals(type, data.sessions.single().prizeType)
+            val model = model()
+            open(model, data)
+            model.dismissReadingSessionReward()
+            model.chooseTier3RewardChances(0, 0, 100)
+            model.chooseRewardThresholds(998, 999, 1000)
+            model.chooseSubjectRewardsEnabled(Subject.READING, false)
+            RewardType.entries.forEach { model.chooseRewardEnabled(it, false) }
+            val restored = model()
+            open(restored, data)
+            assertNull(restored.readingCelebration)
+            restored.openSubjectHistory(Subject.READING)
+            restored.showReadingRewardForSession(data, data.sessions.single())
+            repeat(3) { restored.claimReadingReward() }
+            assertEquals(PrizeAward(type, RewardBalance(0, 1)), restored.readingRewardResult?.prize)
+            assertEquals(thresholds, restored.readingRewardResult?.rewardThresholds)
+            val again = model()
+            again.openSubjectHistory(Subject.READING)
+            again.showReadingRewardForSession(data, data.sessions.single())
+            again.claimReadingReward()
+            assertEquals(RewardBalance(0, 1), again.rewardBalances[type])
+            assertTrue(again.history.isEmpty())
         }
     }
 

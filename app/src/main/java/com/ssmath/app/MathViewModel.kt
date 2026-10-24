@@ -191,6 +191,8 @@ class MathViewModel(
         rewardsEnabled(Subject.READING) && game !in disabledReadingGameRewards
     var rewardThresholds by mutableStateOf(settings.readRewardThresholds())
         private set
+    var tier3RewardChances by mutableStateOf(settings.readTier3RewardChances())
+        private set
     var matrixRewardTier by mutableStateOf(settings.readMatrixRewardTier())
         private set
     var disabledRewards by mutableStateOf(RewardType.entries.filter {
@@ -596,15 +598,22 @@ class MathViewModel(
         resetTimer()
         val finishedAt = wallClock()
         latestResultId = maxOf(Math.addExact(latestResultId, 1), finishedAt)
+        val thresholdsAtFinish = settings.readRewardThresholds()
+        val matrixTierAtFinish = settings.readMatrixRewardTier()
+        val chancesAtFinish = settings.readTier3RewardChances()
+        val disabledAtFinish = settings.getStringSet("disabled_rewards", emptySet()).orEmpty()
+        val enabledAtFinish = settings.getBoolean(Subject.MATH.rewardsPreference, true) &&
+            currentMathRewardGame.name !in settings.getStringSet("disabled_math_game_rewards", emptySet()).orEmpty()
         val result = PracticeResult(latestResultId, finishedAt, state.operation, state.maximum, duration, state.attempts,
             minimum = state.minimum, maximumSecond = state.maximumSecond.takeIf { state.operation == Operation.DIVISION },
             questionCount = state.questionCount, timedOut = expired, gameMode = gameMode,
             isMultiplicationMatrix = state.isMultiplicationMatrix,
             isLogicMath = state.logicSettings != null,
-            rewardThresholds = rewardThresholds, matrixRewardTier = matrixRewardTier,
+            rewardThresholds = thresholdsAtFinish, matrixRewardTier = matrixTierAtFinish,
             prizeType = selectPrize(state.questionCount, state.correct, state.attempts.size,
-                rewardsEnabledAtStart, currentGameRewardsEnabled && gameMode == GameMode.REWARDS, expired, rewardRandom,
-                disabledRewards, rewardThresholds, matrixRewardTier.takeIf { state.isMultiplicationMatrix }))
+                rewardsEnabledAtStart, enabledAtFinish && gameMode == GameMode.REWARDS, expired, rewardRandom,
+                RewardType.entries.filter { it.name in disabledAtFinish }.toSet(), thresholdsAtFinish,
+                matrixTierAtFinish.takeIf { state.isMultiplicationMatrix }, tier3RewardChances = chancesAtFinish))
         val pending = PendingResult(result)
         pendingResult = pending
         lastResult = result
@@ -1262,11 +1271,36 @@ class MathViewModel(
     }
 
     fun chooseRewardThresholds(tier1Minimum: Int, tier2Minimum: Int) {
-        if (tier1Minimum !in 1..1000 || tier2Minimum !in 1..1000 || tier1Minimum >= tier2Minimum) return
-        if (rewardThresholds != RewardThresholds(tier1Minimum, tier2Minimum)) rewardsQuestionCountText = ""
-        rewardThresholds = RewardThresholds(tier1Minimum, tier2Minimum)
-        settings.edit().putInt("reward_tier_1_minimum", tier1Minimum)
-            .putInt("reward_tier_2_minimum", tier2Minimum).apply()
+        val thresholds = try {
+            RewardThresholds(tier1Minimum, tier2Minimum)
+        } catch (_: IllegalArgumentException) { return }
+        saveRewardThresholds(thresholds)
+    }
+
+    fun chooseRewardThresholds(tier1Minimum: Int, tier2Minimum: Int, tier3Minimum: Int) {
+        if (tier3Minimum !in 1..1000) return
+        val thresholds = try {
+            RewardThresholds(tier1Minimum, tier2Minimum, tier3Minimum)
+        } catch (_: IllegalArgumentException) { return }
+        saveRewardThresholds(thresholds)
+    }
+
+    private fun saveRewardThresholds(thresholds: RewardThresholds) {
+        if (rewardThresholds != thresholds) rewardsQuestionCountText = ""
+        rewardThresholds = thresholds
+        settings.edit().putInt("reward_tier_1_minimum", thresholds.tier1Minimum)
+            .putInt("reward_tier_2_minimum", thresholds.tier2Minimum)
+            .putInt("reward_tier_3_minimum", thresholds.tier3Minimum).apply()
+    }
+
+    fun chooseTier3RewardChances(toys1: Int, toys2: Int, toys3: Int) {
+        val chances = try {
+            Tier3RewardChances(toys1, toys2, toys3)
+        } catch (_: IllegalArgumentException) { return }
+        tier3RewardChances = chances
+        settings.edit().putInt("reward_tier_3_toys_1_percentage", toys1)
+            .putInt("reward_tier_3_toys_2_percentage", toys2)
+            .putInt("reward_tier_3_toys_3_percentage", toys3).apply()
     }
 
     fun chooseMatrixRewardTier(tier: RewardTier) {

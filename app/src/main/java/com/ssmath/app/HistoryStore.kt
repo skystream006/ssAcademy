@@ -39,7 +39,8 @@ data class PracticeResult(
     val gameMode: GameMode = GameMode.REWARDS,
     val isMultiplicationMatrix: Boolean = false,
     val megaPokemonReward: Celebration? = null,
-    val rewardThresholds: RewardThresholds = RewardThresholds(),
+    @Serializable(with = HistoricalRewardThresholdsSerializer::class)
+    val rewardThresholds: RewardThresholds = RewardThresholds(tier3Minimum = 1001),
     val matrixRewardTier: RewardTier = RewardTier.TIER_2,
     val isLogicMath: Boolean = false
 ) {
@@ -81,7 +82,8 @@ data class ReadingRewardResult(
     val prize: PrizeAward? = null,
     val celebration: Celebration? = null,
     val pokemonReward: Celebration? = null,
-    val rewardThresholds: RewardThresholds = RewardThresholds()
+    @Serializable(with = HistoricalRewardThresholdsSerializer::class)
+    val rewardThresholds: RewardThresholds = RewardThresholds(tier3Minimum = 1001)
 ) {
     val percentCorrectText: String
         get() {

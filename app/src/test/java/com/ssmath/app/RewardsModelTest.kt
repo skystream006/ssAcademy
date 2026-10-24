@@ -251,6 +251,118 @@ class RewardsModelTest {
         assertEquals(RewardThresholds(), settings.readRewardThresholds())
     }
 
+    @Test fun tierThreeChancesAndThresholdsSaveTogetherReloadAndIgnoreInvalidEdits() {
+        val settings = application.getSharedPreferences("settings", 0)
+        val model = model()
+        assertEquals(Tier3RewardChances(), model.tier3RewardChances)
+        model.chooseTier3RewardChances(0, 20, 80)
+        model.chooseRewardThresholds(15, 25, 40)
+        model.chooseMatrixRewardTier(RewardTier.TIER_3)
+        val saved = settings.all
+        listOf(Triple(-1, 21, 80), Triple(101, 0, -1), Triple(0, 0, 0), Triple(0, 20, 79),
+            Triple(34, 33, 34), Triple(Int.MAX_VALUE, Int.MAX_VALUE, 102)).forEach { (a, b, c) ->
+            model.chooseTier3RewardChances(a, b, c)
+            assertEquals(Tier3RewardChances(0, 20, 80), model.tier3RewardChances)
+            assertEquals(saved, settings.all)
+        }
+        listOf(0, 24, 25, 1001, Int.MAX_VALUE).forEach {
+            model.chooseRewardThresholds(15, 25, it)
+            assertEquals(RewardThresholds(15, 25, 40), model.rewardThresholds)
+            assertEquals(saved, settings.all)
+        }
+        val restored = model()
+        assertEquals(Tier3RewardChances(0, 20, 80), restored.tier3RewardChances)
+        assertEquals(RewardThresholds(15, 25, 40), restored.rewardThresholds)
+        assertEquals(RewardTier.TIER_3, restored.matrixRewardTier)
+        assertEquals(0, settings.getInt("reward_tier_3_toys_1_percentage", -1))
+        assertEquals(20, settings.getInt("reward_tier_3_toys_2_percentage", -1))
+        assertEquals(80, settings.getInt("reward_tier_3_toys_3_percentage", -1))
+        assertEquals(40, settings.getInt("reward_tier_3_minimum", -1))
+        assertTrue(restored.disabledRewards.isEmpty())
+    }
+
+    @Test fun tierThreeBadPreferencesFallBackAndLegacyHighThresholdsRemainValid() {
+        val settings = application.getSharedPreferences("settings", 0)
+        listOf(Triple(33, 33, 33), Triple(-1, 51, 50), Triple(101, 0, -1)).forEach { (a, b, c) ->
+            settings.edit().putInt("reward_tier_3_toys_1_percentage", a)
+                .putInt("reward_tier_3_toys_2_percentage", b)
+                .putInt("reward_tier_3_toys_3_percentage", c).commit()
+            assertEquals(Tier3RewardChances(), settings.readTier3RewardChances())
+            assertEquals(Tier3RewardChances(), model().tier3RewardChances)
+        }
+        listOf("reward_tier_3_toys_1_percentage", "reward_tier_3_toys_2_percentage",
+            "reward_tier_3_toys_3_percentage").forEach {
+            settings.edit().clear().putString(it, "33").commit()
+            assertEquals(Tier3RewardChances(), settings.readTier3RewardChances())
+        }
+        settings.edit().clear().putInt("reward_tier_1_minimum", 999)
+            .putInt("reward_tier_2_minimum", 1000).commit()
+        assertEquals(RewardThresholds(999, 1000, 1001), settings.readRewardThresholds())
+        assertEquals(RewardTier.TIER_2, model().rewardThresholds.tierForQuestionCount(1000))
+        settings.edit().putString("reward_tier_3_minimum", "1001").commit()
+        assertEquals(RewardThresholds(), settings.readRewardThresholds())
+        settings.edit().putInt("reward_tier_3_minimum", 1000).commit()
+        assertEquals(RewardThresholds(), settings.readRewardThresholds())
+        settings.edit().clear().putInt("reward_tier_3_minimum", 1002).commit()
+        assertEquals(RewardThresholds(), settings.readRewardThresholds())
+    }
+
+    @Test fun everyMathModeReadsTierThreeSettingsAtFinishAndKeepsItsAwardThroughReloadAndClaim() {
+        val settings = application.getSharedPreferences("settings", 0)
+        for (game in MathRewardGame.entries) {
+            val model = model()
+            model.chooseRewardThresholds(25, 50, 100)
+            model.chooseTier3RewardChances(100, 0, 0)
+            model.chooseMatrixRewardTier(RewardTier.TIER_2)
+            RewardType.entries.forEach { model.chooseRewardEnabled(it, true) }
+            readyRewardGame(model, game)
+            model.start()
+            val count = requireNotNull(model.game).questionCount
+            repeat(count - 1) { answer(model) }
+            settings.edit().putInt("reward_tier_1_minimum", 1).putInt("reward_tier_2_minimum", 2)
+                .putInt("reward_tier_3_minimum", 3).putString("matrix_reward_tier", "TIER_3")
+                .putInt("reward_tier_3_toys_1_percentage", 0).putInt("reward_tier_3_toys_2_percentage", 0)
+                .putInt("reward_tier_3_toys_3_percentage", 100).commit()
+            finish(model, 1)
+            val result = requireNotNull(model.lastResult)
+            assertEquals(RewardType.TOYS_3, result.prizeType)
+            assertEquals(RewardThresholds(1, 2, 3), result.rewardThresholds)
+            assertEquals(RewardTier.TIER_3, result.matrixRewardTier)
+            model.chooseTier3RewardChances(100, 0, 0)
+            model.chooseRewardThresholds(998, 999, 1000)
+            model.chooseMatrixRewardTier(RewardTier.TIER_1)
+            model.chooseRewardEnabled(RewardType.TOYS_3, false)
+            val restored = model()
+            val saved = restored.history.first { it.id == result.id }
+            assertEquals(result, saved)
+            restored.showRewardForResult(saved)
+            val before = restored.rewardBalances[RewardType.TOYS_3] ?: RewardBalance()
+            repeat(3) { restored.claimReward() }
+            shadowOf(Looper.getMainLooper()).idle()
+            assertEquals(before.addFragment(), restored.rewardBalances[RewardType.TOYS_3])
+            assertEquals(PrizeAward(RewardType.TOYS_3, before.addFragment()),
+                restored.history.first { it.id == result.id }.prize)
+        }
+    }
+
+    @Test fun disabledPositiveToyWeightAtMathFinishGivesNoPrizeOrFallbackInEveryMode() {
+        val settings = application.getSharedPreferences("settings", 0)
+        val model = model()
+        for (game in MathRewardGame.entries) {
+            model.chooseRewardThresholds(1, 2, 3)
+            model.chooseMatrixRewardTier(RewardTier.TIER_3)
+            model.chooseTier3RewardChances(0, 100, 0)
+            RewardType.entries.forEach { model.chooseRewardEnabled(it, true) }
+            readyRewardGame(model, game)
+            model.start()
+            val count = requireNotNull(model.game).questionCount
+            settings.edit().putStringSet("disabled_rewards", setOf("TOYS_2")).commit()
+            finish(model, count)
+            assertNull(model.lastResult?.prizeType)
+            assertEquals(RewardThresholds(1, 2, 3), model.lastResult?.rewardThresholds)
+        }
+    }
+
     @Test fun ordinaryRewardsUseFinishThresholdsAndKeepTheirRulesThroughReloadAndClaim() {
         val model = model()
         listOf(15 to RewardTier.TIER_1, 25 to RewardTier.TIER_2).forEach { (count, tier) ->
@@ -565,7 +677,7 @@ class RewardsModelTest {
         RewardType.entries.forEach { first.chooseRewardEnabled(it, false) }
         val restored = model()
         RewardType.entries.forEach { type ->
-            val count = if (type.tier == RewardTier.TIER_1) 25 else 50
+            val count = RewardThresholds().minimum(type.tier)
             start(restored, count)
             finish(restored, count)
             assertNull(restored.lastResult!!.prizeType)
@@ -674,14 +786,15 @@ class RewardsModelTest {
         val model = model()
         listOf(Triple(24, 0, false), Triple(25, 0, true), Triple(25, 2, true), Triple(25, 3, false),
             Triple(26, 2, true), Triple(49, 4, true), Triple(50, 0, true), Triple(50, 4, true),
-            Triple(50, 5, false), Triple(51, 4, true), Triple(100, 10, false)).forEach { (count, wrong, eligible) ->
+            Triple(50, 5, false), Triple(51, 4, true), Triple(99, 0, true), Triple(100, 0, true),
+            Triple(100, 9, true), Triple(100, 10, false)).forEach { (count, wrong, eligible) ->
             start(model, count)
             finish(model, count, wrong)
             assertEquals(count, model.lastResult!!.questionCount)
             assertEquals(eligible, model.lastResult!!.prizeType != null)
             if (eligible) {
                 val type = model.lastResult!!.prizeType!!
-                assertEquals(if (count >= 50) RewardTier.TIER_2 else RewardTier.TIER_1, type.tier)
+                assertEquals(rewardTierForQuestionCount(count), type.tier)
                 model.dismissCelebration()
                 model.claimReward()
                 assertEquals(type, model.lastResult!!.prize!!.type)

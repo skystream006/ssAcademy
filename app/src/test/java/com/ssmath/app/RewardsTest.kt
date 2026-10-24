@@ -19,14 +19,18 @@ class RewardsTest {
             assertEquals(RewardTier.TIER_1, thresholds.tierForQuestionCount(thresholds.tier1Minimum))
             assertEquals(RewardTier.TIER_1, thresholds.tierForQuestionCount(thresholds.tier2Minimum - 1))
             assertEquals(RewardTier.TIER_2, thresholds.tierForQuestionCount(thresholds.tier2Minimum))
-            assertEquals(RewardTier.TIER_2, thresholds.tierForQuestionCount(Int.MAX_VALUE))
+            assertEquals(RewardTier.TIER_2, thresholds.tierForQuestionCount(thresholds.tier3Minimum - 1))
+            assertEquals(RewardTier.TIER_3, thresholds.tierForQuestionCount(thresholds.tier3Minimum))
+            assertEquals(RewardTier.TIER_3, thresholds.tierForQuestionCount(Int.MAX_VALUE))
             assertEquals(thresholds.tier1Minimum, thresholds.minimum(RewardTier.TIER_1))
             assertEquals(thresholds.tier2Minimum, thresholds.minimum(RewardTier.TIER_2))
+            assertEquals(thresholds.tier3Minimum, thresholds.minimum(RewardTier.TIER_3))
             assertEquals(thresholds, Json.decodeFromString(RewardThresholds.serializer(),
                 Json.encodeToString(RewardThresholds.serializer(), thresholds)))
         }
         assertEquals("15–24 questions", RewardThresholds(15, 25).questionCountLabel(RewardTier.TIER_1))
-        assertEquals("25 or more questions", RewardThresholds(15, 25).questionCountLabel(RewardTier.TIER_2))
+        assertEquals("25–99 questions", RewardThresholds(15, 25).questionCountLabel(RewardTier.TIER_2))
+        assertEquals("100 or more questions", RewardThresholds(15, 25).questionCountLabel(RewardTier.TIER_3))
         listOf(0 to 50, -1 to 50, 25 to 25, 50 to 25, 25 to 0, 25 to 1001,
             1000 to 1001, Int.MIN_VALUE to Int.MAX_VALUE).forEach { (first, second) ->
             assertThrows(IllegalArgumentException::class.java) { RewardThresholds(first, second) }
@@ -79,13 +83,18 @@ class RewardsTest {
     @Test fun questionCountsMapToNamedTiersAtTheBoundaries() {
         listOf(Int.MIN_VALUE, 0, 1, 24).forEach { assertNull(rewardTierForQuestionCount(it)) }
         (25..49).forEach { assertEquals(RewardTier.TIER_1, rewardTierForQuestionCount(it)) }
-        listOf(50, 51, 100, 1000, Int.MAX_VALUE).forEach {
+        listOf(50, 51, 99).forEach {
             assertEquals(RewardTier.TIER_2, rewardTierForQuestionCount(it))
+        }
+        listOf(100, 101, 1000, Int.MAX_VALUE).forEach {
+            assertEquals(RewardTier.TIER_3, rewardTierForQuestionCount(it))
         }
         assertEquals("Tier 1", RewardTier.TIER_1.label)
         assertEquals("25–49 questions", RewardTier.TIER_1.questionCountLabel)
         assertEquals("Tier 2", RewardTier.TIER_2.label)
-        assertEquals("50 or more questions", RewardTier.TIER_2.questionCountLabel)
+        assertEquals("50–99 questions", RewardTier.TIER_2.questionCountLabel)
+        assertEquals("Tier 3", RewardTier.TIER_3.label)
+        assertEquals("100 or more questions", RewardTier.TIER_3.questionCountLabel)
     }
 
     @Test fun rewardTypesBelongToTheirAssignedTier() {
@@ -96,6 +105,8 @@ class RewardsTest {
         )
         assertEquals(setOf(RewardType.VIDEO_GAME, RewardType.RESTAURANT),
             RewardType.entries.filter { it.tier == RewardTier.TIER_2 }.toSet())
+        assertEquals(setOf(RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3),
+            RewardType.entries.filter { it.tier == RewardTier.TIER_3 }.toSet())
     }
 
     @Test fun tierMetadataDoesNotChangeStoredRewardNames() {
@@ -113,10 +124,110 @@ class RewardsTest {
             assertEquals(RewardType.entries.filter { it.tier == RewardTier.TIER_1 }.toSet(), selected)
             assertTrue(selected.all { it?.tier == RewardTier.TIER_1 })
         }
-        listOf(50, 51, 100, 1000).forEach { count ->
+        listOf(50, 51, 99).forEach { count ->
             val selected = (1..100).map { prize(count, seed = it) }.toSet()
             assertEquals(RewardType.entries.filter { it.tier == RewardTier.TIER_2 }.toSet(), selected)
             assertTrue(selected.all { it?.tier == RewardTier.TIER_2 })
+        }
+        listOf(100, 101, 1000).forEach { count ->
+            val selected = (1..100).map { prize(count, seed = it) }.toSet()
+            assertEquals(RewardType.entries.filter { it.tier == RewardTier.TIER_3 }.toSet(), selected)
+        }
+    }
+
+    @Test fun tierThreeThresholdsValidateOrderingAndRetainLegacyMaximumPair() {
+        assertEquals(100, RewardThresholds().tier3Minimum)
+        assertEquals(301, RewardThresholds(200, 300).tier3Minimum)
+        assertEquals(1001, RewardThresholds(999, 1000).tier3Minimum)
+        assertEquals("1000 or more questions", RewardThresholds(999, 1000).questionCountLabel(RewardTier.TIER_2))
+        listOf(0, 25, 50, 1002, Int.MIN_VALUE, Int.MAX_VALUE).forEach {
+            assertThrows(IllegalArgumentException::class.java) { RewardThresholds(25, 50, it) }
+        }
+        val custom = RewardThresholds(1, 2, 3)
+        assertEquals(RewardTier.TIER_3, custom.tierForQuestionCount(3))
+        assertEquals("2–2 questions", custom.questionCountLabel(RewardTier.TIER_2))
+        assertEquals(custom, Json.decodeFromString(RewardThresholds.serializer(),
+            Json.encodeToString(RewardThresholds.serializer(), custom)))
+    }
+
+    @Test fun tierThreePercentagesAreImmutableValidatedAndSerializable() {
+        val defaults = Tier3RewardChances()
+        assertEquals(listOf(34, 33, 33), listOf(defaults.toys1, defaults.toys2, defaults.toys3))
+        RewardType.entries.forEach { type ->
+            assertEquals(when (type) {
+                RewardType.TOYS_1 -> 34
+                RewardType.TOYS_2, RewardType.TOYS_3 -> 33
+                else -> 0
+            }, defaults.percentage(type))
+        }
+        listOf(Triple(-1, 51, 50), Triple(101, 0, -1), Triple(33, 33, 33),
+            Triple(0, 0, 0), Triple(100, 100, 100), Triple(Int.MAX_VALUE, Int.MAX_VALUE, 102),
+            Triple(50, -1, 51), Triple(50, 51, -1)).forEach { (a, b, c) ->
+            assertThrows(IllegalArgumentException::class.java) { Tier3RewardChances(a, b, c) }
+        }
+        for (chances in listOf(defaults, Tier3RewardChances(100, 0, 0), Tier3RewardChances(0, 100, 0),
+            Tier3RewardChances(0, 0, 100), Tier3RewardChances(17, 24, 59))) {
+            assertEquals(chances, Json.decodeFromString(Tier3RewardChances.serializer(),
+                Json.encodeToString(Tier3RewardChances.serializer(), chances)))
+        }
+        assertEquals(Tier3RewardChances(), defaults)
+        assertThrows(IllegalArgumentException::class.java) { defaults.copy(toys2 = 0) }
+    }
+
+    private class TicketRandom(private val ticket: Int, private val bound: Int) : Random() {
+        override fun nextBits(bitCount: Int): Int = error("Selection must use a bounded integer ticket")
+        override fun nextInt(until: Int): Int {
+            assertEquals(bound, until)
+            return ticket.also { assertTrue(it in 0 until until) }
+        }
+    }
+
+    @Test fun tierThreeExactTicketBoundariesFollowConfiguredWeightsAndEnabledReweighting() {
+        val chances = Tier3RewardChances(10, 30, 60)
+        for ((disabled, expected) in listOf(
+            emptySet<RewardType>() to (List(10) { RewardType.TOYS_1 } + List(30) { RewardType.TOYS_2 } +
+                List(60) { RewardType.TOYS_3 }),
+            setOf(RewardType.TOYS_2) to (List(10) { RewardType.TOYS_1 } + List(60) { RewardType.TOYS_3 }),
+            setOf(RewardType.TOYS_1, RewardType.TOYS_3) to List(30) { RewardType.TOYS_2 }
+        )) {
+            expected.forEachIndexed { ticket, type ->
+                assertEquals(type, selectPrize(100, 100, 100, true, true,
+                    random = TicketRandom(ticket, expected.size), disabledRewards = disabled,
+                    tier3RewardChances = chances))
+            }
+        }
+        val defaults = List(34) { RewardType.TOYS_1 } + List(33) { RewardType.TOYS_2 } +
+            List(33) { RewardType.TOYS_3 }
+        defaults.forEachIndexed { ticket, type ->
+            assertEquals(type, selectPrize(100, 100, 100, true, true, random = TicketRandom(ticket, 100)))
+        }
+    }
+
+    @Test fun zeroWeightToysNeverWinAndDisabledPositiveWeightsNeverFallBack() {
+        val chances = Tier3RewardChances(0, 100, 0)
+        repeat(100) { ticket ->
+            assertEquals(RewardType.TOYS_2, selectPrize(100, 100, 100, true, true,
+                random = TicketRandom(ticket, 100), tier3RewardChances = chances))
+        }
+        val unusedRandom = object : Random() {
+            override fun nextBits(bitCount: Int): Int = error("No eligible prize must not draw a ticket")
+        }
+        listOf(setOf(RewardType.TOYS_2), RewardType.entries.filter { it.tier == RewardTier.TIER_3 }.toSet())
+            .forEach { disabled ->
+                assertNull(selectPrize(100, 100, 100, true, true, random = unusedRandom,
+                    disabledRewards = disabled, tier3RewardChances = chances))
+                assertNull(selectPrize(121, 121, 121, true, true, random = unusedRandom,
+                    disabledRewards = disabled, matrixRewardTier = RewardTier.TIER_3, tier3RewardChances = chances))
+            }
+    }
+
+    @Test fun firstTwoTiersRemainUniformAndIgnoreToyPercentages() {
+        for (count in listOf(25, 50)) {
+            val types = RewardType.entries.filter { it.tier == rewardTierForQuestionCount(count) }
+            types.forEachIndexed { ticket, type ->
+                assertEquals(type, selectPrize(count, count, count, true, true,
+                    random = TicketRandom(ticket, types.size), tier3RewardChances = Tier3RewardChances(0, 0, 100)))
+            }
         }
     }
 
@@ -236,6 +347,10 @@ class RewardsTest {
         assertEquals("Ice Cream Cone Fragment", RewardType.ICE_CREAM.fragmentLabel)
         assertEquals("Bed Time", RewardType.BED_TIME.label)
         assertEquals("Restaurant", RewardType.RESTAURANT.label)
+        listOf(RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3).forEachIndexed { index, type ->
+            assertEquals("$${index + 1} Toys", type.label)
+            assertEquals(type.label, type.pluralLabel)
+        }
         RewardType.entries.forEach {
             assertTrue(it.label.isNotBlank())
             assertTrue(it.pluralLabel.isNotBlank())

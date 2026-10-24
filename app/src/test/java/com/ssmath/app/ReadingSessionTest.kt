@@ -1,5 +1,6 @@
 package com.ssmath.app
 
+import kotlinx.serialization.json.Json
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -16,6 +17,43 @@ internal fun readingSessionFixture(
 )
 
 class ReadingSessionTest {
+    @Test fun newSessionsSerializeCurrentRulesAndHistoricalSessionsDecodeLegacyThirdTier() {
+        val session = requireNotNull(readingSessionFixture().activeSession)
+        assertEquals(100, session.rewardThresholds.tier3Minimum)
+        for (thresholds in listOf(RewardThresholds(), RewardThresholds(15, 25), RewardThresholds(200, 300),
+            RewardThresholds(999, 1000), RewardThresholds(10, 20, 30))) {
+            val updated = session.copy(rewardThresholds = thresholds)
+            val encoded = Json.encodeToString(ReadingSession.serializer(), updated)
+            assertEquals(updated, Json.decodeFromString(ReadingSession.serializer(), encoded))
+        }
+        for (entireRules in listOf(false, true)) {
+            val old = withoutTierThreeRules(readingSessionFixture(), entireRules)
+            val decoded = Json.decodeFromString(ReadingData.serializer(), old.toString())
+            assertEquals(RewardThresholds(tier3Minimum = 1001), decoded.activeSession?.rewardThresholds)
+            ReadingEngine.validate(decoded)
+        }
+    }
+
+    @Test fun tierThreeSelectionHonorsFinishChanceGuardsWithoutReplayingCompletedSessions() {
+        for (startEnabled in listOf(false, true)) for (finishEnabled in listOf(false, true)) {
+            var data = readingSessionFixture(count = 25, rewardsEnabled = startEnabled)
+            repeat(24) { data = ReadingEngine.nextSessionActivity(readingSolve(data)) }
+            data = readingAnswer(data, readingCorrect(data))
+            val finished = ReadingEngine.finish(data, rewardsEnabled = finishEnabled,
+                rewardThresholds = RewardThresholds(1, 2, 3), tier3RewardChances = Tier3RewardChances(0, 100, 0))
+            assertEquals(if (startEnabled && finishEnabled) RewardType.TOYS_2 else null,
+                finished.activeSession?.prizeType)
+            ReadingEngine.validate(finished)
+            val id = requireNotNull(finished.activeSession).id
+            assertEquals(finished, ReadingEngine.endSession(finished, id, rewardsEnabled = true,
+                tier3RewardChances = Tier3RewardChances(100, 0, 0)))
+            val disabled = ReadingEngine.finish(data, rewardThresholds = RewardThresholds(1, 2, 3),
+                disabledRewards = setOf(RewardType.TOYS_2), tier3RewardChances = Tier3RewardChances(0, 100, 0))
+            assertNull(disabled.activeSession?.prizeType)
+            ReadingEngine.validate(disabled)
+        }
+    }
+
     @Test fun configuredSessionCountsIncludeBoundariesAndCompleteNormally() {
         for (count in listOf(1, 14, 16, 20, 40, 1000)) {
             val data = readingSessionFixture(count = count)
