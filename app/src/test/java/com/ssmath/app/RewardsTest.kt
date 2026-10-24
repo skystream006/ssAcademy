@@ -139,6 +139,7 @@ class RewardsTest {
         assertEquals(100, RewardThresholds().tier3Minimum)
         assertEquals(301, RewardThresholds(200, 300).tier3Minimum)
         assertEquals(1001, RewardThresholds(999, 1000).tier3Minimum)
+        assertEquals("1000 or more questions", RewardThresholds(999, 1000).questionCountLabel(RewardTier.TIER_2))
         listOf(0, 25, 50, 1002, Int.MIN_VALUE, Int.MAX_VALUE).forEach {
             assertThrows(IllegalArgumentException::class.java) { RewardThresholds(25, 50, it) }
         }

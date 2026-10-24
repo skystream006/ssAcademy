@@ -361,7 +361,7 @@ private fun DrawScope.drawRestaurant(progress: Float) {
 }
 
 private fun DrawScope.drawToyTop(progress: Float) {
-    val turn = progress * 2f * PI.toFloat()
+    val turn = (progress % 1f) * 2f * PI.toFloat()
     val lift = (1f - cos(turn)) * 2f
     drawOval(rewardInk.copy(alpha = 0.12f), Offset(52f + lift, 171f), Size(96f - lift * 2f, 7f))
     withTransform({ translate(0f, -lift) }) {
@@ -405,7 +405,7 @@ private fun DrawScope.drawToyTop(progress: Float) {
 }
 
 private fun DrawScope.drawToyTrain(progress: Float) {
-    val turn = progress * 2f * PI.toFloat()
+    val turn = (progress % 1f) * 2f * PI.toFloat()
     val bounce = (1f - cos(turn)) * 1.5f
     drawOval(rewardInk.copy(alpha = 0.12f), Offset(29f, 175f), Size(141f, 6f))
     repeat(3) { index ->
@@ -452,7 +452,7 @@ private fun DrawScope.drawToyTrain(progress: Float) {
 }
 
 private fun DrawScope.drawToyRobot(progress: Float) {
-    val turn = progress * 2f * PI.toFloat()
+    val turn = (progress % 1f) * 2f * PI.toFloat()
     val pulse = (1f - cos(turn)) / 2f
     drawOval(rewardInk.copy(alpha = 0.12f), Offset(51f, 177f), Size(98f, 6f))
     drawLine(rewardInk, Offset(100f, 44f), Offset(100f, 29f), 4f, cap = StrokeCap.Round)

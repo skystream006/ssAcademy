@@ -1262,7 +1262,7 @@ class ReadingScreenTest {
         compose.onNodeWithText("How many questions would you like?").assertIsDisplayed()
         compose.onNodeWithText("reading points", substring = true).assertDoesNotExist()
         compose.onNodeWithText("Read, imagine, and make stories.", substring = true).assertDoesNotExist()
-        listOf(15, 25, 50).forEach { compose.onNodeWithTag("reading-question-count-$it").assertIsDisplayed() }
+        listOf(15, 25, 50, 100).forEach { compose.onNodeWithTag("reading-question-count-$it").assertIsDisplayed() }
         click("reading-question-count-15")
         click("reading-game-MISSING")
         waitFor { it.activeSession != null }

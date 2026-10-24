@@ -97,7 +97,17 @@ class RewardDrawingsTest {
             listOf(0f, 0.25f, 0.5f, 0.75f).forEach { progress ->
                 val whole = render(200, 200) { drawRewardArtwork(type, false, progress) }
                 val fragment = render(200, 200) { drawRewardArtwork(type, true, progress) }
-                val source = whole.indices.filter { it % 200 < cutX - 5 && whole[it] ushr 24 > 64 }
+                // Native curves can rasterize differently after clipping; compare their solid interiors.
+                val source = whole.indices.filter { pixel ->
+                    pixel % 200 in 1 until cutX - 5 && pixel / 200 in 1..198 &&
+                        whole[pixel] ushr 24 == 255 &&
+                        listOf(pixel - 1, pixel + 1, pixel - 200, pixel + 200).all { neighbor ->
+                            whole[neighbor] ushr 24 == 255 && listOf(0, 8, 16).all { shift ->
+                                abs((whole[pixel] ushr shift and 255) -
+                                    (whole[neighbor] ushr shift and 255)) <= 8
+                            }
+                        }
+                }
                 assertTrue("$type retains a substantial full-size piece", source.size > 1_000)
                 val matching = source.count { pixel ->
                     listOf(0, 8, 16, 24).all { shift ->
@@ -105,7 +115,7 @@ class RewardDrawingsTest {
                             (fragment[pixel + 32] ushr shift and 255)) <= 2
                     }
                 }
-                assertTrue("$type fragment keeps the original scale and animated details",
+                assertTrue("$type fragment keeps full-size animated details at $progress: $matching/${source.size}",
                     matching >= source.size * 0.995f)
                 val rows = if (type == RewardType.TOYS_3) 108..136 else 88..120
                 val edges = rows.map { y ->

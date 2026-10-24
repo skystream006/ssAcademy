@@ -677,7 +677,7 @@ class RewardsModelTest {
         RewardType.entries.forEach { first.chooseRewardEnabled(it, false) }
         val restored = model()
         RewardType.entries.forEach { type ->
-            val count = if (type.tier == RewardTier.TIER_1) 25 else 50
+            val count = RewardThresholds().minimum(type.tier)
             start(restored, count)
             finish(restored, count)
             assertNull(restored.lastResult!!.prizeType)

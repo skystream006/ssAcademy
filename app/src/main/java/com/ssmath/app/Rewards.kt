@@ -38,7 +38,8 @@ data class RewardThresholds(
 
     fun questionCountLabel(tier: RewardTier): String = when (tier) {
         RewardTier.TIER_1 -> "$tier1Minimum–${tier2Minimum - 1} questions"
-        RewardTier.TIER_2 -> "$tier2Minimum–${tier3Minimum - 1} questions"
+        RewardTier.TIER_2 -> if (tier3Minimum == 1001) "$tier2Minimum or more questions"
+            else "$tier2Minimum–${tier3Minimum - 1} questions"
         RewardTier.TIER_3 -> "$tier3Minimum or more questions"
     }
 
@@ -50,7 +51,7 @@ data class RewardThresholds(
     }
 }
 
-/** Missing historical rules predate Tier 3; do not reinterpret an already awarded Reading prize. */
+/** Missing historical rules predate Tier 3; do not reinterpret an already awarded prize. */
 internal object HistoricalRewardThresholdsSerializer :
     JsonTransformingSerializer<RewardThresholds>(RewardThresholds.serializer()) {
     override fun transformDeserialize(element: JsonElement): JsonElement =

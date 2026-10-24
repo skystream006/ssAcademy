@@ -753,7 +753,7 @@ class MathAppTest {
             .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(titleLayouts) }
         assertFalse(titleLayouts.single().didOverflowWidth)
         assertFalse(titleLayouts.single().didOverflowHeight)
-        listOf(15, 25, 50).forEach { count ->
+        listOf(15, 25, 50, 100).forEach { count ->
             val button = compose.onNodeWithTag("rewards-question-count-$count")
                 .performScrollTo().assertIsDisplayed().performClick().assertIsSelected()
                 .fetchSemanticsNode().boundsInRoot
@@ -2160,7 +2160,7 @@ class MathAppTest {
     private fun assertRewardsLaunchHeader() {
         compose.onNode(hasText("Challenge- Basic Math") and hasAnyAncestor(isDialog())).assertIsDisplayed()
         compose.onNodeWithText("How many questions would you like?").performScrollTo().assertIsDisplayed()
-        listOf(15, 25, 50).forEach { count ->
+        listOf(15, 25, 50, 100).forEach { count ->
             compose.onNodeWithTag("rewards-question-count-$count").performScrollTo().assertIsDisplayed()
         }
         compose.onNodeWithTag("rewards-setup").assertDoesNotExist()
