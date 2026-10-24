@@ -366,7 +366,9 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
 - **Appearance** – collapsed by default; tap the heading to expand or collapse
   text size, theme, and skin controls without changing your choices. Choose the
   **Blue Wave** look or a **Color theme** (midnight, royal purple, gold, green,
-  pink, black) with a **Dark appearance** switch.
+  pink, black) with a **Dark appearance** switch. Settings and its dialogs
+  always use a light background, without Blue Wave or skin backgrounds.
+  Your saved appearance still applies outside Settings.
 - **Text size** – use the slider under Appearance to adjust app text from 80% to
   200% in 10% steps (default 100%). Changes apply immediately, work with your
   device's font-size setting, and are remembered for next time.

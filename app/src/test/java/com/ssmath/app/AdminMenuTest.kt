@@ -338,6 +338,103 @@ class AdminMenuTest {
 
     @Test
     @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun settingsStayLightAcrossAppearancesWithoutChangingSavedPreferences() {
+        val model = MathViewModel(application)
+        model.openSettings()
+        compose.setContent { MathAppContent(model) }
+        val appearances = listOf(Triple("green", null, true)) +
+            COLOR_THEMES.map { (theme, _) -> Triple(theme, null, false) } +
+            COLOR_THEMES.flatMap { (theme, _) ->
+                listOf(Triple(theme, "dark", false), Triple(theme, "light", false))
+            }
+        appearances.forEach { (theme, mode, wave) ->
+            compose.runOnIdle {
+                model.chooseWaveAppearance(wave)
+                model.chooseTheme(theme)
+                if (mode != null) model.chooseDark(mode == "dark")
+                model.chooseSkin(AppSkin.GALAXY)
+                model.chooseSkins(true)
+            }
+            compose.onNodeWithTag("settings-screen").assertIsDisplayed()
+            assertTrue("Settings must be light for $theme/$mode/$wave",
+                screenCornerColor("settings-screen").luminance() > 0.8f)
+            compose.runOnIdle {
+                assertEquals(theme, model.theme)
+                assertEquals(mode, model.mode)
+                assertEquals(wave, model.waveAppearance)
+                assertTrue(model.skinsEnabled)
+                assertEquals(AppSkin.GALAXY, model.skin)
+            }
+        }
+        compose.runOnIdle {
+            model.chooseWaveAppearance(false)
+            model.chooseTheme("black")
+            model.chooseDark(true)
+            model.chooseSkins(false)
+            model.chooseTextSize(150)
+        }
+        compose.onNodeWithText("Appearance").performScrollTo().performClick()
+        compose.onNodeWithText("Text size: 150%").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Dark appearance").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.onNodeWithTag("subject-Math").assertIsDisplayed()
+        compose.runOnIdle {
+            val view = compose.activity.findViewById<View>(android.R.id.content)
+            assertTrue(cornerColor(view, 1, view.height / 2).luminance() < 0.1f)
+            assertEquals("dark", model.mode)
+            assertEquals("black", preferences.getString("theme", null))
+        }
+    }
+
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun adminDialogsAndChildPagesStayLightInDarkAppearance() {
+        val model = MathViewModel(application)
+        model.chooseWaveAppearance(false)
+        model.chooseTheme("black")
+        model.chooseDark(true)
+        model.openSettings()
+        compose.setContent { MathAppContent(model) }
+        compose.onNodeWithTag("admin-menu").performScrollTo().performClick()
+        compose.onNodeWithTag("admin-pin-dialog").assertIsDisplayed()
+        assertTrue(dialogCornerColor().luminance() > 0.8f)
+        submit("4826", "4826")
+        awaitTag("admin-dialog")
+        assertTrue(dialogCornerColor().luminance() > 0.8f)
+        compose.runOnIdle { model.openRewardsSetup() }
+        compose.onNodeWithTag("rewards-setup-screen").assertIsDisplayed()
+        assertTrue(screenCornerColor("settings-screen").luminance() > 0.8f)
+        compose.onNodeWithTag("save-rewards-setup").performScrollTo().performClick()
+        compose.runOnIdle { model.openReadingProgress() }
+        compose.onNodeWithTag("reading-back").performScrollTo().assertIsDisplayed()
+        assertTrue(screenCornerColor("settings-screen").luminance() > 0.8f)
+        compose.runOnIdle { assertEquals("dark", model.mode) }
+    }
+
+    private fun screenCornerColor(tag: String): Color {
+        val bounds = compose.onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
+        return compose.runOnIdle {
+            cornerColor(compose.activity.findViewById(android.R.id.content),
+                bounds.left.toInt() + 1, bounds.top.toInt() + 1)
+        }
+    }
+
+    private fun dialogCornerColor(): Color = compose.runOnIdle {
+        cornerColor(ShadowDialog.getLatestDialog().findViewById(android.R.id.content), 1, 1)
+    }
+
+    private fun cornerColor(view: View, x: Int, y: Int): Color {
+        val image = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+        return try {
+            view.draw(Canvas(image))
+            Color(image.getPixel(x, y))
+        } finally {
+            image.recycle()
+        }
+    }
+
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
     fun subsectionsGetProgressivelyDarkerInLightDarkAndWaveThemes() {
         val appearance = mutableStateOf(0)
         compose.setContent {

@@ -80,6 +80,16 @@ internal fun ScreenScaffold(title: String, onBack: () -> Unit, actions: @Composa
 
 @Composable
 fun SettingsScreen(model: MathViewModel) {
+    MathTheme(theme = model.theme, mode = "light", waveAppearance = false,
+        textSizePercent = model.textSizePercent) {
+        Surface(Modifier.fillMaxSize().testTag("settings-screen")) {
+            SettingsContent(model)
+        }
+    }
+}
+
+@Composable
+private fun SettingsContent(model: MathViewModel) {
     var showingDebug by rememberSaveable { mutableStateOf(false) }
     var showingAdmin by remember { mutableStateOf(false) }
     var adminUnlocked by remember { mutableStateOf(false) }
