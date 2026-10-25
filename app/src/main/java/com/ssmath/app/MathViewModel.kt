@@ -96,6 +96,10 @@ class MathViewModel(
         private set
     var divisionMaximumSecondText by mutableStateOf(settings.getInt("division_maximum_second", settings.getInt("maximum", 10)).toString())
         private set
+    var multiplicationMaximumFirstText by mutableStateOf(settings.getInt("multiplication_maximum_first", settings.getInt("maximum", 10)).toString())
+        private set
+    var multiplicationMaximumSecondText by mutableStateOf(settings.getInt("multiplication_maximum_second", settings.getInt("maximum", 10)).toString())
+        private set
     var questionCountText by mutableStateOf(settings.getInt("question_count", DEFAULT_QUESTION_COUNT).toString())
         private set
     var rewardsQuestionCountText by mutableStateOf("")
@@ -281,13 +285,16 @@ class MathViewModel(
     val minimum: Int? get() = parseMaximum(minimumText)?.takeIf { it <= (maximum ?: MAX_MAXIMUM) }
     val divisionMaximumFirst: Int? get() = parseMaximum(divisionMaximumFirstText)
     val divisionMaximumSecond: Int? get() = parseMaximum(divisionMaximumSecondText)
+    val multiplicationMaximumFirst: Int? get() = parseMaximum(multiplicationMaximumFirstText)
+    val multiplicationMaximumSecond: Int? get() = parseMaximum(multiplicationMaximumSecondText)
     val questionCount: Int? get() = parseQuestionCount(questionCountText)
     val rewardsQuestionCount: Int? get() = parseQuestionCount(rewardsQuestionCountText)
     val canSubmitSetup: Boolean get() = selectedOperation != null && questionCount != null &&
         if (selectedOperation == Operation.DIVISION) divisionMaximumFirst != null && divisionMaximumSecond != null
+        else if (selectedOperation == Operation.MULTIPLICATION) multiplicationMaximumFirst != null && multiplicationMaximumSecond != null
         else minimum != null && maximum != null
     val canSaveRewardsSetup: Boolean get() = rewardsSetupSubject == MathRewardGame.MATRIX ||
-        Operation.entries.all { rewardsSetupDraft[it]?.isValid(it) == true }
+        Operation.entries.all { rewardsSetupDraft[it]?.isValid(it, rewardsSetupSubject == MathRewardGame.LOGIC) == true }
     val feedback: Feedback?
         get() = game?.attempts?.lastOrNull()?.let { attempt ->
             when {
@@ -301,17 +308,30 @@ class MathViewModel(
         viewModelScope.launch { reloadHistory() }
     }
 
+    private fun loadLegacyRewardsDefaults(operation: Operation): RewardsGameDefaults {
+        val legacy = if (operation == Operation.DIVISION)
+            RewardsGameDefaults(divisionMaximumFirstText, divisionMaximumSecondText)
+        else RewardsGameDefaults(minimumText, maximumText)
+        val fallback = legacy.takeIf { it.isValid(operation, isLogicMath = true) }
+            ?: RewardsGameDefaults.defaults(operation, isLogicMath = true)
+        val prefix = "rewards_${operation.name}_"
+        return RewardsGameDefaults(
+            settings.getInt("${prefix}first", requireNotNull(fallback.first)).toString(),
+            settings.getInt("${prefix}second", requireNotNull(fallback.second)).toString()
+        ).takeIf { it.isValid(operation, isLogicMath = true) } ?: fallback
+    }
+
     private fun loadRewardsDefaults(): Map<Operation, RewardsGameDefaults> {
         val defaults = Operation.entries.associateWith { operation ->
-            val legacy = if (operation == Operation.DIVISION)
-                RewardsGameDefaults(divisionMaximumFirstText, divisionMaximumSecondText)
-            else RewardsGameDefaults(minimumText, maximumText)
-            val fallback = legacy.takeIf { it.isValid(operation) } ?: RewardsGameDefaults.defaults(operation)
-            val prefix = "rewards_${operation.name}_"
-            RewardsGameDefaults(
-                settings.getInt("${prefix}first", requireNotNull(fallback.first)).toString(),
-                settings.getInt("${prefix}second", requireNotNull(fallback.second)).toString()
-            ).takeIf { it.isValid(operation) } ?: fallback
+            val legacy = loadLegacyRewardsDefaults(operation)
+            if (operation == Operation.MULTIPLICATION) {
+                // The old upper bound applied to both factors; never reinterpret its minimum as a maximum.
+                val fallback = RewardsGameDefaults(legacy.secondText, legacy.secondText)
+                RewardsGameDefaults(
+                    settings.getInt("rewards_MULTIPLICATION_maximum_first", requireNotNull(fallback.first)).toString(),
+                    settings.getInt("rewards_MULTIPLICATION_maximum_second", requireNotNull(fallback.second)).toString()
+                ).takeIf { it.isValid(operation) } ?: fallback
+            } else legacy
         }
         // Freeze the migration now so future practice edits cannot change unsaved rewards defaults.
         persistRewardsDefaults(defaults)
@@ -320,12 +340,13 @@ class MathViewModel(
 
     private fun loadLogicRewardsDefaults(): Map<Operation, RewardsGameDefaults> {
         val defaults = Operation.entries.associateWith { operation ->
-            val fallback = rewardsDefaults.getValue(operation)
+            val fallback = if (operation == Operation.MULTIPLICATION) loadLegacyRewardsDefaults(operation)
+                else rewardsDefaults.getValue(operation)
             val prefix = "logic_rewards_${operation.name}_"
             RewardsGameDefaults(
                 settings.getInt("${prefix}first", requireNotNull(fallback.first)).toString(),
                 settings.getInt("${prefix}second", requireNotNull(fallback.second)).toString()
-            ).takeIf { it.isValid(operation) } ?: fallback
+            ).takeIf { it.isValid(operation, isLogicMath = true) } ?: fallback
         }
         // Snapshot the formerly shared defaults before either subject can be edited.
         persistRewardsDefaults(defaults, MathRewardGame.LOGIC)
@@ -339,10 +360,12 @@ class MathViewModel(
         val edit = settings.edit()
         defaults.forEach { (operation, parameters) ->
             val prefix = if (subject == MathRewardGame.LOGIC) "logic_rewards_${operation.name}_"
+                else if (operation == Operation.MULTIPLICATION) "rewards_MULTIPLICATION_maximum_"
                 else "rewards_${operation.name}_"
             edit.putInt("${prefix}first", requireNotNull(parameters.first))
                 .putInt("${prefix}second", requireNotNull(parameters.second))
-                .remove("${prefix}question_count")
+                .remove(if (subject == MathRewardGame.LOGIC) "logic_rewards_${operation.name}_question_count"
+                    else "rewards_${operation.name}_question_count")
         }
         edit.apply()
     }
@@ -462,7 +485,7 @@ class MathViewModel(
         if (screen != Screen.SETUP || overlay != null ||
             (setupDialog != SetupDialog.REWARDS && setupDialog != SetupDialog.LOGIC)) return
         val defaults = if (setupDialog == SetupDialog.LOGIC) logicRewardsDefaults else rewardsDefaults
-        val parameters = defaults[operation]?.takeIf { it.isValid(operation) } ?: return
+        val parameters = defaults[operation]?.takeIf { it.isValid(operation, setupDialog == SetupDialog.LOGIC) } ?: return
         val count = rewardsQuestionCount ?: return
         ready(GameMode.REWARDS, operation, GameParameters(parameters.firstText, parameters.secondText, count.toString()),
             isLogicMath = setupDialog == SetupDialog.LOGIC)
@@ -487,6 +510,9 @@ class MathViewModel(
         if (operation == Operation.DIVISION) {
             divisionMaximumFirstText = defaults.firstText
             divisionMaximumSecondText = defaults.secondText
+        } else if (operation == Operation.MULTIPLICATION) {
+            multiplicationMaximumFirstText = defaults.firstText
+            multiplicationMaximumSecondText = defaults.secondText
         } else {
             minimumText = defaults.firstText
             maximumText = defaults.secondText
@@ -501,6 +527,10 @@ class MathViewModel(
 
     fun updateDivisionMaximumSecond(text: String) { divisionMaximumSecondText = text.take(6) }
 
+    fun updateMultiplicationMaximumFirst(text: String) { multiplicationMaximumFirstText = text.take(6) }
+
+    fun updateMultiplicationMaximumSecond(text: String) { multiplicationMaximumSecondText = text.take(6) }
+
     fun updateQuestionCount(text: String) { questionCountText = text.take(6) }
 
     fun updateRewardsQuestionCount(text: String) { rewardsQuestionCountText = text.take(6) }
@@ -514,12 +544,17 @@ class MathViewModel(
         if (operation == Operation.DIVISION) {
             edit.putInt("division_maximum_first", requireNotNull(divisionMaximumFirst))
                 .putInt("division_maximum_second", requireNotNull(divisionMaximumSecond))
+        } else if (operation == Operation.MULTIPLICATION) {
+            edit.putInt("multiplication_maximum_first", requireNotNull(multiplicationMaximumFirst))
+                .putInt("multiplication_maximum_second", requireNotNull(multiplicationMaximumSecond))
         } else {
             edit.putInt("maximum", requireNotNull(maximum)).putInt("minimum", requireNotNull(minimum))
         }
         edit.apply()
         val parameters = if (operation == Operation.DIVISION)
             GameParameters(divisionMaximumFirstText, divisionMaximumSecondText, questionCountText)
+        else if (operation == Operation.MULTIPLICATION)
+            GameParameters(multiplicationMaximumFirstText, multiplicationMaximumSecondText, questionCountText)
         else GameParameters(minimumText, maximumText, questionCountText)
         ready(GameMode.PRACTICE, operation, parameters)
     }
@@ -555,10 +590,10 @@ class MathViewModel(
         val ready = readyGame ?: return
         val operation = ready.operation
         val parameters = ready.parameters
-        val division = operation == Operation.DIVISION
-        val minimum = if (division) MIN_MAXIMUM else parameters.first ?: return
-        val maximum = (if (division) parameters.first else parameters.second) ?: return
-        val maximumSecond = if (division) parameters.second ?: return else maximum
+        val independentMaximums = operation.usesIndependentMaximums(ready.isLogicMath) && !ready.isMultiplicationMatrix
+        val minimum = if (independentMaximums) MIN_MAXIMUM else parameters.first ?: return
+        val maximum = (if (independentMaximums) parameters.first else parameters.second) ?: return
+        val maximumSecond = if (independentMaximums) parameters.second ?: return else maximum
         val questionCount = parameters.questionCount ?: return
         gameMode = ready.mode
         game = if (ready.isMultiplicationMatrix) GameState.startMultiplicationMatrix(randomizeMatrixQuestions)
@@ -611,7 +646,9 @@ class MathViewModel(
         val enabledAtFinish = settings.getBoolean(Subject.MATH.rewardsPreference, true) &&
             currentMathRewardGame.name !in settings.getStringSet("disabled_math_game_rewards", emptySet()).orEmpty()
         val result = PracticeResult(latestResultId, finishedAt, state.operation, state.maximum, duration, state.attempts,
-            minimum = state.minimum, maximumSecond = state.maximumSecond.takeIf { state.operation == Operation.DIVISION },
+            minimum = state.minimum, maximumSecond = state.maximumSecond.takeIf {
+                state.operation.usesIndependentMaximums(state.logicSettings != null) && !state.isMultiplicationMatrix
+            },
             questionCount = state.questionCount, timedOut = expired, gameMode = gameMode,
             isMultiplicationMatrix = state.isMultiplicationMatrix,
             isLogicMath = state.logicSettings != null,

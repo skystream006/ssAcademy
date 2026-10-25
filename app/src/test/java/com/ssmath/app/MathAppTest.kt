@@ -641,7 +641,8 @@ class MathAppTest {
             compose.onNodeWithTag("rewards-question-count-$count").performScrollTo().performClick()
             compose.onNodeWithTag("rewards-operation-${operation.name}").performScrollTo().assertIsEnabled().performClick()
             compose.onNode(isDialog()).assertDoesNotExist()
-            val numbers = if (operation == Operation.DIVISION) "first up to 4 · second up to 13"
+            val numbers = if (operation in listOf(Operation.MULTIPLICATION, Operation.DIVISION))
+                "first up to ${index + 1} · second up to ${index + 10}"
                 else "numbers ${index + 1} to ${index + 10}"
             compose.onNodeWithText("${operation.label} · $numbers · $count questions").assertIsDisplayed()
             assertEquals(GameMode.REWARDS, model.gameMode)
@@ -661,6 +662,59 @@ class MathAppTest {
         compose.onNodeWithTag("minimum-input").performScrollTo().assertTextContains("3")
         compose.onNodeWithTag("maximum-input").performScrollTo().assertTextContains("12")
         compose.onNodeWithTag("question-count-input").performScrollTo().assertTextContains("3")
+    }
+
+    @Test fun multiplicationDefaultsUseIndependentMaximumsAndPracticeSharesTheirLabels() {
+        val model = model()
+        model.openSettings()
+        compose.setContent { MathAppContent(model) }
+        compose.openGameSettings()
+        compose.onNodeWithText("Basic Math Settings").performScrollTo().performClick()
+        compose.onNodeWithTag("rewards-setup").performScrollTo().performClick()
+        val first = compose.onNodeWithTag("rewards-MULTIPLICATION-first")
+        val second = compose.onNodeWithTag("rewards-MULTIPLICATION-second")
+        first.performScrollTo().assertTextContains("Maximum First number").assertTextContains("10")
+        second.performScrollTo().assertTextContains("Maximum Second number").assertTextContains("10")
+        listOf(first, second).forEach { field ->
+            listOf("", "0", "-1", "1.5", "abc", "10001").forEach { invalid ->
+                field.performScrollTo().performTextReplacement(invalid)
+                compose.onNodeWithTag("save-rewards-setup").performScrollTo().assertIsNotEnabled()
+                field.performScrollTo().performTextReplacement("10")
+            }
+        }
+        first.performScrollTo().performTextReplacement("100")
+        second.performScrollTo().performTextReplacement("7")
+        compose.onNodeWithTag("save-rewards-setup").performScrollTo().assertIsEnabled().performClick()
+        compose.runOnIdle {
+            model.closeOverlay()
+            model.openRewardsGame()
+            model.updateRewardsQuestionCount("15")
+            model.selectRewardsGame(Operation.MULTIPLICATION)
+        }
+        compose.onNodeWithText("Multiplication · first up to 100 · second up to 7 · 15 questions").assertIsDisplayed()
+        compose.runOnIdle {
+            model.backToSetup()
+            model.dismissSetupDialog()
+            model.openPracticeGame()
+            model.selectOperation(Operation.MULTIPLICATION)
+        }
+        compose.onNodeWithText("What is the Maximum First number?").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("minimum-input").performScrollTo().assertTextContains("100")
+        compose.onNodeWithText("What is the Maximum Second number?").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("maximum-input").performScrollTo().assertTextContains("7")
+        compose.onNodeWithTag("submit-setup").performScrollTo().assertIsEnabled()
+        compose.runOnIdle {
+            model.dismissSetupDialog()
+            model.openSettings()
+        }
+        compose.openGameSettings()
+        compose.onNodeWithText("Logic Math Settings").performScrollTo().performClick()
+        compose.onNodeWithTag("logic-rewards-setup").performScrollTo().performClick()
+        first.performScrollTo().assertTextContains("Minimum number")
+        second.performScrollTo().assertTextContains("Maximum number")
+        first.performScrollTo().performTextReplacement("100")
+        second.performScrollTo().performTextReplacement("7")
+        compose.onNodeWithTag("save-rewards-setup").performScrollTo().assertIsNotEnabled()
     }
 
     @Test fun logicDefaultActivitySettingsSaveIndependentlyAndDiscardUnsavedChanges() {
@@ -1014,7 +1068,7 @@ class MathAppTest {
         compose.onNodeWithTag("submit-setup").performScrollTo().performClick()
 
         compose.onNodeWithText("Press Start when Ready").assertIsDisplayed()
-        compose.onNodeWithText("numbers 4 to 6", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("first up to 4 · second up to 6", substring = true).assertIsDisplayed()
         compose.onNodeWithTag("start-button").performClick()
         compose.onNodeWithTag("timer").assertDoesNotExist()
         compose.onNodeWithTag("wrong-tally").assertTextEquals("Wrong: 0")
@@ -1053,13 +1107,14 @@ class MathAppTest {
         results.performScrollToIndex(0)
         compose.waitUntil(5_000) { model.history.size == 1 }
         assertEquals(1, HistoryStore(File(application.filesDir, "practice_history.json")).load().single().correct)
-        assertEquals(4, model.lastResult!!.minimum)
-        assertEquals(4, HistoryStore(File(application.filesDir, "practice_history.json")).load().single().minimum)
+        assertEquals(1, model.lastResult!!.minimum)
+        assertEquals(4, model.lastResult!!.maximum)
+        assertEquals(6, HistoryStore(File(application.filesDir, "practice_history.json")).load().single().maximumSecond)
         model.lastResult!!.attempts.forEach {
-            assertTrue(it.problem.left in 4..6)
-            assertTrue(it.problem.right in 4..6)
+            assertTrue(it.problem.left in 1..4)
+            assertTrue(it.problem.right in 1..6)
         }
-        compose.onNodeWithText("Multiplication · numbers 4 to 6").assertIsDisplayed()
+        compose.onNodeWithText("Multiplication · first up to 4 · second up to 6").assertIsDisplayed()
 
         compose.onNodeWithTag("done-button").performClick()
         compose.onNodeWithTag("practice-game").assertIsDisplayed()
@@ -1067,8 +1122,8 @@ class MathAppTest {
         compose.onNodeWithContentDescription("Settings").performClick()
         compose.onNodeWithText("Result Histories").performScrollTo().performClick()
         compose.onNodeWithTag("practice-history").performClick()
-        compose.onNodeWithText("Multiplication · 4 to 6").performClick()
-        compose.onNodeWithText("Multiplication · numbers 4 to 6").assertIsDisplayed()
+        compose.onNodeWithText("Multiplication · first up to 4 · second up to 6").performClick()
+        compose.onNodeWithText("Multiplication · first up to 4 · second up to 6").assertIsDisplayed()
     }
 
     @Test
