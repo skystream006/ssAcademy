@@ -120,7 +120,7 @@ class EquationTest {
         compose.onNodeWithContentDescription("Settings").performClick()
         compose.onNodeWithText("Result Histories").performScrollTo().performClick()
         compose.onNodeWithTag("practice-history").performClick()
-        compose.onNodeWithText("Multiplication · 1 to 10").performClick()
+        compose.onNodeWithText("Multiplication · first up to 10 · second up to 10").performClick()
         compose.onNodeWithContentDescription(description).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Correct answer:", substring = true).assertDoesNotExist()
         compose.runOnIdle { model.chooseShowCorrectAnswers(true) }
