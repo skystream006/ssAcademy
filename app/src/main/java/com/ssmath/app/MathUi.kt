@@ -519,23 +519,23 @@ internal fun RewardsSetupScreen(model: MathViewModel) {
                 "Practice Game shares Basic Math's default number limits.")
             Operation.entries.forEach { operation ->
                 val parameters = model.rewardsSetupDraft.getValue(operation)
-                val division = operation == Operation.DIVISION
+                val independentMaximums = operation.usesIndependentMaximums(model.rewardsSetupSubject == MathRewardGame.LOGIC)
                 Card(Modifier.fillMaxWidth().align(Alignment.CenterHorizontally)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(operation.label, style = MaterialTheme.typography.titleLarge)
                         OutlinedTextField(parameters.firstText,
                             { model.updateRewardsParameters(operation, parameters.copy(firstText = it)) },
-                            label = { Text(if (division) "Maximum First number" else "Minimum number") },
-                            supportingText = { Text(if (division) "Whole number from $MIN_MAXIMUM to ${"%,d".format(MAX_MAXIMUM)}"
+                            label = { Text(if (independentMaximums) "Maximum First number" else "Minimum number") },
+                            supportingText = { Text(if (independentMaximums) "Whole number from $MIN_MAXIMUM to ${"%,d".format(MAX_MAXIMUM)}"
                                 else "Whole number from $MIN_MAXIMUM to the maximum number") },
                             isError = parameters.firstText.isNotEmpty() && (parameters.first == null ||
-                                (!division && parameters.second != null && (parameters.first ?: 0) > requireNotNull(parameters.second))),
+                                (!independentMaximums && parameters.second != null && (parameters.first ?: 0) > requireNotNull(parameters.second))),
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
                             modifier = Modifier.fillMaxWidth().testTag("rewards-${operation.name}-first"))
                         OutlinedTextField(parameters.secondText,
                             { model.updateRewardsParameters(operation, parameters.copy(secondText = it)) },
-                            label = { Text(if (division) "Maximum Second number" else "Maximum number") },
+                            label = { Text(if (independentMaximums) "Maximum Second number" else "Maximum number") },
                             supportingText = { Text("Whole number from $MIN_MAXIMUM to ${"%,d".format(MAX_MAXIMUM)}") },
                             isError = parameters.secondText.isNotEmpty() && parameters.second == null,
                             singleLine = true,
@@ -568,6 +568,12 @@ private fun MatrixActivitySettings(model: MathViewModel) {
 @Composable
 private fun SetupForm(model: MathViewModel, modifier: Modifier) {
     val division = model.selectedOperation == Operation.DIVISION
+    val multiplication = model.selectedOperation == Operation.MULTIPLICATION
+    val independentMaximums = division || multiplication
+    val firstText = if (division) model.divisionMaximumFirstText
+        else if (multiplication) model.multiplicationMaximumFirstText else model.minimumText
+    val secondText = if (division) model.divisionMaximumSecondText
+        else if (multiplication) model.multiplicationMaximumSecondText else model.maximumText
     Column(modifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("What would you like to practice?", style = MaterialTheme.typography.titleLarge)
         Operation.entries.chunked(2).forEach { row ->
@@ -589,24 +595,26 @@ private fun SetupForm(model: MathViewModel, modifier: Modifier) {
                 }
             }
         }
-        Text(if (division) "What is the Maximum First number?" else "What is the minimum number?",
+        Text(if (independentMaximums) "What is the Maximum First number?" else "What is the minimum number?",
             style = MaterialTheme.typography.titleLarge)
-        OutlinedTextField(if (division) model.divisionMaximumFirstText else model.minimumText,
-            if (division) model::updateDivisionMaximumFirst else model::updateMinimum, singleLine = true,
-            label = { Text(if (division) "Maximum First number" else "Minimum number") },
-            supportingText = { Text(if (division) "Whole number from $MIN_MAXIMUM to ${"%,d".format(MAX_MAXIMUM)}"
+        OutlinedTextField(firstText,
+            if (division) model::updateDivisionMaximumFirst
+                else if (multiplication) model::updateMultiplicationMaximumFirst else model::updateMinimum, singleLine = true,
+            label = { Text(if (independentMaximums) "Maximum First number" else "Minimum number") },
+            supportingText = { Text(if (independentMaximums) "Whole number from $MIN_MAXIMUM to ${"%,d".format(MAX_MAXIMUM)}"
                 else "Whole number from $MIN_MAXIMUM to the maximum number") },
-            isError = if (division) model.divisionMaximumFirstText.isNotEmpty() && model.divisionMaximumFirst == null
+            isError = if (independentMaximums) firstText.isNotEmpty() && parseMaximum(firstText) == null
                 else model.minimumText.isNotEmpty() && model.minimum == null,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
             modifier = Modifier.fillMaxWidth().testTag("minimum-input"))
-        Text(if (division) "What is the Maximum Second number?" else "What is the maximum number?",
+        Text(if (independentMaximums) "What is the Maximum Second number?" else "What is the maximum number?",
             style = MaterialTheme.typography.titleLarge)
-        OutlinedTextField(if (division) model.divisionMaximumSecondText else model.maximumText,
-            if (division) model::updateDivisionMaximumSecond else model::updateMaximum, singleLine = true,
-            label = { Text(if (division) "Maximum Second number" else "Maximum number") },
+        OutlinedTextField(secondText,
+            if (division) model::updateDivisionMaximumSecond
+                else if (multiplication) model::updateMultiplicationMaximumSecond else model::updateMaximum, singleLine = true,
+            label = { Text(if (independentMaximums) "Maximum Second number" else "Maximum number") },
             supportingText = { Text("Whole number from $MIN_MAXIMUM to ${"%,d".format(MAX_MAXIMUM)}") },
-            isError = if (division) model.divisionMaximumSecondText.isNotEmpty() && model.divisionMaximumSecond == null
+            isError = if (independentMaximums) secondText.isNotEmpty() && parseMaximum(secondText) == null
                 else model.maximumText.isNotEmpty() && model.maximum == null,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
             modifier = Modifier.fillMaxWidth().testTag("maximum-input"))
@@ -627,7 +635,7 @@ private fun SetupForm(model: MathViewModel, modifier: Modifier) {
 private fun ReadyDialog(model: MathViewModel) {
     val operation = model.readyOperation ?: return
     val parameters = model.readyParameters ?: return
-    val numbers = if (operation == Operation.DIVISION)
+    val numbers = if (operation.usesIndependentMaximums(model.readyLogicMath) && !model.readyMultiplicationMatrix)
         "first up to ${parameters.first} · second up to ${parameters.second}"
         else "numbers ${parameters.first} to ${parameters.second}"
     DialogCard {

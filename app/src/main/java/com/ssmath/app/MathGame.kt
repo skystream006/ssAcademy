@@ -20,15 +20,15 @@ data class RewardsGameDefaults(
     val first: Int? get() = parseMaximum(firstText)
     val second: Int? get() = parseMaximum(secondText)
 
-    fun isValid(operation: Operation): Boolean {
+    fun isValid(operation: Operation, isLogicMath: Boolean = false): Boolean {
         val first = first ?: return false
         val second = second ?: return false
-        return operation == Operation.DIVISION || first <= second
+        return operation.usesIndependentMaximums(isLogicMath) || first <= second
     }
 
     companion object {
-        fun defaults(operation: Operation) = RewardsGameDefaults(
-            firstText = if (operation == Operation.DIVISION) "10" else "1"
+        fun defaults(operation: Operation, isLogicMath: Boolean = false) = RewardsGameDefaults(
+            firstText = if (operation.usesIndependentMaximums(isLogicMath)) "10" else "1"
         )
     }
 }
@@ -47,7 +47,7 @@ data class GameParameters(
 
     companion object {
         fun defaults(operation: Operation) = GameParameters(
-            firstText = if (operation == Operation.DIVISION) "10" else "1"
+            firstText = if (operation.usesIndependentMaximums()) "10" else "1"
         )
     }
 }
@@ -58,6 +58,9 @@ enum class Operation(val label: String, val symbol: String) {
     SUBTRACTION("Subtraction", "−"),
     MULTIPLICATION("Multiplication", "×"),
     DIVISION("Division", "÷");
+
+    fun usesIndependentMaximums(isLogicMath: Boolean = false): Boolean =
+        this == DIVISION || (this == MULTIPLICATION && !isLogicMath)
 
     fun apply(left: Int, right: Int): Int = when (this) {
         ADDITION -> left + right
@@ -120,7 +123,8 @@ class ProblemGenerator(private val random: Random = Random.Default) {
         Problem(0, 0, operation, LogicPuzzleGenerator(random).next(operation, maximum, settings, minimum, maximumSecond))
 
     /**
-     * Addition, subtraction and multiplication use numbers between [minimum] and [maximum].
+     * Addition and subtraction use numbers between [minimum] and [maximum].
+     * Multiplication bounds the first factor by [maximum] and the second by [maximumSecond].
      * Subtraction never goes below zero. Division has a whole-number answer, with the
      * dividend bounded by [maximum] and the divisor by [maximumSecond].
      */
@@ -139,7 +143,8 @@ class ProblemGenerator(private val random: Random = Random.Default) {
     private fun create(operation: Operation, minimum: Int, maximum: Int, maximumSecond: Int): Problem {
         fun number() = random.nextInt(minimum, maximum + 1)
         return when (operation) {
-            Operation.ADDITION, Operation.MULTIPLICATION -> Problem(number(), number(), operation)
+            Operation.ADDITION -> Problem(number(), number(), operation)
+            Operation.MULTIPLICATION -> Problem(number(), random.nextInt(minimum, maximumSecond + 1), operation)
             Operation.SUBTRACTION -> {
                 val a = number()
                 val b = number()

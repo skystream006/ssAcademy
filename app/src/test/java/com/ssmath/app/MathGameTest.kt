@@ -146,6 +146,44 @@ class MathGameTest {
         assertTrue(divisors.size > 5)
     }
 
+    @Test fun multiplicationUsesIndependentOperandMaximumsThroughoutTheGame() {
+        listOf(1 to 1, 1 to MAX_MAXIMUM, MAX_MAXIMUM to 1, 100 to 7, 7 to 100,
+            MAX_MAXIMUM to MAX_MAXIMUM).forEach { (first, second) ->
+            var game = GameState.start(Operation.MULTIPLICATION, first, generator,
+                questionCount = 100, maximumSecond = second)
+            repeat(100) {
+                assertTrue(game.problem.left in 1..first)
+                assertTrue(game.problem.right in 1..second)
+                assertEquals(game.problem.left * game.problem.right, game.problem.answer)
+                game = game.answer(game.problem.answer, generator)
+            }
+            assertTrue(game.perfect)
+        }
+    }
+
+    @Test fun multiplicationCanUseEveryPairWithinIndependentMaximums() {
+        listOf(5 to 3, 3 to 5).forEach { (first, second) ->
+            val expected = (1..first).flatMap { left ->
+                (1..second).map { right -> Problem(left, right, Operation.MULTIPLICATION) }
+            }.toSet()
+            val actual = (1..2000).map {
+                generator.next(Operation.MULTIPLICATION, first, maximumSecond = second)
+            }.toSet()
+            assertEquals(expected, actual)
+        }
+    }
+
+    @Test fun multiplicationRejectsInvalidOperandMaximums() {
+        listOf(0, -1, MAX_MAXIMUM + 1, Int.MAX_VALUE).forEach { invalid ->
+            assertThrows(IllegalArgumentException::class.java) {
+                GameState.start(Operation.MULTIPLICATION, invalid, generator, maximumSecond = 10)
+            }
+            assertThrows(IllegalArgumentException::class.java) {
+                GameState.start(Operation.MULTIPLICATION, 10, generator, maximumSecond = invalid)
+            }
+        }
+    }
+
     @Test fun divisionCanUseEveryValidPairInTheSelectedRange() {
         val problems = (1..1000).map { generator.next(Operation.DIVISION, 12, minimum = 3) }.toSet()
         val expected = (3..12).flatMap { divisor ->

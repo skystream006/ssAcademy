@@ -202,8 +202,9 @@ class GameModesTest {
                 .putInt("rewards_${operation.name}_second", 8).commit()
         }
         val model = model()
-        val legacy = model.rewardsDefaults
+        val legacy = Operation.entries.associateWith { RewardsGameDefaults("3", "8") }
         assertEquals(legacy, model.logicRewardsDefaults)
+        assertEquals(RewardsGameDefaults("8", "8"), model.rewardsDefaults[Operation.MULTIPLICATION])
         model.openSettings()
         model.openRewardsSetup()
         model.updateRewardsParameters(Operation.ADDITION, RewardsGameDefaults("4", "9"))
@@ -844,6 +845,7 @@ class GameModesTest {
         val original = model.rewardsDefaults
         Operation.entries.forEach { operation ->
             assertEquals(if (operation == Operation.DIVISION) RewardsGameDefaults("81", "9")
+                else if (operation == Operation.MULTIPLICATION) RewardsGameDefaults("18", "18")
                 else RewardsGameDefaults("3", "18"), original[operation])
         }
         model.openPracticeGame()
@@ -885,6 +887,109 @@ class GameModesTest {
         assertEquals(RewardsGameDefaults("27", "27"), model().rewardsDefaults[Operation.DIVISION])
     }
 
+    @Test fun multiplicationMigratesTheOldUpperBoundOnceWithoutChangingLogicRanges() {
+        listOf(false, true).forEach { savedRewards ->
+            settings.edit().clear().putInt("minimum", 4).putInt("maximum", 27).commit()
+            if (savedRewards) settings.edit().putInt("rewards_MULTIPLICATION_first", 3)
+                .putInt("rewards_MULTIPLICATION_second", 12).commit()
+            val model = model()
+            val oldRange = if (savedRewards) RewardsGameDefaults("3", "12") else RewardsGameDefaults("4", "27")
+            assertEquals(RewardsGameDefaults(oldRange.secondText, oldRange.secondText),
+                model.rewardsDefaults[Operation.MULTIPLICATION])
+            assertEquals(oldRange, model.logicRewardsDefaults[Operation.MULTIPLICATION])
+            model.openSettings()
+            model.openRewardsSetup()
+            model.updateRewardsParameters(Operation.MULTIPLICATION, RewardsGameDefaults("100", "7"))
+            assertTrue(model.canSaveRewardsSetup)
+            model.saveRewardsSetup()
+            settings.edit().putInt("minimum", 2).putInt("maximum", 5).commit()
+            val restored = model()
+            assertEquals(RewardsGameDefaults("100", "7"), restored.rewardsDefaults[Operation.MULTIPLICATION])
+            assertEquals(oldRange, restored.logicRewardsDefaults[Operation.MULTIPLICATION])
+            restored.openSettings()
+            restored.openRewardsSetup(MathRewardGame.LOGIC)
+            restored.updateRewardsParameters(Operation.MULTIPLICATION, RewardsGameDefaults("100", "7"))
+            assertFalse(restored.canSaveRewardsSetup)
+            restored.cancelRewardsSetup()
+            restored.closeOverlay()
+            restored.openLogicMathGame()
+            restored.updateRewardsQuestionCount("1")
+            restored.selectRewardsGame(Operation.MULTIPLICATION)
+            restored.start()
+            assertEquals(oldRange.first, restored.game!!.minimum)
+            assertEquals(oldRange.second, restored.game!!.maximum)
+            assertEquals(oldRange.second, restored.game!!.maximumSecond)
+        }
+    }
+
+    @Test fun invalidSavedMultiplicationMaximumsFallBackWithoutInvalidatingLogicDefaults() {
+        settings.edit().putInt("rewards_MULTIPLICATION_first", 3)
+            .putInt("rewards_MULTIPLICATION_second", 12)
+            .putInt("rewards_MULTIPLICATION_maximum_first", 0)
+            .putInt("rewards_MULTIPLICATION_maximum_second", 10_001)
+            .putInt("logic_rewards_MULTIPLICATION_first", 5)
+            .putInt("logic_rewards_MULTIPLICATION_second", 9).commit()
+        val model = model()
+        assertEquals(RewardsGameDefaults("12", "12"), model.rewardsDefaults[Operation.MULTIPLICATION])
+        assertEquals(RewardsGameDefaults("5", "9"), model.logicRewardsDefaults[Operation.MULTIPLICATION])
+        assertEquals(model.rewardsDefaults, model().rewardsDefaults)
+    }
+
+    @Test fun multiplicationMaximumsDriveChallengesAndPracticeAndPersistInHistory() {
+        val model = model()
+        val operation = Operation.MULTIPLICATION
+        model.openSettings()
+        model.openRewardsSetup()
+        model.updateRewardsParameters(operation, RewardsGameDefaults("100", "7"))
+        model.saveRewardsSetup()
+        model.closeOverlay()
+        GameMode.entries.forEach { mode ->
+            if (mode == GameMode.REWARDS) readyRewards(model, 25, operation)
+            else readyPractice(model, 25, operation)
+            assertEquals(GameParameters("100", "7", "25"), model.readyParameters)
+            model.start()
+            repeat(25) {
+                assertTrue(model.game!!.problem.left in 1..100)
+                assertTrue(model.game!!.problem.right in 1..7)
+                answer(model)
+            }
+            val result = requireNotNull(model.lastResult)
+            assertEquals(1, result.minimum)
+            assertEquals(100, result.maximum)
+            assertEquals(7, result.maximumSecond)
+            assertEquals("first up to 100 · second up to 7", result.numberDescription)
+            assertEquals(result, model().history.first { it.id == result.id })
+            model.dismissCelebration()
+            model.done()
+        }
+        model.openPracticeGame()
+        model.updateMultiplicationMaximumFirst("2")
+        model.updateMultiplicationMaximumSecond("20")
+        model.submitSetup()
+        val restored = model()
+        assertEquals(2, restored.multiplicationMaximumFirst)
+        assertEquals(20, restored.multiplicationMaximumSecond)
+        restored.openPracticeGame()
+        assertEquals(100, restored.multiplicationMaximumFirst)
+        assertEquals(7, restored.multiplicationMaximumSecond)
+        restored.selectOperation(Operation.ADDITION)
+        assertEquals("1", restored.minimumText)
+        assertEquals("10", restored.maximumText)
+        restored.selectOperation(Operation.MULTIPLICATION)
+        assertEquals(100, restored.multiplicationMaximumFirst)
+        assertEquals(7, restored.multiplicationMaximumSecond)
+        assertEquals(RewardsGameDefaults("100", "7"), restored.rewardsDefaults[operation])
+    }
+
+    @Test fun legacyMultiplicationResultsKeepTheirOriginalRangeDescription() {
+        val result = PracticeResult(1, 1, Operation.MULTIPLICATION, 12, 1000,
+            listOf(Attempt(Problem(4, 6, Operation.MULTIPLICATION), 24)), minimum = 3)
+        HistoryStore(file).save(listOf(result))
+        val restored = HistoryStore(file).load().single()
+        assertNull(restored.maximumSecond)
+        assertEquals("numbers 3 to 12", restored.numberDescription)
+    }
+
     @Test fun invalidLegacyQuestionCountsDoNotDiscardValidNumberDefaults() {
         listOf(0, -1, 1001).forEach { count ->
             settings.edit().clear().putInt("minimum", 3).putInt("maximum", 18)
@@ -893,6 +998,7 @@ class GameModesTest {
             val model = model()
             Operation.entries.forEach { operation ->
                 assertEquals(if (operation == Operation.DIVISION) RewardsGameDefaults("81", "9")
+                    else if (operation == Operation.MULTIPLICATION) RewardsGameDefaults("18", "18")
                     else RewardsGameDefaults("3", "18"), model.rewardsDefaults[operation])
             }
             assertEquals(count.toString(), model.questionCountText)
@@ -913,7 +1019,7 @@ class GameModesTest {
                 .putInt("rewards_${operation.name}_second", second)
                 .putInt("rewards_${operation.name}_question_count", listOf(50, 0, -1, 1001)[operation.ordinal])
                 .commit()
-            RewardsGameDefaults(first.toString(), second.toString())
+            RewardsGameDefaults((if (operation == Operation.MULTIPLICATION) second else first).toString(), second.toString())
         }
         val model = model()
         assertEquals(expected, model.rewardsDefaults)
@@ -969,8 +1075,9 @@ class GameModesTest {
             val game = requireNotNull(restored.game)
             assertEquals(operation, game.operation)
             assertEquals(count, game.questionCount)
-            assertEquals(if (operation == Operation.DIVISION) 1 else parameters.first, game.minimum)
-            assertEquals(if (operation == Operation.DIVISION) parameters.first else parameters.second, game.maximum)
+            val independentMaximums = operation in listOf(Operation.MULTIPLICATION, Operation.DIVISION)
+            assertEquals(if (independentMaximums) 1 else parameters.first, game.minimum)
+            assertEquals(if (independentMaximums) parameters.first else parameters.second, game.maximum)
             assertEquals(parameters.second, game.maximumSecond)
             assertEquals("1", restored.minimumText)
             assertEquals("10", restored.maximumText)
@@ -979,7 +1086,7 @@ class GameModesTest {
         }
     }
 
-    @Test fun parametersValidateBoundsCountsAndIndependentDivisionMaxima() {
+    @Test fun parametersValidateBoundsCountsAndIndependentOperandMaxima() {
         Operation.entries.forEach { operation ->
             val valid = GameParameters.defaults(operation)
             listOf("", "0", "-1", "10001", "1.5", "abc", "1234567").forEach { invalid ->
@@ -991,11 +1098,12 @@ class GameModesTest {
             }
             assertTrue(GameParameters("1", "10000", "1").isValid(operation))
             assertTrue(GameParameters("10000", "10000", "1000").isValid(operation))
-            assertEquals(operation == Operation.DIVISION, GameParameters("100", "3", "25").isValid(operation))
+            assertEquals(operation in listOf(Operation.MULTIPLICATION, Operation.DIVISION),
+                GameParameters("100", "3", "25").isValid(operation))
         }
     }
 
-    @Test fun rewardsDefaultsValidateOnlyNumberBoundsAndIndependentDivisionMaxima() {
+    @Test fun rewardsDefaultsValidateOnlyNumberBoundsAndIndependentOperandMaxima() {
         Operation.entries.forEach { operation ->
             val valid = RewardsGameDefaults.defaults(operation)
             assertTrue(valid.isValid(operation))
@@ -1005,7 +1113,10 @@ class GameModesTest {
             }
             assertTrue(RewardsGameDefaults("1", "10000").isValid(operation))
             assertTrue(RewardsGameDefaults("10000", "10000").isValid(operation))
-            assertEquals(operation == Operation.DIVISION, RewardsGameDefaults("100", "3").isValid(operation))
+            assertEquals(operation in listOf(Operation.MULTIPLICATION, Operation.DIVISION),
+                RewardsGameDefaults("100", "3").isValid(operation))
+            assertEquals(operation == Operation.DIVISION,
+                RewardsGameDefaults("100", "3").isValid(operation, isLogicMath = true))
         }
     }
 
@@ -1160,7 +1271,7 @@ class GameModesTest {
         model.selectOperation(Operation.SUBTRACTION)
         model.updateRewardsParameters(Operation.MULTIPLICATION, RewardsGameDefaults("", ""))
         model.updateRewardsQuestionCount("1")
-        assertEquals(GameParameters("1", "10", "50"), model.readyParameters)
+        assertEquals(GameParameters("10", "10", "50"), model.readyParameters)
         model.start()
         assertEquals(GameMode.REWARDS, model.gameMode)
         assertEquals(Operation.MULTIPLICATION, model.game!!.operation)

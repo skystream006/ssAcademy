@@ -51,7 +51,8 @@ data class PracticeResult(
         else -> operation.label
     }
     val numberDescription: String get() =
-        if (operation == Operation.DIVISION && maximumSecond != null) "first up to $maximum · second up to $maximumSecond"
+        if (operation.usesIndependentMaximums(isLogicMath) && !isMultiplicationMatrix && maximumSecond != null)
+            "first up to $maximum · second up to $maximumSecond"
         else "numbers $minimum to $maximum"
     val correct: Int get() = attempts.count { it.correct }
     val wrong: Int get() = attempts.count { !it.correct }

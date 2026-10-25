@@ -22,9 +22,9 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    above the **Maximum number** (both 1 to 10,000; minimum cannot exceed maximum),
    and answer **How many questions would you like?** using the **Number of questions**
    field (1 to 1,000; defaults to 10), then press **Submit**.
-   For **Division**, the two inputs instead ask **What is the Maximum First number?**
+   For **Multiplication** and **Division**, the two inputs instead ask **What is the Maximum First number?**
    and **What is the Maximum Second number?** Each is an independent limit from
-   1 to 10,000, for the dividend and divisor respectively; either limit may be larger.
+   1 to 10,000, for the first and second operands respectively; either limit may be larger.
    Number limits start from the selected operation's **Basic Math** defaults each time
    you open Practice Game or switch operations. You can override them for that practice
    game without changing the saved defaults. Your operation and question count are remembered.
@@ -42,6 +42,9 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    Question counts are chosen per game, not saved in challenge defaults, and
    do not change your Practice Game choices. Change the number limits in
    **Settings > Admin Menu > Game Settings > Math Settings > Basic Math Settings > Default Activity Settings**.
+   Multiplication and Division use **Maximum First number** and **Maximum Second number**
+   defaults (both initially 10). Existing multiplication ranges migrate their upper bound
+   to both maximums. Logic Math retains its separate minimum/maximum settings for multiplication.
    **Challenge - Logic Math** offers its own saved tier minimums as question-count choices and the same four math types,
    using its own number limits in **Logic Math Settings > Default Activity Settings**,
    with its own timer duration and the same scoring, wrong-answer limit, and reward rules.
@@ -73,8 +76,9 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    **Mega Pokémons** celebration pool, exclusive to this game; ordinary multiplication
    games (even with 121 questions), Practice Game, and reading cannot award this tier.
 2. **Press Start when Ready** – press **Start** to begin. The timer starts now.
-3. **Play** – in Practice Game and Challenge- Basic Math, addition, subtraction and multiplication use two random numbers
+3. **Play** – in Practice Game and Challenge- Basic Math, addition and subtraction use two random numbers
    between the minimum and maximum, inclusive. Subtraction never goes below zero.
+   Multiplication picks each factor independently from 1 to its respective maximum.
    Division always has a whole-number answer, using a first number from 1 to its first maximum
    and a second number from 1 to its second maximum, choosing only exactly divisible pairs.
    A correct answer earns a point; a wrong answer is added to
