@@ -984,7 +984,7 @@ class GameModesTest {
     @Test fun legacyMultiplicationResultsKeepTheirOriginalRangeDescription() {
         val result = PracticeResult(1, 1, Operation.MULTIPLICATION, 12, 1000,
             listOf(Attempt(Problem(4, 6, Operation.MULTIPLICATION), 24)), minimum = 3)
-        HistoryStore(file).save(listOf(result))
+        HistoryStore(file).add(result)
         val restored = HistoryStore(file).load().single()
         assertNull(restored.maximumSecond)
         assertEquals("numbers 3 to 12", restored.numberDescription)
