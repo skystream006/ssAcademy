@@ -1,6 +1,7 @@
 package com.ssmath.app
 
 import android.app.Application
+import android.net.Uri
 import android.os.SystemClock
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -8,6 +9,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import java.io.File
+import java.io.IOException
 import kotlin.random.Random
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -163,6 +165,12 @@ class MathViewModel(
     var removingReward by mutableStateOf(false)
         private set
     var rewardRemovalError by mutableStateOf<String?>(null)
+        private set
+    internal var collectionTransferBusy by mutableStateOf(false)
+        private set
+    internal var collectionTransferMessage by mutableStateOf<String?>(null)
+        private set
+    internal var collectionImportPreview by mutableStateOf<CollectionBackup?>(null)
         private set
     var message by mutableStateOf<String?>(null)
         private set
@@ -1126,6 +1134,94 @@ class MathViewModel(
         applySnapshot(saved.snapshot)
         if (lastResult === previous) lastResult = saved.result
         if (rewardResult === previous) rewardResult = saved.result
+    }
+
+    internal fun exportCollections(uri: Uri) {
+        if (collectionTransferBusy) return
+        transferCollections("Unable to export collections. Choose a writable location and try again.") {
+            val backup = storeLock.withLock {
+                withContext(ioDispatcher) { CollectionBackup.from(store.loadSnapshot()) }
+            }
+            withContext(ioDispatcher) {
+                val resolver = getApplication<Application>().contentResolver
+                val output = resolver.openOutputStream(uri, "wt")
+                    ?: throw IOException("Unable to open the destination file.")
+                output.bufferedWriter(Charsets.UTF_8).use { it.write(CollectionBackup.encode(backup)) }
+            }
+            collectionTransferMessage = "Collections exported. Copy this file to the other device to import it."
+        }
+    }
+
+    internal fun previewCollectionImport(uri: Uri) {
+        if (collectionTransferBusy) return
+        collectionImportPreview = null
+        transferCollections("Unable to read this collection file. Choose a valid ssAcademy export and try again.") {
+            val backup = withContext(ioDispatcher) {
+                val input = getApplication<Application>().contentResolver.openInputStream(uri)
+                    ?: throw IOException("Unable to open the collection file.")
+                input.use(CollectionBackup::read)
+            }
+            collectionImportPreview = backup
+        }
+    }
+
+    internal fun importCollections(mode: CollectionImportMode) {
+        val backup = collectionImportPreview ?: return
+        if (collectionTransferBusy) return
+        transferCollections("Unable to import collections. Check the reward balance limit and device storage, then try again.") {
+            storeLock.withLock {
+                val snapshot = withContext(ioDispatcher) { store.importCollections(backup, mode) }
+                applySnapshot(snapshot)
+                lastResult = lastResult?.let { result -> snapshot.history.find { it.id == result.id } ?: result }
+                historyDetail = historyDetail?.let { result -> snapshot.history.find { it.id == result.id } }
+                pendingResult?.takeIf { it.saved }?.let { pending ->
+                    snapshot.history.find { it.id == pending.result.id }?.let { pending.result = it }
+                }
+                pendingReadingResult?.takeIf { it.saved }?.let { pending ->
+                    snapshot.readingResults.find { it.sessionId == pending.result.sessionId }?.let { pending.result = it }
+                }
+            }
+            collectionImportPreview = null
+            collectionTransferMessage = if (mode == CollectionImportMode.REPLACE) "Collections replaced."
+                else "Collections merged."
+        }
+    }
+
+    private fun transferCollections(failureMessage: String, action: suspend () -> Unit) {
+        collectionTransferBusy = true
+        collectionTransferMessage = null
+        fun failed(error: Exception) {
+            DebugLog.event(DebugEvent.HISTORY_FAILURE, error = error)
+            collectionTransferMessage = failureMessage
+        }
+        viewModelScope.launch {
+            try {
+                action()
+            } catch (error: IOException) {
+                failed(error)
+            } catch (error: IllegalArgumentException) {
+                failed(error)
+            } catch (error: SecurityException) {
+                failed(error)
+            } finally {
+                collectionTransferBusy = false
+            }
+        }
+    }
+
+    internal fun collectionPickerFailed(error: Exception) {
+        DebugLog.event(DebugEvent.HISTORY_FAILURE, error = error)
+        collectionTransferMessage = "Unable to open the file picker. Install or enable a Files app and try again."
+    }
+
+    internal fun cancelCollectionImport() {
+        if (!collectionTransferBusy) collectionImportPreview = null
+    }
+
+    internal fun clearCollectionTransfer() {
+        if (collectionTransferBusy) return
+        collectionImportPreview = null
+        collectionTransferMessage = null
     }
 
     private fun applySnapshot(snapshot: PracticeSnapshot) {

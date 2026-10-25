@@ -178,6 +178,21 @@ none was configured); disabling it never deletes the PIN.
 Admin Menu contains **Game Settings**, **My Rewards** (add/remove controls), and
 **Available Rewards**; every section starts collapsed. Settings subsections have
 darker backgrounds, including nested subject settings.
+Use **Settings > Admin Menu > Export / Import Collections** to transfer collections
+between devices. **Export collections** saves one JSON file containing every whole
+reward, fragment, and collected animation, including Mega Pokémon and Other scenes.
+Copy that file to the other device, open the same menu, and choose **Import collections**.
+After the file is checked, review its totals and explicitly choose **Replace collections**
+to overwrite both destination collections, or **Merge collections** to add reward balances
+and combine animations without duplicates. Nothing changes until you choose; **Cancel import**
+keeps the destination unchanged. Merging the same file again adds its reward balances again.
+Export a destination backup before replacing collections if you might want to restore them.
+History, reading progress, settings, and the Admin PIN are not included or replaced.
+Imported animations are not removed by deleting local game history; after replacement,
+old claimed gifts remain visible in history but no longer subtract from the new inventory
+when their results are deleted. New claims continue to behave normally.
+Invalid, unsupported, oversized files (over 256 KB), and merges exceeding reward balance
+limits are rejected without changing either collection. Use the latest app on both devices.
 **Math Settings** contains **Math Rewards System**,
 **Show timer**, **Show correct answers**,
 **Vertical equations**, and collapsed **Basic Math Settings**,
