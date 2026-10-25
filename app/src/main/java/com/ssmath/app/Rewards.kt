@@ -130,7 +130,11 @@ data class RewardBalance(val whole: Int = 0, val fragments: Int = 0) {
 
 /** The inventory balance immediately after this result's fragment was claimed. */
 @Serializable
-data class PrizeAward(val type: RewardType, val balance: RewardBalance)
+data class PrizeAward(
+    val type: RewardType,
+    val balance: RewardBalance,
+    val deductOnHistoryDeletion: Boolean = true
+)
 
 internal fun qualifiesForReward(questionCount: Int, correct: Int, answered: Int, timedOut: Boolean,
                                 rewardThresholds: RewardThresholds = RewardThresholds(),

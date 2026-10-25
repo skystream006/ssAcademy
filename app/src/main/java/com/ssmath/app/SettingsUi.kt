@@ -2,7 +2,10 @@
 
 package com.ssmath.app
 
+import android.content.ActivityNotFoundException
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -94,6 +97,13 @@ private fun SettingsContent(model: MathViewModel) {
     var showingAdmin by remember { mutableStateOf(false) }
     var adminUnlocked by remember { mutableStateOf(false) }
     var showingName by rememberSaveable { mutableStateOf(false) }
+    var showingTransfer by rememberSaveable { mutableStateOf(false) }
+    val exportCollections = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) {
+        if (it != null) model.exportCollections(it)
+    }
+    val importCollections = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {
+        if (it != null) model.previewCollectionImport(it)
+    }
     val adminPage = model.overlay == Overlay.REWARDS_SETUP || model.overlay == Overlay.READING_PROGRESS
     LaunchedEffect(adminPage) {
         if (adminPage) showingAdmin = true
@@ -101,6 +111,8 @@ private fun SettingsContent(model: MathViewModel) {
     val dismissAdmin = {
         showingAdmin = false
         adminUnlocked = false
+        showingTransfer = false
+        model.clearCollectionTransfer()
         if (adminPage) model.closeOverlay()
     }
     if (!adminPage) {
@@ -112,9 +124,35 @@ private fun SettingsContent(model: MathViewModel) {
     if (showingDebug) {
         DebugDialog(model, onDismiss = { showingDebug = false })
     }
-    if (showingAdmin || adminPage) {
+    if (showingAdmin || adminPage || showingTransfer) {
         if (adminUnlocked || !model.adminPinLockEnabled) {
-            AdminDialog(model, onDismiss = dismissAdmin)
+            if (showingTransfer) {
+                CollectionTransferDialog(model,
+                    onExport = {
+                        try {
+                            exportCollections.launch("ssAcademy-collections.json")
+                        } catch (error: ActivityNotFoundException) {
+                            model.collectionPickerFailed(error)
+                        } catch (error: SecurityException) {
+                            model.collectionPickerFailed(error)
+                        }
+                    },
+                    onImport = {
+                        try {
+                            importCollections.launch(arrayOf("application/json", "text/plain", "application/octet-stream"))
+                        } catch (error: ActivityNotFoundException) {
+                            model.collectionPickerFailed(error)
+                        } catch (error: SecurityException) {
+                            model.collectionPickerFailed(error)
+                        }
+                    },
+                    onDismiss = { model.clearCollectionTransfer(); showingTransfer = false })
+            } else {
+                AdminDialog(model, onDismiss = dismissAdmin, onTransfer = {
+                    model.clearCollectionTransfer()
+                    showingTransfer = true
+                })
+            }
         } else {
             AdminPinDialog(onUnlocked = { adminUnlocked = true; showingAdmin = true }, onDismiss = dismissAdmin)
         }
@@ -415,7 +453,7 @@ private fun DebugDialog(model: MathViewModel, onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit) {
+private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit, onTransfer: () -> Unit) {
     val context = LocalContext.current
     val pinStore = remember(context) { AdminPinStore(context.getSharedPreferences("settings", 0)) }
     var showingAdjustments by rememberSaveable { mutableStateOf(false) }
@@ -467,6 +505,9 @@ private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit) {
                     }
                     Button(onClick = { showingAdjustments = true }, modifier = Modifier.fillMaxWidth()) {
                         Text("Add/Remove Rewards", textAlign = TextAlign.Center)
+                    }
+                    Button(onClick = onTransfer, modifier = Modifier.fillMaxWidth().testTag("collection-transfer")) {
+                        Text("Export / Import Collections", textAlign = TextAlign.Center)
                     }
                     HorizontalDivider()
                     CollapsibleSettingsSection("Available Rewards", defaultExpanded = false) {

@@ -103,7 +103,8 @@ data class PracticeSnapshot(
     val lastResultId: Long = 0,
     val pokemons: Set<Celebration> = emptySet(),
     val readingResults: List<ReadingRewardResult> = emptyList(),
-    val recordedReadingSessionIds: Set<String> = emptySet()
+    val recordedReadingSessionIds: Set<String> = emptySet(),
+    val importedPokemons: Set<Celebration> = emptySet()
 )
 
 data class SavedPractice(val result: PracticeResult, val snapshot: PracticeSnapshot)
@@ -141,7 +142,8 @@ class HistoryStore(private val file: File) {
                     val ids = retired.map { it.jsonObject.getValue("sessionId").jsonPrimitive.content }.toSet()
                     val fragments = retired.mapNotNull {
                         it.jsonObject["prize"]?.takeUnless { prize -> prize == JsonNull }?.let { prize ->
-                            json.decodeFromJsonElement(PrizeAward.serializer(), prize).type
+                            json.decodeFromJsonElement(PrizeAward.serializer(), prize)
+                                .takeIf { it.deductOnHistoryDeletion }?.type
                         }
                     }.groupingBy { it }.eachCount()
                     val collected = retired.mapNotNull {
@@ -261,6 +263,33 @@ class HistoryStore(private val file: File) {
 
     fun useReward(type: RewardType): PracticeSnapshot = removeReward(type, fragment = false)
 
+    internal fun importCollections(backup: CollectionBackup, mode: CollectionImportMode): PracticeSnapshot {
+        val snapshot = loadSnapshot()
+        val replacing = mode == CollectionImportMode.REPLACE
+        val rewards = if (replacing) backup.rewards else {
+            (snapshot.rewards.keys + backup.rewards.keys).associateWith { type ->
+                val total = (snapshot.rewards[type]?.totalFragments ?: 0).toLong() +
+                    (backup.rewards[type]?.totalFragments ?: 0)
+                require(total <= RewardBalance((Int.MAX_VALUE - 2) / 3, 2).totalFragments) {
+                    "Merging would exceed the reward balance limit. No collections were changed."
+                }
+                RewardBalance((total / 3).toInt(), (total % 3).toInt())
+            }
+        }
+        return save(snapshot.copy(
+            rewards = rewards,
+            pokemons = if (replacing) backup.pokemons else snapshot.pokemons + backup.pokemons,
+            importedPokemons = if (replacing) backup.pokemons else snapshot.importedPokemons + backup.pokemons,
+            // Keep historical gifts visible, but do not subtract old claims from a replacement inventory.
+            history = if (!replacing) snapshot.history else snapshot.history.map {
+                it.copy(prize = it.prize?.copy(deductOnHistoryDeletion = false))
+            },
+            readingResults = if (!replacing) snapshot.readingResults else snapshot.readingResults.map {
+                it.copy(prize = it.prize?.copy(deductOnHistoryDeletion = false))
+            }
+        ))
+    }
+
     fun addReward(type: RewardType, fragment: Boolean): PracticeSnapshot {
         val snapshot = loadSnapshot()
         val balance = snapshot.rewards[type] ?: RewardBalance()
@@ -335,7 +364,8 @@ class HistoryStore(private val file: File) {
         val snapshot = loadSnapshot()
         val removed = snapshot.readingResults.filter { it.sessionId in sessionIds }
         if (removed.isEmpty() && snapshot.recordedReadingSessionIds.containsAll(sessionIds)) return snapshot
-        val fragments = removed.mapNotNull { it.prize?.type }.groupingBy { it }.eachCount()
+        val fragments = removed.mapNotNull { it.prize?.takeIf { prize -> prize.deductOnHistoryDeletion }?.type }
+            .groupingBy { it }.eachCount()
         return save(withoutReadingResults(snapshot, sessionIds, fragments, removed.mapNotNull { it.pokemonReward }.toSet()))
     }
 
@@ -346,7 +376,7 @@ class HistoryStore(private val file: File) {
         val remaining = snapshot.readingResults.filterNot { it.sessionId in sessionIds }
         val pokemonsToRemove = collected -
             remaining.mapNotNull { it.pokemonReward }.toSet() -
-            snapshot.history.flatMap { it.pokemonRewards }.toSet()
+            snapshot.history.flatMap { it.pokemonRewards }.toSet() - snapshot.importedPokemons
         return snapshot.copy(
             readingResults = remaining,
             recordedReadingSessionIds = snapshot.recordedReadingSessionIds + sessionIds,
@@ -357,11 +387,12 @@ class HistoryStore(private val file: File) {
 
     private fun withoutResults(snapshot: PracticeSnapshot, removed: List<PracticeResult>): PracticeSnapshot {
         val ids = removed.map { it.id }.toSet()
-        val fragments = removed.mapNotNull { it.prize?.type }.groupingBy { it }.eachCount()
+        val fragments = removed.mapNotNull { it.prize?.takeIf { prize -> prize.deductOnHistoryDeletion }?.type }
+            .groupingBy { it }.eachCount()
         val remaining = snapshot.history.filterNot { it.id in ids }
         val pokemonsToRemove = removed.flatMap { it.pokemonRewards }.toSet() -
             remaining.flatMap { it.pokemonRewards }.toSet() -
-            snapshot.readingResults.mapNotNull { it.pokemonReward }.toSet()
+            snapshot.readingResults.mapNotNull { it.pokemonReward }.toSet() - snapshot.importedPokemons
         // Keep claimed IDs to prevent a stale save from restoring a deleted prize.
         return snapshot.copy(
             history = remaining,
