@@ -181,7 +181,7 @@ open Admin Menu. Re-enabling the lock requires the existing PIN again (or creati
 none was configured); disabling it never deletes the PIN.
 Admin Menu contains **Game Settings**, **My Rewards** (add/remove controls), and
 **Available Rewards**; every section starts collapsed. Settings subsections have
-darker backgrounds, including nested subject settings.
+progressively lighter backgrounds (up to white), including nested subject settings.
 Use **Settings > Admin Menu > Export / Import Collections** to transfer collections
 between devices. **Export collections** saves one JSON file containing every whole
 reward, fragment, and collected animation, including Mega Pokémon and Other scenes.
@@ -387,8 +387,9 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   text size, theme, and skin controls without changing your choices. Choose the
   **Blue Wave** look or a **Color theme** (midnight, royal purple, gold, green,
   pink, black) with a **Dark appearance** switch. Settings and its dialogs
-  always use a light background, without Blue Wave or skin backgrounds.
-  Your saved appearance still applies outside Settings.
+  follow the selected color theme and Dark appearance option, without Blue Wave
+  or skin backgrounds. When no dark/light preference is saved, they use the color
+  theme's default. Your saved appearance still applies outside Settings.
 - **Text size** – use the slider under Appearance to adjust app text from 80% to
   200% in 10% steps (default 100%). Changes apply immediately, work with your
   device's font-size setting, and are remembered for next time.

@@ -338,14 +338,17 @@ class AdminMenuTest {
 
     @Test
     @GraphicsMode(GraphicsMode.Mode.NATIVE)
-    fun settingsStayLightAcrossAppearancesWithoutChangingSavedPreferences() {
+    fun settingsFollowDarkAppearanceWithoutChangingSavedPreferences() {
         val model = MathViewModel(application)
         model.openSettings()
         compose.setContent { MathAppContent(model) }
-        val appearances = listOf(Triple("green", null, true)) +
-            COLOR_THEMES.map { (theme, _) -> Triple(theme, null, false) } +
+        val appearances = COLOR_THEMES.flatMap { (theme, _) ->
+            listOf(false, true).map { wave -> Triple(theme, null, wave) }
+        } +
             COLOR_THEMES.flatMap { (theme, _) ->
-                listOf(Triple(theme, "dark", false), Triple(theme, "light", false))
+                listOf(false, true).flatMap { wave ->
+                    listOf(Triple(theme, "dark", wave), Triple(theme, "light", wave))
+                }
             }
         appearances.forEach { (theme, mode, wave) ->
             compose.runOnIdle {
@@ -356,14 +359,18 @@ class AdminMenuTest {
                 model.chooseSkins(true)
             }
             compose.onNodeWithTag("settings-screen").assertIsDisplayed()
-            assertTrue("Settings must be light for $theme/$mode/$wave",
-                screenCornerColor("settings-screen").luminance() > 0.8f)
+            val luminance = screenCornerColor("settings-screen").luminance()
+            assertTrue("Settings must follow dark appearance for $theme/$mode/$wave",
+                if (isDarkTheme(theme, mode)) luminance < 0.1f else luminance > 0.8f)
             compose.runOnIdle {
                 assertEquals(theme, model.theme)
                 assertEquals(mode, model.mode)
                 assertEquals(wave, model.waveAppearance)
                 assertTrue(model.skinsEnabled)
                 assertEquals(AppSkin.GALAXY, model.skin)
+                assertEquals(theme, preferences.getString("theme", null))
+                assertEquals(mode, preferences.getString("mode", null))
+                assertEquals(wave, preferences.getBoolean("wave_appearance", !wave))
             }
         }
         compose.runOnIdle {
@@ -376,6 +383,13 @@ class AdminMenuTest {
         compose.onNodeWithText("Appearance").performScrollTo().performClick()
         compose.onNodeWithText("Text size: 150%").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Dark appearance").performScrollTo().assertIsDisplayed()
+        val darkSwitch = compose.onNodeWithContentDescription("Dark appearance")
+        darkSwitch.performScrollTo().assertIsOn().performClick()
+        assertTrue(screenCornerColor("settings-screen").luminance() > 0.8f)
+        compose.runOnIdle { assertEquals("light", preferences.getString("mode", null)) }
+        darkSwitch.assertIsOff().performClick()
+        assertTrue(screenCornerColor("settings-screen").luminance() < 0.1f)
+        compose.runOnIdle { assertEquals("dark", preferences.getString("mode", null)) }
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithTag("subject-Math").assertIsDisplayed()
         compose.runOnIdle {
@@ -388,7 +402,7 @@ class AdminMenuTest {
 
     @Test
     @GraphicsMode(GraphicsMode.Mode.NATIVE)
-    fun adminDialogsAndChildPagesStayLightInDarkAppearance() {
+    fun adminDialogsAndChildPagesFollowDarkAppearance() {
         val model = MathViewModel(application)
         model.chooseWaveAppearance(false)
         model.chooseTheme("black")
@@ -397,17 +411,17 @@ class AdminMenuTest {
         compose.setContent { MathAppContent(model) }
         compose.onNodeWithTag("admin-menu").performScrollTo().performClick()
         compose.onNodeWithTag("admin-pin-dialog").assertIsDisplayed()
-        assertTrue(dialogCornerColor().luminance() > 0.8f)
+        assertTrue(dialogCornerColor().luminance() < 0.1f)
         submit("4826", "4826")
         awaitTag("admin-dialog")
-        assertTrue(dialogCornerColor().luminance() > 0.8f)
+        assertTrue(dialogCornerColor().luminance() < 0.1f)
         compose.runOnIdle { model.openRewardsSetup() }
         compose.onNodeWithTag("rewards-setup-screen").assertIsDisplayed()
-        assertTrue(screenCornerColor("settings-screen").luminance() > 0.8f)
+        assertTrue(screenCornerColor("settings-screen").luminance() < 0.1f)
         compose.onNodeWithTag("save-rewards-setup").performScrollTo().performClick()
         compose.runOnIdle { model.openReadingProgress() }
         compose.onNodeWithTag("reading-back").performScrollTo().assertIsDisplayed()
-        assertTrue(screenCornerColor("settings-screen").luminance() > 0.8f)
+        assertTrue(screenCornerColor("settings-screen").luminance() < 0.1f)
         compose.runOnIdle { assertEquals("dark", model.mode) }
     }
 
@@ -435,34 +449,56 @@ class AdminMenuTest {
 
     @Test
     @GraphicsMode(GraphicsMode.Mode.NATIVE)
-    fun subsectionsGetProgressivelyDarkerInLightDarkAndWaveThemes() {
-        val appearance = mutableStateOf(0)
+    fun subsectionsGetProgressivelyLighterWithoutLosingTextContrast() {
+        val appearances = listOf(Triple("green", "dark", true)) +
+            COLOR_THEMES.flatMap { (theme, _) ->
+                listOf(Triple(theme, "dark", false), Triple(theme, "light", false))
+            }
+        val appearance = mutableStateOf(appearances.first())
+        var textColors = listOf<Color>()
         compose.setContent {
-            MathTheme(mode = if (appearance.value == 1) "dark" else "light", waveAppearance = appearance.value == 2) {
+            val (theme, mode, wave) = appearance.value
+            MathTheme(theme = theme, mode = mode, waveAppearance = wave) {
+                textColors = listOf(MaterialTheme.colorScheme.onSurface, MaterialTheme.colorScheme.onSurfaceVariant)
                 Surface(color = MaterialTheme.colorScheme.surface) {
                     Column {
                         Text("Parent")
                         CollapsibleSettingsSection("Outer", defaultExpanded = true) {
-                            CollapsibleSettingsSection("Inner", defaultExpanded = true) { Text("Content") }
+                            CollapsibleSettingsSection("Inner", defaultExpanded = true) {
+                                CollapsibleSettingsSection("Deepest", defaultExpanded = true) { Text("Content") }
+                            }
                         }
                     }
                 }
             }
         }
-        repeat(3) { mode ->
-            compose.runOnIdle { appearance.value = mode }
-            val outer = compose.onNodeWithTag("settings-section-Outer").fetchSemanticsNode().boundsInRoot
-            val inner = compose.onNodeWithTag("settings-section-Inner").fetchSemanticsNode().boundsInRoot
+        appearances.forEach { selection ->
+            compose.runOnIdle { appearance.value = selection }
+            val sections = listOf("Outer", "Inner", "Deepest").map {
+                compose.onNodeWithTag("settings-section-$it").fetchSemanticsNode().boundsInRoot
+            }
             compose.runOnIdle {
                 val view = compose.activity.findViewById<View>(android.R.id.content)
                 val image = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
                 try {
                     view.draw(Canvas(image))
-                    val parentColor = Color(image.getPixel(outer.center.x.toInt(), 1))
-                    val outerColor = Color(image.getPixel(outer.center.x.toInt(), outer.top.toInt() + 1))
-                    val innerColor = Color(image.getPixel(inner.center.x.toInt(), inner.top.toInt() + 1))
-                    assertTrue(outerColor.luminance() < parentColor.luminance())
-                    assertTrue(innerColor.luminance() < outerColor.luminance())
+                    val parentColor = Color(image.getPixel(sections.first().center.x.toInt(), 1))
+                    val sectionColors = sections.map { bounds ->
+                        Color(image.getPixel(bounds.center.x.toInt(), bounds.top.toInt() + 1))
+                    }
+                    (listOf(parentColor) + sectionColors).zipWithNext().forEach { (parent, child) ->
+                        if (parent == Color.White) assertEquals(Color.White, child)
+                        else assertTrue("Nested sections must get lighter for $selection",
+                            child.luminance() > parent.luminance())
+                    }
+                    sectionColors.forEach { background ->
+                        textColors.forEach { text ->
+                            val lighter = maxOf(text.luminance(), background.luminance())
+                            val darker = minOf(text.luminance(), background.luminance())
+                            assertTrue("Settings text must keep 4.5:1 contrast for $selection",
+                                (lighter + 0.05f) / (darker + 0.05f) >= 4.5f)
+                        }
+                    }
                 } finally {
                     image.recycle()
                 }
