@@ -338,7 +338,7 @@ class AdminMenuTest {
 
     @Test
     @GraphicsMode(GraphicsMode.Mode.NATIVE)
-    fun settingsStayLightAcrossAppearancesWithoutChangingSavedPreferences() {
+    fun settingsFollowAppearanceWithoutChangingSavedPreferences() {
         val model = MathViewModel(application)
         model.openSettings()
         compose.setContent { MathAppContent(model) }
@@ -356,14 +356,24 @@ class AdminMenuTest {
                 model.chooseSkins(true)
             }
             compose.onNodeWithTag("settings-screen").assertIsDisplayed()
-            assertTrue("Settings must be light for $theme/$mode/$wave",
-                screenCornerColor("settings-screen").luminance() > 0.8f)
+            val dark = wave || isDarkTheme(theme, mode)
+            val expectedSurface = when {
+                wave -> Color(0xFF080C12)
+                theme == "black" -> if (dark) Color(0xFF181818) else Color.White
+                dark -> Color(0xFF191E1C)
+                else -> Color(0xFFF6F8F6)
+            }
+            assertEquals("Settings must follow $theme/$mode/$wave",
+                expectedSurface, screenCornerColor("settings-screen"))
             compose.runOnIdle {
                 assertEquals(theme, model.theme)
                 assertEquals(mode, model.mode)
                 assertEquals(wave, model.waveAppearance)
                 assertTrue(model.skinsEnabled)
                 assertEquals(AppSkin.GALAXY, model.skin)
+                assertEquals(theme, preferences.getString("theme", null))
+                assertEquals(mode, preferences.getString("mode", null))
+                assertEquals(wave, preferences.getBoolean("wave_appearance", !wave))
             }
         }
         compose.runOnIdle {
@@ -388,27 +398,64 @@ class AdminMenuTest {
 
     @Test
     @GraphicsMode(GraphicsMode.Mode.NATIVE)
-    fun adminDialogsAndChildPagesStayLightInDarkAppearance() {
+    fun darkAppearanceSwitchImmediatelyUpdatesSettingsAndSurvivesReopening() {
         val model = MathViewModel(application)
         model.chooseWaveAppearance(false)
-        model.chooseTheme("black")
-        model.chooseDark(true)
+        model.chooseDark(false)
         model.openSettings()
         compose.setContent { MathAppContent(model) }
-        compose.onNodeWithTag("admin-menu").performScrollTo().performClick()
-        compose.onNodeWithTag("admin-pin-dialog").assertIsDisplayed()
-        assertTrue(dialogCornerColor().luminance() > 0.8f)
-        submit("4826", "4826")
-        awaitTag("admin-dialog")
-        assertTrue(dialogCornerColor().luminance() > 0.8f)
-        compose.runOnIdle { model.openRewardsSetup() }
-        compose.onNodeWithTag("rewards-setup-screen").assertIsDisplayed()
+        compose.onNodeWithText("Appearance").performScrollTo().performClick()
+        val toggle = compose.onNodeWithContentDescription("Dark appearance")
+        toggle.performScrollTo().assertIsOff().performClick().assertIsOn()
+        assertTrue(screenCornerColor("settings-screen").luminance() < 0.1f)
+        assertEquals("dark", preferences.getString("mode", null))
+        toggle.performClick().assertIsOff()
         assertTrue(screenCornerColor("settings-screen").luminance() > 0.8f)
-        compose.onNodeWithTag("save-rewards-setup").performScrollTo().performClick()
-        compose.runOnIdle { model.openReadingProgress() }
-        compose.onNodeWithTag("reading-back").performScrollTo().assertIsDisplayed()
-        assertTrue(screenCornerColor("settings-screen").luminance() > 0.8f)
-        compose.runOnIdle { assertEquals("dark", model.mode) }
+        assertEquals("light", preferences.getString("mode", null))
+        toggle.performClick().assertIsOn()
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.onNodeWithContentDescription("Settings").performClick()
+        assertTrue(screenCornerColor("settings-screen").luminance() < 0.1f)
+        compose.runOnIdle { assertEquals("dark", MathViewModel(application).mode) }
+    }
+
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun adminDialogsAndChildPagesFollowLightDarkAndWaveAppearance() {
+        val model = MathViewModel(application)
+        model.chooseTheme("black")
+        model.openSettings()
+        AdminPinStore(preferences).create("4826")
+        compose.setContent { MathAppContent(model) }
+        listOf(false to false, false to true, true to false).forEach { (wave, dark) ->
+            compose.runOnIdle {
+                model.chooseWaveAppearance(wave)
+                model.chooseDark(dark)
+            }
+            val surface = screenCornerColor("settings-screen")
+            compose.onNodeWithTag("admin-menu").performScrollTo().performClick()
+            compose.onNodeWithTag("admin-pin-dialog").assertIsDisplayed()
+            assertEquals(surface, dialogCornerColor())
+            submit("4826")
+            awaitTag("admin-dialog")
+            assertEquals(surface, dialogCornerColor())
+            openChangePin()
+            assertEquals(surface, dialogCornerColor())
+            compose.onNodeWithText("Cancel").performClick()
+            compose.runOnIdle { model.openRewardsSetup() }
+            compose.onNodeWithTag("rewards-setup-screen").assertIsDisplayed()
+            assertEquals(surface, screenCornerColor("settings-screen"))
+            compose.onNodeWithTag("save-rewards-setup").performScrollTo().performClick()
+            compose.runOnIdle { model.openReadingProgress() }
+            compose.onNodeWithTag("reading-back").performScrollTo().assertIsDisplayed()
+            assertEquals(surface, screenCornerColor("settings-screen"))
+            compose.onNodeWithTag("reading-back").performClick()
+            compose.onNodeWithText("Close").performClick()
+            compose.openDebugSettings()
+            assertEquals(surface, dialogCornerColor())
+            compose.onNodeWithText("Close").performClick()
+            compose.runOnIdle { assertEquals(if (dark) "dark" else "light", model.mode) }
+        }
     }
 
     private fun screenCornerColor(tag: String): Color {
@@ -435,24 +482,35 @@ class AdminMenuTest {
 
     @Test
     @GraphicsMode(GraphicsMode.Mode.NATIVE)
-    fun subsectionsGetProgressivelyDarkerInLightDarkAndWaveThemes() {
-        val appearance = mutableStateOf(0)
+    fun subsectionsGetDarkerInLightThemesAndLighterInDarkAndWaveThemes() {
+        val appearances = listOf(Triple("green", null, true)) +
+            COLOR_THEMES.map { (theme, _) -> Triple(theme, null, false) } +
+            COLOR_THEMES.flatMap { (theme, _) ->
+                listOf(Triple(theme, "dark", false), Triple(theme, "light", false))
+            }
+        val appearance = mutableStateOf(appearances.first())
+        var mutedTextColor = Color.Unspecified
         compose.setContent {
-            MathTheme(mode = if (appearance.value == 1) "dark" else "light", waveAppearance = appearance.value == 2) {
+            val (theme, mode, wave) = appearance.value
+            MathTheme(theme = theme, mode = mode, waveAppearance = wave) {
+                mutedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                 Surface(color = MaterialTheme.colorScheme.surface) {
                     Column {
                         Text("Parent")
                         CollapsibleSettingsSection("Outer", defaultExpanded = true) {
-                            CollapsibleSettingsSection("Inner", defaultExpanded = true) { Text("Content") }
+                            CollapsibleSettingsSection("Inner", defaultExpanded = true) {
+                                CollapsibleSettingsSection("Deepest", defaultExpanded = true) { Text("Content") }
+                            }
                         }
                     }
                 }
             }
         }
-        repeat(3) { mode ->
-            compose.runOnIdle { appearance.value = mode }
+        appearances.forEach { current ->
+            compose.runOnIdle { appearance.value = current }
             val outer = compose.onNodeWithTag("settings-section-Outer").fetchSemanticsNode().boundsInRoot
             val inner = compose.onNodeWithTag("settings-section-Inner").fetchSemanticsNode().boundsInRoot
+            val deepest = compose.onNodeWithTag("settings-section-Deepest").fetchSemanticsNode().boundsInRoot
             compose.runOnIdle {
                 val view = compose.activity.findViewById<View>(android.R.id.content)
                 val image = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
@@ -461,8 +519,21 @@ class AdminMenuTest {
                     val parentColor = Color(image.getPixel(outer.center.x.toInt(), 1))
                     val outerColor = Color(image.getPixel(outer.center.x.toInt(), outer.top.toInt() + 1))
                     val innerColor = Color(image.getPixel(inner.center.x.toInt(), inner.top.toInt() + 1))
-                    assertTrue(outerColor.luminance() < parentColor.luminance())
-                    assertTrue(innerColor.luminance() < outerColor.luminance())
+                    val deepestColor = Color(image.getPixel(deepest.center.x.toInt(), deepest.top.toInt() + 1))
+                    val dark = current.third || isDarkTheme(current.first, current.second)
+                    listOf(parentColor, outerColor, innerColor, deepestColor).zipWithNext().forEach { (parent, child) ->
+                        if (dark) {
+                            assertTrue("Nested sections must get lighter for $current",
+                                child.luminance() > parent.luminance())
+                        } else {
+                            assertTrue("Nested sections must get darker for $current",
+                                child.luminance() < parent.luminance())
+                        }
+                    }
+                    if (dark) {
+                        val contrast = (mutedTextColor.luminance() + 0.05f) / (deepestColor.luminance() + 0.05f)
+                        assertTrue("Nested dark sections must keep readable text for $current", contrast >= 4.5f)
+                    }
                 } finally {
                     image.recycle()
                 }

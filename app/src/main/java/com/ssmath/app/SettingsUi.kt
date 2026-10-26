@@ -46,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -83,7 +84,7 @@ internal fun ScreenScaffold(title: String, onBack: () -> Unit, actions: @Composa
 
 @Composable
 fun SettingsScreen(model: MathViewModel) {
-    MathTheme(theme = model.theme, mode = "light", waveAppearance = false,
+    MathTheme(theme = model.theme, mode = model.mode, waveAppearance = model.waveAppearance,
         textSizePercent = model.textSizePercent) {
         Surface(Modifier.fillMaxSize().testTag("settings-screen")) {
             SettingsContent(model)
@@ -229,7 +230,8 @@ private fun SettingsPage(model: MathViewModel, onAdmin: () -> Unit, onDebug: () 
                     }
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Text("Dark appearance", Modifier.weight(1f))
-                        Switch(isDarkTheme(model.theme, model.mode), model::chooseDark)
+                        Switch(isDarkTheme(model.theme, model.mode), model::chooseDark,
+                            modifier = Modifier.semantics { contentDescription = "Dark appearance" })
                     }
                 }
                 SkinSetting(model.skinsEnabled, model.skin, model::chooseSkin, model::chooseSkins)
@@ -1312,7 +1314,9 @@ internal fun CollapsibleSettingsSection(
     var manualExpansion by rememberSaveable { mutableStateOf<Boolean?>(null) }
     val contentState = rememberSaveableStateHolder()
     val expanded = manualExpansion ?: defaultExpanded
-    Column(Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.16f), MaterialTheme.shapes.medium)
+    val background = if (MaterialTheme.colorScheme.surface.luminance() < 0.5f) Color.White.copy(alpha = 0.06f)
+        else Color.Black.copy(alpha = 0.16f)
+    Column(Modifier.fillMaxWidth().background(background, MaterialTheme.shapes.medium)
         .padding(8.dp).testTag("settings-section-$title"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
             Modifier.fillMaxWidth().heightIn(min = 48.dp)
