@@ -788,7 +788,19 @@ private fun GameSettings(
             }
             Switch(model.showTimer, model::chooseShowTimer,
                 modifier = Modifier.semantics { contentDescription = "Show timer" })
+            Spacer(Modifier.width(8.dp))
+            OutlinedIconToggleButton(checked = model.pauseInBackground,
+                onCheckedChange = model::choosePauseInBackground,
+                modifier = Modifier.semantics {
+                    contentDescription = "Pause in background"
+                    stateDescription = if (model.pauseInBackground) "On" else "Off"
+                }) {
+                Icon(if (model.pauseInBackground) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null)
+            }
         }
+        Text(if (model.pauseInBackground) "Pause in background: On. Math time pauses when you leave the app."
+            else "Pause in background: Off. Math time keeps running when you leave the app.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         listOf(MathRewardGame.BASIC, MathRewardGame.MATRIX, MathRewardGame.LOGIC).forEach { game ->
             MathTimeLimitSetting(model, game)
         }
@@ -1003,7 +1015,6 @@ private fun MathTimeLimitSetting(model: MathViewModel, game: MathRewardGame) {
             verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(game.title, style = MaterialTheme.typography.titleSmall)
             TimeLimitSetting(model.mathTimeLimitSeconds(game), { model.chooseMathTimeLimitSeconds(game, it) },
-                model.pauseInBackground, model::choosePauseInBackground,
                 tag = if (game == MathRewardGame.BASIC) "time-limit" else "${game.name.lowercase()}-time-limit")
         }
     }
@@ -1013,25 +1024,11 @@ private fun MathTimeLimitSetting(model: MathViewModel, game: MathRewardGame) {
 private fun TimeLimitSetting(
     seconds: Int,
     onChange: (Int) -> Unit,
-    pauseInBackground: Boolean,
-    onPauseInBackgroundChange: (Boolean) -> Unit,
     tag: String
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text("Time limit per 5 questions", style = MaterialTheme.typography.titleSmall)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TimeLimitDropdown(seconds, onChange, tag = tag)
-            OutlinedIconToggleButton(checked = pauseInBackground, onCheckedChange = onPauseInBackgroundChange,
-                modifier = Modifier.semantics {
-                    contentDescription = "Pause in background"
-                    stateDescription = if (pauseInBackground) "On" else "Off"
-                }) {
-                Icon(if (pauseInBackground) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null)
-            }
-        }
-        Text(if (pauseInBackground) "Pause in background: On. Math time pauses when you leave the app."
-            else "Pause in background: Off. Math time keeps running when you leave the app.",
-            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        TimeLimitDropdown(seconds, onChange, tag = tag)
         Text("Applies only to this math challenge. Practice Game has no time limit. " +
             "1 minute per 5 questions gives 5 minutes for 25 questions. " +
             "Time always pauses in settings.",

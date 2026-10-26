@@ -877,32 +877,38 @@ class RewardsSettingsTest {
         }
     }
 
-    @Test fun backgroundPauseButtonIsBesideTimerAndRemembersBothStates() {
+    @Test fun singleBackgroundPauseButtonIsBesideShowTimerAndRemembersBothStates() {
         val model = MathViewModel(application)
         model.chooseShowTimer(true)
         compose.setContent { MathTheme { SettingsScreen(model) } }
         compose.openGameSettings()
-        compose.onNodeWithTag("time-limit").performScrollTo()
-        val dropdown = compose.onNodeWithTag("time-limit").fetchSemanticsNode().boundsInRoot
-        val pauseButton = compose.onNode(hasContentDescription("Pause in background") and
-            hasAnyAncestor(hasTestTag("math-BASIC-timer-settings"))).assertIsDisplayed().assertIsOn()
+        compose.onAllNodesWithContentDescription("Pause in background").assertCountEquals(1)
+        compose.onNodeWithContentDescription("Show timer").performScrollTo()
+        val showTimer = compose.onNodeWithContentDescription("Show timer").fetchSemanticsNode().boundsInRoot
+        val pauseButton = compose.onNodeWithContentDescription("Pause in background")
+            .assertIsDisplayed().assertIsOn()
         val button = pauseButton.fetchSemanticsNode().boundsInRoot
-        assertTrue(button.left >= dropdown.right)
-        assertTrue(button.top < dropdown.bottom && button.bottom > dropdown.top)
+        assertTrue(button.left >= showTimer.right)
+        assertTrue(button.top < showTimer.bottom && button.bottom > showTimer.top)
         pauseButton.performClick().assertIsOff()
         assertFalse(model.pauseInBackground)
         assertFalse(MathViewModel(application).pauseInBackground)
         MathRewardGame.entries.forEach { game ->
             compose.onNode(hasContentDescription("Pause in background") and
-                hasAnyAncestor(hasTestTag("math-${game.name}-timer-settings"))).assertIsOff()
+                hasAnyAncestor(hasTestTag("math-${game.name}-timer-settings"))).assertDoesNotExist()
         }
-        compose.onNode(hasText("Pause in background: Off.", substring = true) and
-            hasAnyAncestor(hasTestTag("math-BASIC-timer-settings"))).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Pause in background: Off.", substring = true).performScrollTo().assertIsDisplayed()
         compose.onNodeWithContentDescription("Show timer").performScrollTo().performClick()
-        pauseButton.assertDoesNotExist()
+        pauseButton.assertIsDisplayed().assertIsOff()
         compose.onNodeWithContentDescription("Show timer").performClick()
+        compose.onNodeWithText("Math Rewards System").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Math Rewards System").performScrollTo().performClick().assertIsOff()
         pauseButton.performScrollTo().assertIsOff().performClick().assertIsOn()
         assertTrue(MathViewModel(application).pauseInBackground)
+        compose.onNodeWithText("Close").performClick()
+        pauseButton.assertDoesNotExist()
+        compose.openGameSettings()
+        pauseButton.performScrollTo().assertIsOn()
     }
 
     @Test
@@ -915,11 +921,15 @@ class RewardsSettingsTest {
         compose.setContent { MathTheme { SettingsScreen(model) } }
         compose.openGameSettings()
         compose.onNodeWithTag("time-limit").performScrollTo().assertIsDisplayed()
-        MathRewardGame.entries.forEach { game ->
-            compose.onNode(hasContentDescription("Pause in background") and
-                hasAnyAncestor(hasTestTag("math-${game.name}-timer-settings")))
-                .performScrollTo().assertIsDisplayed().performClick()
-        }
+        compose.onAllNodesWithContentDescription("Pause in background").assertCountEquals(1)
+        val pauseButton = compose.onNodeWithContentDescription("Pause in background")
+            .performScrollTo().assertIsDisplayed()
+        val showTimer = compose.onNodeWithContentDescription("Show timer").assertIsDisplayed()
+            .fetchSemanticsNode().boundsInRoot
+        val button = pauseButton.fetchSemanticsNode().boundsInRoot
+        assertTrue(button.left >= showTimer.right)
+        assertTrue(button.top < showTimer.bottom && button.bottom > showTimer.top)
+        pauseButton.performClick().assertIsOff()
         assertFalse(model.pauseInBackground)
     }
 

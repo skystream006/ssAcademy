@@ -346,7 +346,9 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   Reading checkpoint points have been removed; checkpoints still track activity progress.
 - **Show timer** – off by default. Show or hide the timer while practicing. The timer pauses while
   Settings, any subject's Practice History, My Rewards, or My Pokémons is open.
-  **Pause in background**, beside each Math time-limit dropdown, is shared across Math games and on by default.
+  **Pause in background**, to the right of **Show timer** in the Admin Menu's **Math Settings**,
+  is a single control shared across Math games and on by default. It remains available when
+  Show timer or Math Rewards System is off.
   Turn it off to keep counting Math game time when the app is in the background, including time limits.
   This choice is remembered; Reading timers still pause in the background.
   Basic Math, Multiplication Matrix, and Logic Math have separately saved durations directly
