@@ -47,7 +47,8 @@ class RewardDrawingsTest {
 
     @Test fun newRewardAnimationsMoveWholeAndFragmentDetailsAndLoopSmoothly() {
         listOf(RewardType.BED_TIME, RewardType.RESTAURANT,
-            RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3).forEach { type ->
+            RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3,
+            RewardType.GOOD_BEHAVIOR_POINT).forEach { type ->
             listOf(false, true).forEach { fragment ->
                 fun frame(progress: Float) = render(200, 200) { drawRewardArtwork(type, fragment, progress) }
                 val first = frame(0f)
@@ -91,9 +92,10 @@ class RewardDrawingsTest {
         assertEquals("Each price is drawn with a different numeral", 3, badges.size)
     }
 
-    @Test fun toyFragmentsKeepFullSizeDetailsAndJaggedCutEdgesThroughoutTheirAnimations() {
-        listOf(RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3).forEach { type ->
-            val cutX = if (type == RewardType.TOYS_1) 78 else 83
+    @Test fun tierThreeFragmentsKeepFullSizeDetailsAndJaggedCutEdgesThroughoutTheirAnimations() {
+        listOf(RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3,
+            RewardType.GOOD_BEHAVIOR_POINT).forEach { type ->
+            val cutX = if (type == RewardType.TOYS_2 || type == RewardType.TOYS_3) 83 else 78
             listOf(0f, 0.25f, 0.5f, 0.75f).forEach { progress ->
                 val whole = render(200, 200) { drawRewardArtwork(type, false, progress) }
                 val fragment = render(200, 200) { drawRewardArtwork(type, true, progress) }
@@ -124,6 +126,19 @@ class RewardDrawingsTest {
                 assertTrue("$type has a visibly broken edge at $progress", edges.toSet().size >= 5)
             }
         }
+    }
+
+    @Test fun goodBehaviorPointMedalKeepsItsNumeralLegibleThroughoutAnimation() {
+        val type = RewardType.GOOD_BEHAVIOR_POINT
+        val numeralPixels = (64..121).flatMap { y -> (82..121).map { x -> y * 200 + x } }
+        fun numeral(progress: Float): IntArray {
+            val whole = render(200, 200) { drawRewardArtwork(type, false, progress) }
+            return numeralPixels.map { whole[it] }.toIntArray()
+        }
+        val first = numeral(0f)
+        assertTrue(first.all { it ushr 24 == 255 })
+        assertTrue(first.count { it == Color(0xFF38324F).toArgb() } > 400)
+        listOf(0.25f, 0.5f, 0.75f, 1f).forEach { assertArrayEquals(first, numeral(it)) }
     }
 
     @Test fun existingRewardArtworkDoesNotChangeWithAnimationProgress() {

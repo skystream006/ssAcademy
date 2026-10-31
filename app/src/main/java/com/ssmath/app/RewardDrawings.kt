@@ -61,6 +61,7 @@ private fun DrawScope.drawWholeReward(type: RewardType, progress: Float) {
         RewardType.TOYS_1 -> drawToyTop(progress)
         RewardType.TOYS_2 -> drawToyTrain(progress)
         RewardType.TOYS_3 -> drawToyRobot(progress)
+        RewardType.GOOD_BEHAVIOR_POINT -> drawGoodBehaviorPoint(progress)
     }
 }
 
@@ -116,6 +117,7 @@ private fun DrawScope.drawRewardFragment(type: RewardType, progress: Float) {
         RewardType.TOYS_1 -> listOf(88..128)
         RewardType.TOYS_2 -> listOf(64..136)
         RewardType.TOYS_3 -> listOf(48..80, 104..144)
+        RewardType.GOOD_BEHAVIOR_POINT -> listOf(40..168)
         else -> listOf(edgeStart..edgeEnd)
     }
     val brokenEdge = Path().apply {
@@ -500,6 +502,42 @@ private fun DrawScope.drawToyRobot(progress: Float) {
             3f, Offset(103f + index * 8f, 120f))
     }
     drawLine(Color(0xFFE8DDFF), Offset(82f, 140f), Offset(118f, 140f), 3f, cap = StrokeCap.Round)
+}
+
+private fun DrawScope.drawGoodBehaviorPoint(progress: Float) {
+    val turn = (progress % 1f) * 2f * PI.toFloat()
+    val pulse = (1f - cos(turn)) / 2f
+    listOf(-1f, 1f).forEach { side ->
+        val ribbon = Path().apply {
+            moveTo(100f + side * 36f, 125f)
+            lineTo(100f + side * 8f, 135f)
+            lineTo(100f + side * 14f, 176f)
+            lineTo(100f + side * 28f, 164f)
+            lineTo(100f + side * 42f, 170f)
+            close()
+        }
+        drawPath(ribbon, Brush.verticalGradient(listOf(Color(0xFF66D6B3), Color(0xFF269B83)), 125f, 176f))
+        drawPath(ribbon, rewardInk, style = rewardOutline)
+        drawLine(Color(0xFFBBF4D6), Offset(100f + side * 25f, 142f),
+            Offset(100f + side * 29f, 157f), 3f, cap = StrokeCap.Round)
+    }
+    val center = Offset(100f, 92f)
+    drawCircle(Brush.linearGradient(listOf(Color(0xFFFFECAA), Color(0xFFE9A83C)),
+        Offset(50f, 40f), Offset(150f, 150f)), 58f, center)
+    drawCircle(rewardInk, 58f, center, style = rewardOutline)
+    drawCircle(Color(0xFFFFF4CE), 49f, center, style = Stroke(3f))
+    drawCircle(Color(0xFFFFD36C), 42f, center)
+    drawArc(Color.White.copy(alpha = 0.55f + pulse * 0.35f), 190f + progress * 360f, 65f, false,
+        Offset(47f, 39f), Size(106f, 106f), style = Stroke(4f, cap = StrokeCap.Round))
+    val numeral = Path().apply {
+        moveTo(89f, 80f); lineTo(102f, 69f); lineTo(102f, 114f)
+        moveTo(88f, 114f); lineTo(116f, 114f)
+    }
+    drawPath(numeral, rewardInk, style = Stroke(7f, cap = StrokeCap.Round, join = StrokeJoin.Round))
+    drawGiftStar(Offset(60f, 78f), 6f + pulse * 3f, Color(0xFFFFFAE5))
+    drawGiftStar(Offset(140f, 107f), 9f - pulse * 3f, Color(0xFFFFFAE5))
+    drawGiftStar(Offset(31f, 43f), 4f + pulse * 3f, Color(0xFF39B79C))
+    drawGiftStar(Offset(169f, 56f), 7f - pulse * 3f, Color(0xFFE9A83C))
 }
 
 private fun DrawScope.drawToyPriceBadge(dollars: Int) {

@@ -83,19 +83,30 @@ enum class RewardType(val label: String, val pluralLabel: String, val fragmentLa
     RESTAURANT("Restaurant", "Restaurants", "Restaurant Fragment", RewardTier.TIER_2),
     TOYS_1("$1 Toys", "$1 Toys", "$1 Toys Fragment", RewardTier.TIER_3),
     TOYS_2("$2 Toys", "$2 Toys", "$2 Toys Fragment", RewardTier.TIER_3),
-    TOYS_3("$3 Toys", "$3 Toys", "$3 Toys Fragment", RewardTier.TIER_3)
+    TOYS_3("$3 Toys", "$3 Toys", "$3 Toys Fragment", RewardTier.TIER_3),
+    GOOD_BEHAVIOR_POINT("1 Good Behavior Point", "Good Behavior Points",
+        "1 Good Behavior Point Fragment", RewardTier.TIER_3)
 }
 
 @Serializable
-data class Tier3RewardChances(val toys1: Int = 34, val toys2: Int = 33, val toys3: Int = 33) {
+data class Tier3RewardChances(
+    val toys1: Int,
+    val toys2: Int,
+    val toys3: Int,
+    val goodBehaviorPoint: Int = 0
+) {
+    constructor() : this(35, 25, 10, 30)
+
     init {
-        require(toys1 in 0..100 && toys2 in 0..100 && toys3 in 0..100 && toys1 + toys2 + toys3 == 100)
+        require(toys1 in 0..100 && toys2 in 0..100 && toys3 in 0..100 && goodBehaviorPoint in 0..100 &&
+            toys1 + toys2 + toys3 + goodBehaviorPoint == 100)
     }
 
     fun percentage(type: RewardType): Int = when (type) {
         RewardType.TOYS_1 -> toys1
         RewardType.TOYS_2 -> toys2
         RewardType.TOYS_3 -> toys3
+        RewardType.GOOD_BEHAVIOR_POINT -> goodBehaviorPoint
         else -> 0
     }
 }

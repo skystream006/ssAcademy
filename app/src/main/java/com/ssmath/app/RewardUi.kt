@@ -70,6 +70,7 @@ internal fun rewardImageDescription(type: RewardType, fragment: Boolean): String
         RewardType.TOYS_1 -> "\$1 Toys: a colorful spinning top"
         RewardType.TOYS_2 -> "\$2 Toys: a colorful toy train"
         RewardType.TOYS_3 -> "\$3 Toys: a friendly toy robot"
+        RewardType.GOOD_BEHAVIOR_POINT -> "1 Good Behavior Point: a sparkling gold medal"
         else -> type.label
     }
     return when (type) {
@@ -83,6 +84,7 @@ internal fun rewardImageDescription(type: RewardType, fragment: Boolean): String
         RewardType.TOYS_1 -> "One third of a \$1 toy spinning top"
         RewardType.TOYS_2 -> "One third of a \$2 toy train"
         RewardType.TOYS_3 -> "One third of a \$3 toy robot"
+        RewardType.GOOD_BEHAVIOR_POINT -> "One third of a good behavior point medal"
     }
 }
 
@@ -95,7 +97,7 @@ internal fun RewardImage(
 ) {
     val animated = when (type) {
         RewardType.BED_TIME, RewardType.RESTAURANT,
-        RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3 -> true
+        RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3, RewardType.GOOD_BEHAVIOR_POINT -> true
         else -> false
     }
     val animation = if (animated) {
@@ -331,7 +333,8 @@ internal fun UseRewardsDialog(
         title = { Text(if (choice == null) "What reward would you like to use?" else "Use reward?") },
         text = {
             if (choice != null) {
-                Text("You would like to use 1 ${choice.label}?")
+                val rewardLabel = if (choice == RewardType.GOOD_BEHAVIOR_POINT) choice.label else "1 ${choice.label}"
+                Text("You would like to use $rewardLabel?")
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (usingReward) {
@@ -430,6 +433,7 @@ private fun RewardInventoryPart(type: RewardType, fragment: Boolean, count: Stri
                 RewardType.TOYS_1 -> Color(0xFFFFF1D2)
                 RewardType.TOYS_2 -> Color(0xFFDDF4F5)
                 RewardType.TOYS_3 -> Color(0xFFF0E6FF)
+                RewardType.GOOD_BEHAVIOR_POINT -> Color(0xFFE0F5E9)
             }
         ) {
             RewardImage(type, fragment, Modifier.fillMaxWidth().aspectRatio(1f).padding(6.dp),

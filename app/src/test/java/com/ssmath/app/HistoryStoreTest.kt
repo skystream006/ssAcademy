@@ -331,7 +331,8 @@ class HistoryStoreTest {
     @Test fun customMathAndReadingRuleSnapshotsRoundTripAndClaimOnlyOnce() {
         val thresholds = RewardThresholds(15, 25)
         listOf(15 to RewardType.LOLLIPOP, 25 to RewardType.VIDEO_GAME, 100 to RewardType.TOYS_1,
-            101 to RewardType.TOYS_2, 102 to RewardType.TOYS_3).forEach { (count, type) ->
+            101 to RewardType.TOYS_2, 102 to RewardType.TOYS_3,
+            103 to RewardType.GOOD_BEHAVIOR_POINT).forEach { (count, type) ->
             val math = eligible(count.toLong(), type).copy(
                 attempts = List(count) { Attempt(Problem(1, 1, Operation.ADDITION), 2) },
                 questionCount = count, rewardThresholds = thresholds)

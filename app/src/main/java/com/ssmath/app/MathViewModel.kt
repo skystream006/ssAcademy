@@ -1424,14 +1424,18 @@ class MathViewModel(
         null
     }
 
-    fun chooseTier3RewardChances(toys1: Int, toys2: Int, toys3: Int) {
+    fun chooseTier3RewardChances(toys1: Int, toys2: Int, toys3: Int, goodBehaviorPoint: Int = 0) {
         val chances = try {
-            Tier3RewardChances(toys1, toys2, toys3)
-        } catch (_: IllegalArgumentException) { return }
+            Tier3RewardChances(toys1, toys2, toys3, goodBehaviorPoint)
+        } catch (_: IllegalArgumentException) {
+            message = "Tier 3 chances must be whole percentages from 0 to 100 and total 100%."
+            return
+        }
         tier3RewardChances = chances
         settings.edit().putInt("reward_tier_3_toys_1_percentage", toys1)
             .putInt("reward_tier_3_toys_2_percentage", toys2)
-            .putInt("reward_tier_3_toys_3_percentage", toys3).apply()
+            .putInt("reward_tier_3_toys_3_percentage", toys3)
+            .putInt("reward_tier_3_good_behavior_point_percentage", goodBehaviorPoint).apply()
     }
 
     fun chooseMatrixRewardTier(tier: RewardTier) {
