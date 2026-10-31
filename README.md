@@ -306,11 +306,13 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   Ice Cream Cone, Gummi Bear, Ramen, or Bed Time Fragment. **Tier 2** rewards are for sessions
   of **50–99 questions**: a random Video Game or Restaurant Fragment.
   **Tier 3** rewards are for sessions of **100 or more questions**: a **$1 Toys**,
-  **$2 Toys**, or **$3 Toys** Fragment, selected using the saved Tier 3 chances.
+  **$2 Toys**, **$3 Toys**, or **1 Good Behavior Point** Fragment, selected using the saved Tier 3 chances.
   Bed Time features a sleeping child, floating Zs, and twinkling stars; Restaurant
   features a swaying striped awning and a steaming meal. Their artwork animates
   when revealed and in My Rewards and Use rewards. All three toy rewards also have
-  distinct looping animations, including their one-third fragments.
+  distinct looping animations, including their one-third fragments. **1 Good Behavior Point**
+  features a sparkling gold medal with a numeral 1 and green ribbons; both the whole medal
+  and its one-third fragment animate. Three matching fragments make one good behavior point.
   Individual rewards can be enabled or disabled in **Settings > Admin Menu > Available Rewards**.
   Under **Game Settings > Math Settings > Math Rewards System** or
   **Reading Settings > Reading Rewards System**, enable an activity and set its horizontal
@@ -323,9 +325,10 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   minimum to below Tier 2's minimum, and no prize below Tier 1's minimum. Matrix games use their
   separately selected tier instead. Changing these settings never changes saved prizes or claims.
   **Tier 3 chances** in Available Rewards are whole percentages from **0 to 100** and must
-  add up to **100% across all three toys** before **Save Tier 3 chances** is enabled.
-  Defaults are **34%**, **33%**, and **33%**, respectively. Saving applies all three values
-  together; invalid or unsaved edits leave the previous chances intact. **0%** excludes a toy.
+  add up to **100% across all four rewards** before **Save Tier 3 chances** is enabled.
+  Toy defaults remain **34%**, **33%**, and **33%**; **1 Good Behavior Point** defaults to **0%**
+  until configured. Existing saved toy chances are preserved. Saving applies all four values
+  together; invalid or unsaved edits leave the previous chances intact. **0%** excludes a reward.
   Only enabled rewards from the qualifying tier are selected. Disabled Tier 3 rewards are excluded,
   and remaining positive chances are scaled proportionally (for example, 60% and 40% become
   100% and 0% if the second toy is disabled). If no enabled reward has a positive chance,

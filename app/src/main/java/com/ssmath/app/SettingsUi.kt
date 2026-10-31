@@ -633,32 +633,36 @@ private fun Tier3ChanceSettings(model: MathViewModel) {
     var toys1Text by rememberSaveable(saved) { mutableStateOf(saved.toys1.toString()) }
     var toys2Text by rememberSaveable(saved) { mutableStateOf(saved.toys2.toString()) }
     var toys3Text by rememberSaveable(saved) { mutableStateOf(saved.toys3.toString()) }
-    val texts = listOf(toys1Text, toys2Text, toys3Text)
+    var goodBehaviorPointText by rememberSaveable(saved) { mutableStateOf(saved.goodBehaviorPoint.toString()) }
+    val texts = listOf(toys1Text, toys2Text, toys3Text, goodBehaviorPointText)
     val percentages = texts.map { it.trim().toIntOrNull()?.takeIf { value -> value in 0..100 } }
     val total = if (percentages.all { it != null }) percentages.sumOf { requireNotNull(it) } else null
-    Text("Tier 3 chances must total 100%. Use whole percentages from 0 to 100; 0% never awards that toy. " +
+    Text("Tier 3 chances must total 100%. Use whole percentages from 0 to 100; 0% never awards that reward. " +
         "Disabled rewards are excluded and the remaining enabled chances are scaled proportionally. " +
         "Changes apply when a game finishes.")
-    listOf(RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3).forEachIndexed { index, type ->
+    listOf(RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3,
+        RewardType.GOOD_BEHAVIOR_POINT).forEachIndexed { index, type ->
         Text("${type.label} chance (%)", style = MaterialTheme.typography.bodyMedium)
         OutlinedTextField(texts[index], { value ->
             when (index) {
                 0 -> toys1Text = value.take(6)
                 1 -> toys2Text = value.take(6)
-                else -> toys3Text = value.take(6)
+                2 -> toys3Text = value.take(6)
+                else -> goodBehaviorPointText = value.take(6)
             }
         }, isError = percentages[index] == null, singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.fillMaxWidth().testTag("reward-chance-${type.name}")
                 .semantics { contentDescription = "${type.label} chance (%)" })
     }
-    Text(total?.let { "Tier 3 total: $it% (must equal 100%)" } ?: "Enter a whole percentage from 0 to 100 for every toy.",
+    Text(total?.let { "Tier 3 total: $it% (must equal 100%)" } ?: "Enter a whole percentage from 0 to 100 for every reward.",
         color = if (total == 100) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error,
         modifier = Modifier.testTag("tier-3-chance-total"))
     Button(onClick = {
         if (total == 100) model.chooseTier3RewardChances(
-            requireNotNull(percentages[0]), requireNotNull(percentages[1]), requireNotNull(percentages[2]))
-    }, enabled = total == 100 && percentages != listOf(saved.toys1, saved.toys2, saved.toys3),
+            requireNotNull(percentages[0]), requireNotNull(percentages[1]), requireNotNull(percentages[2]),
+            requireNotNull(percentages[3]))
+    }, enabled = total == 100 && percentages != listOf(saved.toys1, saved.toys2, saved.toys3, saved.goodBehaviorPoint),
         modifier = Modifier.fillMaxWidth().testTag("save-tier-3-chances")) {
         Text("Save Tier 3 chances", textAlign = TextAlign.Center)
     }

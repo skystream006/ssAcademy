@@ -112,16 +112,17 @@ class ReadingRewardsTest {
         }
     }
 
-    @Test fun toyAwardsAndLegacyTierTwoAwardsSurviveChangedSettingsReplayAndRepeatedClaims() {
+    @Test fun tierThreeAndLegacyTierTwoAwardsSurviveChangedSettingsReplayAndRepeatedClaims() {
         val cases = listOf(
             Triple("old-tier-two", RewardType.VIDEO_GAME, RewardThresholds(tier3Minimum = 1001)),
             Triple("new-toy-one", RewardType.TOYS_1, RewardThresholds()),
             Triple("new-toy-two", RewardType.TOYS_2, RewardThresholds()),
-            Triple("new-toy-three", RewardType.TOYS_3, RewardThresholds())
+            Triple("new-toy-three", RewardType.TOYS_3, RewardThresholds()),
+            Triple("good-behavior-point", RewardType.GOOD_BEHAVIOR_POINT, RewardThresholds())
         )
         for ((id, type, thresholds) in cases) {
             val data = finished(id, count = 100, disabled = RewardType.entries.toSet() - type,
-                thresholds = thresholds)
+                thresholds = thresholds, chances = Tier3RewardChances(25, 25, 25, 25))
             assertEquals(type, data.sessions.single().prizeType)
             val model = model()
             open(model, data)

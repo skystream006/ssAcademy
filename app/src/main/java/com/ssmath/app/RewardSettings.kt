@@ -57,10 +57,13 @@ internal fun SharedPreferences.readRewardThresholds(): RewardThresholds = try {
 
 internal fun SharedPreferences.readTier3RewardChances(): Tier3RewardChances = try {
     Tier3RewardChances(getInt("reward_tier_3_toys_1_percentage", 34),
-        getInt("reward_tier_3_toys_2_percentage", 33), getInt("reward_tier_3_toys_3_percentage", 33))
-} catch (_: IllegalArgumentException) {
+        getInt("reward_tier_3_toys_2_percentage", 33), getInt("reward_tier_3_toys_3_percentage", 33),
+        getInt("reward_tier_3_good_behavior_point_percentage", 0))
+} catch (error: IllegalArgumentException) {
+    Log.w("RewardSettings", "Invalid Tier 3 reward chances; using defaults.", error)
     Tier3RewardChances()
-} catch (_: ClassCastException) {
+} catch (error: ClassCastException) {
+    Log.w("RewardSettings", "Invalid Tier 3 reward chance preference type; using defaults.", error)
     Tier3RewardChances()
 }
 

@@ -266,34 +266,44 @@ class RewardsSettingsTest {
         compose.openAdminSettings()
         compose.onNodeWithTag("reward-chance-TOYS_1").assertDoesNotExist()
         compose.onNodeWithText("Available Rewards").performScrollTo().performClick()
-        listOf(RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3).forEach { type ->
+        listOf(RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3,
+            RewardType.GOOD_BEHAVIOR_POINT).forEach { type ->
             compose.onNodeWithContentDescription("${type.label} reward").performScrollTo().assertIsOn()
             compose.onNodeWithContentDescription("${type.label} chance (%)").performScrollTo().assertIsDisplayed()
         }
         val save = compose.onNodeWithTag("save-tier-3-chances")
         save.performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithTag("reward-chance-GOOD_BEHAVIOR_POINT").performScrollTo().assertTextContains("0")
+        listOf("", "-1", "101", "1.5", "abc", "1").forEach { invalid ->
+            compose.onNodeWithTag("reward-chance-GOOD_BEHAVIOR_POINT").performScrollTo().performTextReplacement(invalid)
+            save.performScrollTo().assertIsNotEnabled()
+            assertEquals(Tier3RewardChances(), MathViewModel(application).tier3RewardChances)
+        }
+        compose.onNodeWithTag("reward-chance-GOOD_BEHAVIOR_POINT").performScrollTo().performTextReplacement("0")
         listOf("", "-1", "101", "1.5", "abc", "33", "35").forEach { invalid ->
             compose.onNodeWithTag("reward-chance-TOYS_1").performScrollTo().performTextReplacement(invalid)
             save.performScrollTo().assertIsNotEnabled()
             assertEquals(Tier3RewardChances(), MathViewModel(application).tier3RewardChances)
         }
         compose.onNodeWithTag("reward-chance-TOYS_1").performScrollTo().performTextReplacement("60")
-        compose.onNodeWithTag("reward-chance-TOYS_2").performScrollTo().performTextReplacement("40")
+        compose.onNodeWithTag("reward-chance-TOYS_2").performScrollTo().performTextReplacement("10")
         compose.onNodeWithTag("reward-chance-TOYS_3").performScrollTo().performTextReplacement("0")
+        compose.onNodeWithTag("reward-chance-GOOD_BEHAVIOR_POINT").performScrollTo().performTextReplacement("30")
         compose.onNodeWithTag("tier-3-chance-total").performScrollTo()
             .assertTextEquals("Tier 3 total: 100% (must equal 100%)")
         save.performScrollTo().assertIsEnabled().performClick().assertIsNotEnabled()
-        assertEquals(Tier3RewardChances(60, 40, 0), MathViewModel(application).tier3RewardChances)
-        compose.onNodeWithContentDescription("${RewardType.TOYS_1.label} reward")
+        assertEquals(Tier3RewardChances(60, 10, 0, 30), MathViewModel(application).tier3RewardChances)
+        compose.onNodeWithContentDescription("${RewardType.GOOD_BEHAVIOR_POINT.label} reward")
             .performScrollTo().performClick().assertIsOff()
-        assertEquals(Tier3RewardChances(60, 40, 0), model.tier3RewardChances)
+        assertEquals(Tier3RewardChances(60, 10, 0, 30), model.tier3RewardChances)
         compose.onNodeWithText("Available Rewards").performScrollTo().performClick().performClick()
         compose.onNodeWithTag("reward-chance-TOYS_1").performScrollTo().assertTextContains("60")
         compose.onNodeWithText("Close").performClick()
         compose.openAdminSettings()
         compose.onNodeWithText("Available Rewards").performScrollTo().performClick()
         compose.onNodeWithTag("reward-chance-TOYS_3").performScrollTo().assertTextContains("0")
-        assertTrue(RewardType.TOYS_1 in MathViewModel(application).disabledRewards)
+        compose.onNodeWithTag("reward-chance-GOOD_BEHAVIOR_POINT").performScrollTo().assertTextContains("30")
+        assertTrue(RewardType.GOOD_BEHAVIOR_POINT in MathViewModel(application).disabledRewards)
     }
 
     @Test fun matrixRewardTierIsSelectableAtLargeTextSizeAndPersistsIndependently() {

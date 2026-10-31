@@ -105,7 +105,7 @@ class RewardsTest {
         )
         assertEquals(setOf(RewardType.VIDEO_GAME, RewardType.RESTAURANT),
             RewardType.entries.filter { it.tier == RewardTier.TIER_2 }.toSet())
-        assertEquals(setOf(RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3),
+        assertEquals(setOf(RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3, RewardType.GOOD_BEHAVIOR_POINT),
             RewardType.entries.filter { it.tier == RewardTier.TIER_3 }.toSet())
     }
 
@@ -131,7 +131,7 @@ class RewardsTest {
         }
         listOf(100, 101, 1000).forEach { count ->
             val selected = (1..100).map { prize(count, seed = it) }.toSet()
-            assertEquals(RewardType.entries.filter { it.tier == RewardTier.TIER_3 }.toSet(), selected)
+            assertEquals(setOf(RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3), selected)
         }
     }
 
@@ -152,7 +152,12 @@ class RewardsTest {
 
     @Test fun tierThreePercentagesAreImmutableValidatedAndSerializable() {
         val defaults = Tier3RewardChances()
-        assertEquals(listOf(34, 33, 33), listOf(defaults.toys1, defaults.toys2, defaults.toys3))
+        assertEquals(listOf(34, 33, 33, 0),
+            listOf(defaults.toys1, defaults.toys2, defaults.toys3, defaults.goodBehaviorPoint))
+        assertEquals(defaults, Json.decodeFromString(Tier3RewardChances.serializer(),
+            """{"toys1":34,"toys2":33,"toys3":33}"""))
+        assertEquals(Tier3RewardChances(0, 20, 80, 0), Json.decodeFromString(Tier3RewardChances.serializer(),
+            """{"toys1":0,"toys2":20,"toys3":80}"""))
         RewardType.entries.forEach { type ->
             assertEquals(when (type) {
                 RewardType.TOYS_1 -> 34
@@ -166,12 +171,16 @@ class RewardsTest {
             assertThrows(IllegalArgumentException::class.java) { Tier3RewardChances(a, b, c) }
         }
         for (chances in listOf(defaults, Tier3RewardChances(100, 0, 0), Tier3RewardChances(0, 100, 0),
-            Tier3RewardChances(0, 0, 100), Tier3RewardChances(17, 24, 59))) {
+            Tier3RewardChances(0, 0, 100), Tier3RewardChances(17, 24, 59),
+            Tier3RewardChances(0, 0, 0, 100), Tier3RewardChances(10, 20, 30, 40))) {
             assertEquals(chances, Json.decodeFromString(Tier3RewardChances.serializer(),
                 Json.encodeToString(Tier3RewardChances.serializer(), chances)))
         }
         assertEquals(Tier3RewardChances(), defaults)
         assertThrows(IllegalArgumentException::class.java) { defaults.copy(toys2 = 0) }
+        listOf(-1, 1, 101, Int.MIN_VALUE, Int.MAX_VALUE).forEach { value ->
+            assertThrows(IllegalArgumentException::class.java) { defaults.copy(goodBehaviorPoint = value) }
+        }
     }
 
     private class TicketRandom(private val ticket: Int, private val bound: Int) : Random() {
@@ -183,12 +192,16 @@ class RewardsTest {
     }
 
     @Test fun tierThreeExactTicketBoundariesFollowConfiguredWeightsAndEnabledReweighting() {
-        val chances = Tier3RewardChances(10, 30, 60)
+        val chances = Tier3RewardChances(10, 20, 30, 40)
         for ((disabled, expected) in listOf(
-            emptySet<RewardType>() to (List(10) { RewardType.TOYS_1 } + List(30) { RewardType.TOYS_2 } +
-                List(60) { RewardType.TOYS_3 }),
-            setOf(RewardType.TOYS_2) to (List(10) { RewardType.TOYS_1 } + List(60) { RewardType.TOYS_3 }),
-            setOf(RewardType.TOYS_1, RewardType.TOYS_3) to List(30) { RewardType.TOYS_2 }
+            emptySet<RewardType>() to (List(10) { RewardType.TOYS_1 } + List(20) { RewardType.TOYS_2 } +
+                List(30) { RewardType.TOYS_3 } + List(40) { RewardType.GOOD_BEHAVIOR_POINT }),
+            setOf(RewardType.TOYS_2) to (List(10) { RewardType.TOYS_1 } + List(30) { RewardType.TOYS_3 } +
+                List(40) { RewardType.GOOD_BEHAVIOR_POINT }),
+            setOf(RewardType.GOOD_BEHAVIOR_POINT) to (List(10) { RewardType.TOYS_1 } +
+                List(20) { RewardType.TOYS_2 } + List(30) { RewardType.TOYS_3 }),
+            setOf(RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3) to
+                List(40) { RewardType.GOOD_BEHAVIOR_POINT }
         )) {
             expected.forEachIndexed { ticket, type ->
                 assertEquals(type, selectPrize(100, 100, 100, true, true,
@@ -221,6 +234,24 @@ class RewardsTest {
             }
     }
 
+    @Test fun goodBehaviorPointCanWinExclusivelyButNeverFallsBackWhenDisabled() {
+        val chances = Tier3RewardChances(0, 0, 0, 100)
+        for (matrixTier in listOf(null, RewardTier.TIER_3)) {
+            val count = if (matrixTier == null) 100 else 121
+            repeat(100) { ticket ->
+                assertEquals(RewardType.GOOD_BEHAVIOR_POINT,
+                    selectPrize(count, count, count, true, true, random = TicketRandom(ticket, 100),
+                        matrixRewardTier = matrixTier, tier3RewardChances = chances))
+            }
+            assertNull(selectPrize(count, count, count, true, true,
+                disabledRewards = setOf(RewardType.GOOD_BEHAVIOR_POINT),
+                matrixRewardTier = matrixTier, tier3RewardChances = chances))
+            assertNull(selectPrize(count, count, count, true, true,
+                disabledRewards = setOf(RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3),
+                matrixRewardTier = matrixTier))
+        }
+    }
+
     @Test fun firstTwoTiersRemainUniformAndIgnoreToyPercentages() {
         for (count in listOf(25, 50)) {
             val types = RewardType.entries.filter { it.tier == rewardTierForQuestionCount(count) }
@@ -248,13 +279,16 @@ class RewardsTest {
     @Test fun selectionUsesOnlyEnabledRewardsFromTheEligibleTier() {
         listOf(25, 49, 50, 1000).forEach { count ->
             val tierRewards = RewardType.entries.filter { it.tier == rewardTierForQuestionCount(count) }.toSet()
+            val selectable = tierRewards.filter {
+                it.tier != RewardTier.TIER_3 || Tier3RewardChances().percentage(it) > 0
+            }.toSet()
             tierRewards.forEach { disabled ->
                 val selected = (0..200).map { prize(count, seed = it, disabledRewards = setOf(disabled)) }.toSet()
-                assertEquals(tierRewards - disabled, selected)
+                assertEquals(selectable - disabled, selected)
             }
             tierRewards.forEach { onlyEnabled ->
                 repeat(10) {
-                    assertEquals(onlyEnabled, prize(count, seed = it,
+                    assertEquals(onlyEnabled.takeIf { it in selectable }, prize(count, seed = it,
                         disabledRewards = RewardType.entries.toSet() - onlyEnabled))
                 }
             }
@@ -347,6 +381,8 @@ class RewardsTest {
         assertEquals("Ice Cream Cone Fragment", RewardType.ICE_CREAM.fragmentLabel)
         assertEquals("Bed Time", RewardType.BED_TIME.label)
         assertEquals("Restaurant", RewardType.RESTAURANT.label)
+        assertEquals("1 Good Behavior Point", RewardType.GOOD_BEHAVIOR_POINT.label)
+        assertEquals("Good Behavior Points", RewardType.GOOD_BEHAVIOR_POINT.pluralLabel)
         listOf(RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3).forEachIndexed { index, type ->
             assertEquals("$${index + 1} Toys", type.label)
             assertEquals(type.label, type.pluralLabel)

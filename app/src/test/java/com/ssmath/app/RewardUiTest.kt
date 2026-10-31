@@ -50,8 +50,8 @@ class RewardUiTest {
                 Column {
                     RewardType.entries.forEach { type ->
                         Row {
-                            RewardImage(type, false, Modifier.size(70.dp))
-                            RewardImage(type, true, Modifier.size(70.dp))
+                            RewardImage(type, false, Modifier.size(64.dp))
+                            RewardImage(type, true, Modifier.size(64.dp))
                         }
                     }
                 }
@@ -75,6 +75,8 @@ class RewardUiTest {
         compose.onNodeWithContentDescription("One third of a \$1 toy spinning top").assertExists()
         compose.onNodeWithContentDescription("One third of a \$2 toy train").assertExists()
         compose.onNodeWithContentDescription("One third of a \$3 toy robot").assertExists()
+        compose.onNodeWithContentDescription("1 Good Behavior Point: a sparkling gold medal").assertExists()
+        compose.onNodeWithContentDescription("One third of a good behavior point medal").assertExists()
         compose.onAllNodesWithText("1/3").assertCountEquals(RewardType.entries.size)
     }
 
@@ -182,7 +184,8 @@ class RewardUiTest {
             MathTheme { RewardGiftDialog(saved, false, null, { opens++ }, {}) }
         }
         listOf(RewardType.BED_TIME to 25, RewardType.RESTAURANT to 50,
-            RewardType.TOYS_1 to 100, RewardType.TOYS_2 to 100, RewardType.TOYS_3 to 100)
+            RewardType.TOYS_1 to 100, RewardType.TOYS_2 to 100, RewardType.TOYS_3 to 100,
+            RewardType.GOOD_BEHAVIOR_POINT to 100)
             .forEachIndexed { index, (type, count) ->
             compose.runOnIdle {
                 saved = result().copy(id = index.toLong(), prizeType = type, questionCount = count,
@@ -207,7 +210,7 @@ class RewardUiTest {
     @GraphicsMode(GraphicsMode.Mode.NATIVE)
     fun newRewardImagesAnimateOnlyWhileResumed() {
         val types = listOf(RewardType.BED_TIME, RewardType.RESTAURANT,
-            RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3)
+            RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3, RewardType.GOOD_BEHAVIOR_POINT)
         val tags = types.flatMap { type -> listOf("${type.name}-whole", "${type.name}-fragment") }
         compose.setContent {
             MathTheme {
@@ -575,9 +578,9 @@ class RewardUiTest {
         compose.onNodeWithText("Yes").assertDoesNotExist()
     }
 
-    @Test fun tierThreeToysUseTheSharedConfirmationAndPreserveTheirFragments() {
+    @Test fun tierThreeRewardsUseTheSharedConfirmationAndPreserveTheirFragments() {
         compose.mainClock.autoAdvance = true
-        val types = listOf(RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3)
+        val types = listOf(RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3, RewardType.GOOD_BEHAVIOR_POINT)
         var balances by mutableStateOf(types.associateWith { RewardBalance(1, 2) })
         val used = mutableListOf<RewardType>()
         compose.setContent {
@@ -592,7 +595,9 @@ class RewardUiTest {
             compose.onNodeWithTag("use-rewards-grid").performScrollToKey(type.name)
             compose.onNodeWithTag("use-reward-${type.name}").assertIsEnabled()
                 .assert(hasText(type.label)).assert(hasText("Whole: 1")).performClick()
-            compose.onNodeWithText("You would like to use 1 ${type.label}?").assertIsDisplayed()
+            val confirmation = if (type == RewardType.GOOD_BEHAVIOR_POINT)
+                "You would like to use 1 Good Behavior Point?" else "You would like to use 1 ${type.label}?"
+            compose.onNodeWithText(confirmation).assertIsDisplayed()
             compose.onNodeWithText("Yes").performClick()
             compose.onNodeWithTag("use-rewards-grid").performScrollToKey(type.name)
             compose.onNodeWithTag("use-reward-${type.name}").assertIsNotEnabled().assert(hasText("Whole: 0"))
@@ -660,7 +665,9 @@ class RewardUiTest {
             compose.onNodeWithTag("use-rewards-grid").performScrollToKey(type.name)
             compose.onNodeWithTag("use-reward-${type.name}").assertIsDisplayed().performClick()
             compose.mainClock.advanceTimeBy(64)
-            compose.onNodeWithText("You would like to use 1 ${type.label}?").assertIsDisplayed()
+            val confirmation = if (type == RewardType.GOOD_BEHAVIOR_POINT)
+                "You would like to use 1 Good Behavior Point?" else "You would like to use 1 ${type.label}?"
+            compose.onNodeWithText(confirmation).assertIsDisplayed()
             compose.onNodeWithText("Yes").assertIsDisplayed()
             compose.onNodeWithText("No").performClick()
             compose.mainClock.advanceTimeBy(64)
@@ -711,15 +718,17 @@ class RewardUiTest {
         val tierThree = compose.onNodeWithText("Tier 3").assertIsDisplayed()
             .assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading))
             .fetchSemanticsNode().boundsInRoot
-        val toys = listOf(RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3).map { type ->
+        val rewards = listOf(RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3,
+            RewardType.GOOD_BEHAVIOR_POINT).map { type ->
             compose.onNodeWithTag("reward-card-${type.name}").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
         }
-        toys.forEach { card ->
+        rewards.forEach { card ->
             assertTrue(tierThree.bottom <= card.top)
-            assertEquals(toys.first().top, card.top, 1f)
+            assertEquals(rewards.first().top, card.top, 1f)
             assertEquals(firstRow.first().width, card.width, 1f)
         }
-        assertEquals(header.left, toys.first().left, 1f)
+        assertEquals(header.left, rewards.first().left, 1f)
+        assertEquals(header.right, rewards.last().right, 1f)
         assertEquals(header.left, tierThree.left, 1f)
         assertEquals(header.right, tierThree.right, 1f)
     }
