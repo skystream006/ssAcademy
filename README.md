@@ -326,8 +326,9 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   separately selected tier instead. Changing these settings never changes saved prizes or claims.
   **Tier 3 chances** in Available Rewards are whole percentages from **0 to 100** and must
   add up to **100% across all four rewards** before **Save Tier 3 chances** is enabled.
-  Toy defaults remain **34%**, **33%**, and **33%**; **1 Good Behavior Point** defaults to **0%**
-  until configured. Existing saved toy chances are preserved. Saving applies all four values
+  Defaults are **35%** for **$1 Toys**, **25%** for **$2 Toys**, **10%** for **$3 Toys**,
+  and **30%** for **1 Good Behavior Point**. Existing saved chances are preserved; older
+  three-toy settings retain a **0%** behavior-point chance until edited. Saving applies all four values
   together; invalid or unsaved edits leave the previous chances intact. **0%** excludes a reward.
   Only enabled rewards from the qualifying tier are selected. Disabled Tier 3 rewards are excluded,
   and remaining positive chances are scaled proportionally (for example, 60% and 40% become

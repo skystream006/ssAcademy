@@ -375,6 +375,19 @@ class RewardsModelTest {
         }
     }
 
+    @Test fun freshTierThreeDefaultsIncludeBehaviorPointsWithoutRewritingSavedToyDefaults() {
+        val settings = application.getSharedPreferences("settings", 0)
+        val expected = Tier3RewardChances(35, 25, 10, 30)
+        assertEquals(expected, settings.readTier3RewardChances())
+        assertEquals(expected, model().tier3RewardChances)
+        assertFalse(settings.contains("reward_tier_3_good_behavior_point_percentage"))
+
+        settings.edit().putInt("reward_tier_3_toys_1_percentage", 34).commit()
+        assertEquals(Tier3RewardChances(34, 33, 33, 0), settings.readTier3RewardChances())
+        assertEquals(Tier3RewardChances(34, 33, 33, 0), model().tier3RewardChances)
+        assertFalse(settings.contains("reward_tier_3_good_behavior_point_percentage"))
+    }
+
     @Test fun everyMathModeReadsTierThreeSettingsAtFinishAndKeepsItsAwardThroughReloadAndClaim() {
         val settings = application.getSharedPreferences("settings", 0)
         for (type in listOf(RewardType.TOYS_3, RewardType.GOOD_BEHAVIOR_POINT))

@@ -273,14 +273,17 @@ class RewardsSettingsTest {
         }
         val save = compose.onNodeWithTag("save-tier-3-chances")
         save.performScrollTo().assertIsNotEnabled()
-        compose.onNodeWithTag("reward-chance-GOOD_BEHAVIOR_POINT").performScrollTo().assertTextContains("0")
-        listOf("", "-1", "101", "1.5", "abc", "1").forEach { invalid ->
+        listOf(RewardType.TOYS_1 to "35", RewardType.TOYS_2 to "25", RewardType.TOYS_3 to "10",
+            RewardType.GOOD_BEHAVIOR_POINT to "30").forEach { (type, percentage) ->
+            compose.onNodeWithTag("reward-chance-${type.name}").performScrollTo().assertTextEquals(percentage)
+        }
+        listOf("", "-1", "101", "1.5", "abc", "0", "29", "31").forEach { invalid ->
             compose.onNodeWithTag("reward-chance-GOOD_BEHAVIOR_POINT").performScrollTo().performTextReplacement(invalid)
             save.performScrollTo().assertIsNotEnabled()
             assertEquals(Tier3RewardChances(), MathViewModel(application).tier3RewardChances)
         }
-        compose.onNodeWithTag("reward-chance-GOOD_BEHAVIOR_POINT").performScrollTo().performTextReplacement("0")
-        listOf("", "-1", "101", "1.5", "abc", "33", "35").forEach { invalid ->
+        compose.onNodeWithTag("reward-chance-GOOD_BEHAVIOR_POINT").performScrollTo().performTextReplacement("30")
+        listOf("", "-1", "101", "1.5", "abc", "34", "36").forEach { invalid ->
             compose.onNodeWithTag("reward-chance-TOYS_1").performScrollTo().performTextReplacement(invalid)
             save.performScrollTo().assertIsNotEnabled()
             assertEquals(Tier3RewardChances(), MathViewModel(application).tier3RewardChances)

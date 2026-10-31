@@ -90,11 +90,13 @@ enum class RewardType(val label: String, val pluralLabel: String, val fragmentLa
 
 @Serializable
 data class Tier3RewardChances(
-    val toys1: Int = 34,
-    val toys2: Int = 33,
-    val toys3: Int = 33,
+    val toys1: Int,
+    val toys2: Int,
+    val toys3: Int,
     val goodBehaviorPoint: Int = 0
 ) {
+    constructor() : this(35, 25, 10, 30)
+
     init {
         require(toys1 in 0..100 && toys2 in 0..100 && toys3 in 0..100 && goodBehaviorPoint in 0..100 &&
             toys1 + toys2 + toys3 + goodBehaviorPoint == 100)

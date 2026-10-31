@@ -131,7 +131,7 @@ class RewardsTest {
         }
         listOf(100, 101, 1000).forEach { count ->
             val selected = (1..100).map { prize(count, seed = it) }.toSet()
-            assertEquals(setOf(RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3), selected)
+            assertEquals(RewardType.entries.filter { it.tier == RewardTier.TIER_3 }.toSet(), selected)
         }
     }
 
@@ -152,16 +152,18 @@ class RewardsTest {
 
     @Test fun tierThreePercentagesAreImmutableValidatedAndSerializable() {
         val defaults = Tier3RewardChances()
-        assertEquals(listOf(34, 33, 33, 0),
+        assertEquals(listOf(35, 25, 10, 30),
             listOf(defaults.toys1, defaults.toys2, defaults.toys3, defaults.goodBehaviorPoint))
-        assertEquals(defaults, Json.decodeFromString(Tier3RewardChances.serializer(),
+        assertEquals(Tier3RewardChances(34, 33, 33, 0), Json.decodeFromString(Tier3RewardChances.serializer(),
             """{"toys1":34,"toys2":33,"toys3":33}"""))
         assertEquals(Tier3RewardChances(0, 20, 80, 0), Json.decodeFromString(Tier3RewardChances.serializer(),
             """{"toys1":0,"toys2":20,"toys3":80}"""))
         RewardType.entries.forEach { type ->
             assertEquals(when (type) {
-                RewardType.TOYS_1 -> 34
-                RewardType.TOYS_2, RewardType.TOYS_3 -> 33
+                RewardType.TOYS_1 -> 35
+                RewardType.TOYS_2 -> 25
+                RewardType.TOYS_3 -> 10
+                RewardType.GOOD_BEHAVIOR_POINT -> 30
                 else -> 0
             }, defaults.percentage(type))
         }
@@ -209,8 +211,8 @@ class RewardsTest {
                     tier3RewardChances = chances))
             }
         }
-        val defaults = List(34) { RewardType.TOYS_1 } + List(33) { RewardType.TOYS_2 } +
-            List(33) { RewardType.TOYS_3 }
+        val defaults = List(35) { RewardType.TOYS_1 } + List(25) { RewardType.TOYS_2 } +
+            List(10) { RewardType.TOYS_3 } + List(30) { RewardType.GOOD_BEHAVIOR_POINT }
         defaults.forEachIndexed { ticket, type ->
             assertEquals(type, selectPrize(100, 100, 100, true, true, random = TicketRandom(ticket, 100)))
         }
@@ -246,9 +248,12 @@ class RewardsTest {
             assertNull(selectPrize(count, count, count, true, true,
                 disabledRewards = setOf(RewardType.GOOD_BEHAVIOR_POINT),
                 matrixRewardTier = matrixTier, tier3RewardChances = chances))
-            assertNull(selectPrize(count, count, count, true, true,
+            assertEquals(RewardType.GOOD_BEHAVIOR_POINT, selectPrize(count, count, count, true, true,
                 disabledRewards = setOf(RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3),
                 matrixRewardTier = matrixTier))
+            assertNull(selectPrize(count, count, count, true, true,
+                disabledRewards = setOf(RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3),
+                matrixRewardTier = matrixTier, tier3RewardChances = Tier3RewardChances(34, 33, 33, 0)))
         }
     }
 
