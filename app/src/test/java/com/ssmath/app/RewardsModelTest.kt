@@ -104,6 +104,37 @@ class RewardsModelTest {
         assertTrue(model().rewardBalances.isEmpty())
     }
 
+    @Test fun slotMachineFragmentChoicePersistsCombinesFragmentsAndSwitchesBackToWholeRewards() {
+        val type = RewardType.LOLLIPOP
+        val model = model()
+        assertFalse(model.slotMachineFragmentReward)
+        model.openSettings()
+        RewardType.entries.forEach { model.chooseRewardEnabled(it, it == type) }
+        model.chooseSlotMachineFragmentReward(true)
+        assertTrue(model().slotMachineFragmentReward)
+        model.chooseSlotMachineTier(RewardTier.TIER_1)
+        repeat(3) { spin ->
+            model.spinSlotMachine()
+            assertTrue(requireNotNull(model.slotMachineRoll).fragmentReward)
+            model.chooseSlotMachineFragmentReward(false)
+            assertTrue(model.slotMachineFragmentReward)
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(SLOT_MACHINE_DURATION_MS.toLong()))
+            assertTrue(model.slotMachineAwarded)
+            val expected = RewardBalance((spin + 1) / 3, (spin + 1) % 3)
+            assertEquals(expected, model().rewardBalances[type])
+            model.retrySlotMachinePrize()
+            assertEquals(expected, model.rewardBalances[type])
+        }
+        model.chooseSlotMachineFragmentReward(false)
+        assertNull(model.slotMachineRoll)
+        assertFalse(model.slotMachineAwarded)
+        assertFalse(model().slotMachineFragmentReward)
+        model.spinSlotMachine()
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(SLOT_MACHINE_DURATION_MS.toLong()))
+        assertEquals(RewardBalance(2, 0), model().rewardBalances[type])
+        assertTrue(model.history.isEmpty())
+    }
+
     @Test fun slotMachineRespectsTierThreeChancesAndRejectsEmptyTiers() {
         val model = model()
         model.chooseSlotMachineTier(RewardTier.TIER_3)
@@ -127,6 +158,7 @@ class RewardsModelTest {
         val model = model()
         model.openSettings()
         RewardType.entries.forEach { model.chooseRewardEnabled(it, it == RewardType.LOLLIPOP) }
+        model.chooseSlotMachineFragmentReward(true)
         model.chooseSlotMachineTier(RewardTier.TIER_1)
         assertTrue(blockedWrite.mkdir())
         model.spinSlotMachine()
@@ -135,6 +167,8 @@ class RewardsModelTest {
         assertNotNull(model.slotMachineError)
         assertFalse(model.slotMachineAwarded)
         assertTrue(model.rewardBalances.isEmpty())
+        model.chooseSlotMachineFragmentReward(false)
+        assertTrue(model.slotMachineFragmentReward)
         model.spinSlotMachine()
         assertEquals(roll, model.slotMachineRoll)
         assertTrue(blockedWrite.delete())
@@ -142,7 +176,7 @@ class RewardsModelTest {
         shadowOf(Looper.getMainLooper()).idle()
         assertNull(model.slotMachineError)
         assertTrue(model.slotMachineAwarded)
-        assertEquals(RewardBalance(1, 0), model().rewardBalances[RewardType.LOLLIPOP])
+        assertEquals(RewardBalance(0, 1), model().rewardBalances[RewardType.LOLLIPOP])
         assertEquals(roll, model.slotMachineRoll)
     }
 

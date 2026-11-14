@@ -54,6 +54,8 @@ class MathViewModel(
 
     internal var slotMachineTier by mutableStateOf<RewardTier?>(null)
         private set
+    internal var slotMachineFragmentReward by mutableStateOf(settings.getBoolean("slot_machine_fragment_reward", false))
+        private set
     internal var slotMachineRoll by mutableStateOf<SlotMachineRoll?>(null)
         private set
     internal var slotMachineBusy by mutableStateOf(false)
@@ -1146,6 +1148,14 @@ class MathViewModel(
 
     fun addReward(type: RewardType, fragment: Boolean) = adjustReward(type, fragment, add = true)
 
+    internal fun chooseSlotMachineFragmentReward(fragment: Boolean) {
+        if (slotMachineBusy || slotMachineError != null) return
+        slotMachineFragmentReward = fragment
+        settings.edit().putBoolean("slot_machine_fragment_reward", fragment).apply()
+        slotMachineRoll = null
+        slotMachineAwarded = false
+    }
+
     internal fun chooseSlotMachineTier(tier: RewardTier?) {
         if (slotMachineBusy) return
         slotMachineTier = tier
@@ -1163,7 +1173,7 @@ class MathViewModel(
         }
         val roll = SlotMachineRoll(List(3) {
             requireNotNull(selectRewardFromTier(tier, rewardRandom, disabledRewards, tier3RewardChances))
-        }, rollNumber = (slotMachineRoll?.rollNumber ?: 0) + 1)
+        }, rollNumber = (slotMachineRoll?.rollNumber ?: 0) + 1, fragmentReward = slotMachineFragmentReward)
         slotMachineRoll = roll
         slotMachineAwarded = false
         slotMachineBusy = true
@@ -1195,7 +1205,7 @@ class MathViewModel(
         val winner = roll.winner ?: return
         try {
             storeLock.withLock {
-                applySnapshot(withContext(ioDispatcher) { store.addReward(winner, fragment = false) })
+                applySnapshot(withContext(ioDispatcher) { store.addReward(winner, fragment = roll.fragmentReward) })
             }
             slotMachineAwarded = true
         } catch (error: CancellationException) {

@@ -15,6 +15,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
@@ -24,7 +25,11 @@ import kotlin.math.floor
 
 internal const val SLOT_MACHINE_DURATION_MS = 2_600
 
-internal data class SlotMachineRoll(val reels: List<RewardType>, val rollNumber: Long = 0) {
+internal data class SlotMachineRoll(
+    val reels: List<RewardType>,
+    val rollNumber: Long = 0,
+    val fragmentReward: Boolean = false
+) {
     init {
         require(reels.size == 3 && reels.all { it.tier == reels.first().tier })
     }
@@ -37,12 +42,23 @@ internal fun SlotMachineDialog(model: MathViewModel, onDismiss: () -> Unit) {
     val tier = model.slotMachineTier
     val roll = model.slotMachineRoll
     val busy = model.slotMachineBusy
+    val fragmentReward = model.slotMachineFragmentReward
     SettingsDialog(
         onDismissRequest = { if (!busy) onDismiss() },
         title = { Text(if (tier == null) "Slot machine: select a tier" else "Slot machine - ${tier.label}") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                Text("Match three fragments to win one complete reward. Each pull is free.")
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (fragmentReward) "Reward: Fragment" else "Reward: Whole reward",
+                        Modifier.weight(1f))
+                    Switch(fragmentReward, model::chooseSlotMachineFragmentReward,
+                        enabled = !busy && model.slotMachineError == null,
+                        modifier = Modifier.testTag("slot-fragment-reward").semantics {
+                            contentDescription = "Fragment reward"
+                        })
+                }
+                Text(if (fragmentReward) "Match three fragments to win one fragment. Each pull is free."
+                    else "Match three rewards to win one complete reward. Each pull is free.")
                 if (tier == null) {
                     Text("Uses enabled rewards and your Tier 3 chance settings.")
                     RewardTier.entries.forEach { option ->
@@ -59,8 +75,10 @@ internal fun SlotMachineDialog(model: MathViewModel, onDismiss: () -> Unit) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         repeat(3) { index ->
                             Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                                SlotMachineReel(types, roll, index, Modifier.fillMaxWidth())
-                                Text(if (busy) "Spinning..." else roll?.reels?.get(index)?.fragmentLabel ?: "Fragment",
+                                SlotMachineReel(types, roll, index, fragmentReward, Modifier.fillMaxWidth())
+                                val type = roll?.reels?.get(index)
+                                Text(if (busy) "Spinning..." else if (fragmentReward) type?.fragmentLabel ?: "Fragment"
+                                    else type?.label ?: "Reward",
                                     textAlign = TextAlign.Center, style = MaterialTheme.typography.labelSmall,
                                     modifier = Modifier.testTag("slot-label-$index"))
                             }
@@ -69,7 +87,9 @@ internal fun SlotMachineDialog(model: MathViewModel, onDismiss: () -> Unit) {
                     val status = when {
                         busy -> "Spinning / saving..."
                         model.slotMachineError != null -> requireNotNull(model.slotMachineError)
-                        model.slotMachineAwarded -> "You won ${requireNotNull(roll?.winner).label}! One complete reward added."
+                        model.slotMachineAwarded -> if (requireNotNull(roll).fragmentReward)
+                            "You won ${requireNotNull(roll.winner).fragmentLabel}! One fragment added."
+                            else "You won ${requireNotNull(roll.winner).label}! One complete reward added."
                         roll != null -> "No match. Pull again!"
                         else -> "Pull the lever to spin all three slots."
                     }
@@ -109,7 +129,13 @@ internal fun SlotMachineDialog(model: MathViewModel, onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun SlotMachineReel(types: List<RewardType>, roll: SlotMachineRoll?, index: Int, modifier: Modifier) {
+private fun SlotMachineReel(
+    types: List<RewardType>,
+    roll: SlotMachineRoll?,
+    index: Int,
+    fragmentReward: Boolean,
+    modifier: Modifier
+) {
     val progress = remember { Animatable(0f) }
     LaunchedEffect(roll) {
         progress.snapTo(0f)
@@ -123,7 +149,7 @@ private fun SlotMachineReel(types: List<RewardType>, roll: SlotMachineRoll?, ind
         val step = floor(progress.value).toInt()
         val fraction = progress.value - step
         for (offset in 0..1) {
-            RewardImage(types[(step + offset) % types.size], fragment = true,
+            RewardImage(types[(step + offset) % types.size], fragment = fragmentReward,
                 modifier = Modifier.fillMaxWidth().height(maxHeight)
                     .offset(y = maxHeight * (offset - fraction)).padding(8.dp))
         }

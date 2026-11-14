@@ -64,6 +64,8 @@ class AdminMenuTest {
         compose.openAdminSettings()
         compose.onNodeWithTag("slot-machine").performScrollTo().performClick()
         compose.onNodeWithTag("slot-machine-dialog").assertIsDisplayed()
+        compose.onNodeWithTag("slot-fragment-reward").assertIsOff().performClick().assertIsOn()
+        compose.onNodeWithText("Reward: Fragment").assertIsDisplayed()
         compose.onNodeWithTag("slot-tier-TIER_2").assertIsNotEnabled()
         compose.onNodeWithTag("slot-tier-TIER_1").performClick()
         repeat(3) { compose.onNodeWithTag("slot-reel-$it").assertIsDisplayed() }
@@ -71,6 +73,7 @@ class AdminMenuTest {
         compose.onNodeWithText("Change tier").performScrollTo().performClick()
         compose.onNodeWithTag("slot-tier-TIER_3").performClick()
         compose.onNodeWithText("Slot machine - Tier 3").assertIsDisplayed()
+        compose.onNodeWithTag("slot-fragment-reward").assertIsOn()
         compose.onNodeWithText("Back to Admin Menu").performClick()
         compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
     }
@@ -84,20 +87,35 @@ class AdminMenuTest {
         restoration.setContent { MathTheme { SlotMachineDialog(model, onDismiss = {}) } }
         compose.mainClock.autoAdvance = false
         repeat(2) { spin ->
-            compose.onNodeWithTag("slot-lever").performScrollTo().performClick()
+            if (spin == 1) {
+                compose.mainClock.autoAdvance = true
+                compose.onNodeWithTag("slot-fragment-reward").performScrollTo().performClick().assertIsOn()
+                compose.onNodeWithTag("slot-status").assertTextEquals("Pull the lever to spin all three slots.")
+                compose.mainClock.autoAdvance = false
+            }
+            compose.onNodeWithTag("slot-lever").performScrollTo()
+            compose.mainClock.advanceTimeBy(64)
+            compose.onNodeWithTag("slot-lever").performClick()
             compose.mainClock.advanceTimeBy(64)
             compose.onNodeWithTag("slot-lever").assertIsNotEnabled()
             compose.onNodeWithText("Back to Admin Menu").assertIsNotEnabled()
             compose.onNodeWithText("Change tier").assertIsNotEnabled()
-            if (spin == 0) restoration.emulateSavedInstanceStateRestore()
+            compose.onNodeWithTag("slot-fragment-reward").assertIsNotEnabled()
+            restoration.emulateSavedInstanceStateRestore()
             compose.runOnIdle {
                 shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(SLOT_MACHINE_DURATION_MS.toLong()))
             }
             compose.mainClock.advanceTimeBy(SLOT_MACHINE_DURATION_MS.toLong() + 64)
-            repeat(3) { compose.onNodeWithTag("slot-label-$it").assertTextEquals("Lollipop Fragment") }
-            compose.onNodeWithTag("slot-status").assertTextEquals("You won Lollipop! One complete reward added.")
+            repeat(3) {
+                compose.onNodeWithTag("slot-label-$it").assertTextEquals(
+                    if (spin == 0) "Lollipop" else "Lollipop Fragment")
+            }
+            compose.onNodeWithTag("slot-status").assertTextEquals(
+                if (spin == 0) "You won Lollipop! One complete reward added."
+                else "You won Lollipop Fragment! One fragment added.")
             compose.onNodeWithTag("slot-lever").assertIsEnabled()
-            compose.runOnIdle { assertEquals(spin + 1, model.rewardBalances[RewardType.LOLLIPOP]?.whole) }
+            compose.onNodeWithTag("slot-fragment-reward").assertIsEnabled()
+            compose.runOnIdle { assertEquals(RewardBalance(1, spin), model.rewardBalances[RewardType.LOLLIPOP]) }
         }
         compose.mainClock.autoAdvance = true
     }
