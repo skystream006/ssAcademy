@@ -85,8 +85,11 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    A correct answer earns a point; a wrong answer is added to
    the **Wrong** tally in the bottom-left corner. Either way, a new problem of the
    same type follows, with your question progress shown above it.
-   Your submitted answer always appears below the correct or incorrect feedback in math
+   By default, your submitted answer appears below the correct or incorrect feedback in math
    and reading games, so you can compare it with the correct answer when shown.
+   To hide it during math games, turn off **Show submitted answer** in
+   **Settings > Admin Menu > Game Settings > Math Settings**, directly above
+   **Show correct answers**. This option defaults to on and is remembered.
    A progress bar fills
    after each answered question, correct or wrong, as an icon jumps to the next point.
    Each game randomly picks one of 10 colorful offline icons: rocket, star, balloon,

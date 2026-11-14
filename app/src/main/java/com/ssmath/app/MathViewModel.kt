@@ -241,6 +241,8 @@ class MathViewModel(
         private set
     var activeTimeLimitMs by mutableStateOf<Long?>(null)
         private set
+    var showSubmittedAnswer by mutableStateOf(settings.getBoolean("show_submitted_answer", true))
+        private set
     var showCorrectAnswers by mutableStateOf(settings.getBoolean("show_correct_answers", true))
         private set
     var verticalEquations by mutableStateOf(settings.getBoolean("vertical_equations", true))
@@ -1484,6 +1486,11 @@ class MathViewModel(
     fun chooseAdvancedTimeLimitSeconds(value: Int) {
         advancedTimeLimitSeconds = normalizeTimeLimitSeconds(value)
         settings.edit().putInt("advanced_time_limit_seconds", advancedTimeLimitSeconds).apply()
+    }
+
+    fun chooseShowSubmittedAnswer(value: Boolean) {
+        showSubmittedAnswer = value
+        settings.edit().putBoolean("show_submitted_answer", value).apply()
     }
 
     fun chooseShowCorrectAnswers(value: Boolean) {

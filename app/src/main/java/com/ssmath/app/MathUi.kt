@@ -732,7 +732,7 @@ private fun PlayingScreen(model: MathViewModel, onQuit: () -> Unit) {
                         color = if (it.correct) CorrectGreen else WrongRed,
                         style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center,
                         modifier = Modifier.testTag("answer-feedback"))
-                    Text("Submitted answer: ${game.attempts.last().given}",
+                    if (model.showSubmittedAnswer) Text("Submitted answer: ${game.attempts.last().given}",
                         style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center,
                         modifier = Modifier.testTag("submitted-answer"))
                     if (correction != null) Equation(correction, correction.answer.toString(), vertical = true,
