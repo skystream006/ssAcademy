@@ -1166,7 +1166,8 @@ class ReadingScreenTest {
         compose.onNodeWithTag("reading-question-result").assertDoesNotExist()
         compose.onNodeWithTag("reading-finish").assertDoesNotExist()
         compose.onNodeWithTag("reading-next").assertDoesNotExist()
-        val correction = "Previous question · ${first.title}\nNot quite. Correct answer: ${question.choices[question.answer]}"
+        val correction = "Previous question · ${first.title}\nNot quite.\n" +
+            "Submitted answer: ${question.choices[readingWrong(data)]}\nCorrect answer: ${question.choices[question.answer]}"
         val feedback = compose.onNodeWithTag("reading-previous-answer").performScrollTo()
             .assertIsDisplayed().assertTextContains(correction).fetchSemanticsNode().boundsInRoot
         val problem = compose.onNodeWithTag("reading-problem").fetchSemanticsNode().boundsInRoot
@@ -1178,7 +1179,7 @@ class ReadingScreenTest {
         click("reading-submit-answer")
         waitFor { it.activeSession?.let { session -> it.sessionAnswered(session) == 2 } == true }
         compose.onNodeWithTag("reading-question-progress").assertTextContains("Question 3 of 15")
-        compose.onNodeWithTag("reading-previous-answer").assertTextContains("Correct! Correct answer:", substring = true)
+        compose.onNodeWithTag("reading-previous-answer").assertTextContains("Correct!\nSubmitted answer:", substring = true)
     }
 
     @Test fun restoredCompletedQuestionAutomaticallyContinuesAndReadyLegacyDraftCanStillSubmit() {

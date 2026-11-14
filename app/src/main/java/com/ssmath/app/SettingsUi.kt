@@ -809,6 +809,15 @@ private fun GameSettings(
         }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
+                Text("Show submitted answer")
+                Text("Display your submitted answer below the feedback while practicing",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Switch(model.showSubmittedAnswer, model::chooseShowSubmittedAnswer,
+                modifier = Modifier.semantics { contentDescription = "Show submitted answer" })
+        }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
                 Text("Show correct answers")
                 Text("Reveal correct answers after mistakes, including in results and history",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

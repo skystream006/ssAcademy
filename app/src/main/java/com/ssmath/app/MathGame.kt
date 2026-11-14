@@ -232,7 +232,5 @@ data class GameState(
 
 fun formatDuration(milliseconds: Long): String {
     val seconds = (milliseconds.coerceAtLeast(0) / 1000)
-    val hours = seconds / 3600
-    return if (hours > 0) "%d:%02d:%02d".format(hours, seconds / 60 % 60, seconds % 60)
-    else "%02d:%02d".format(seconds / 60, seconds % 60)
+    return "%02d:%02d".format(seconds / 60, seconds % 60)
 }

@@ -57,6 +57,43 @@ internal fun readingSolve(data: ReadingData, rewardsEnabled: Boolean = true): Re
 }
 
 class ReadingModelTest {
+    @Test fun correctAndIncorrectFeedbackIncludeTheSubmittedChoice() {
+        val data = readingFixture()
+        val question = requireNotNull(data.active?.content?.question)
+        listOf(readingCorrect(data), readingWrong(data)).forEach { index ->
+            val submitted = readingAnswer(data, index)
+            val expected = "${if (index == question.answer) "Correct!" else "Not quite."}\n" +
+                "Submitted answer: ${question.choices[index]}\nCorrect answer: ${question.choices[question.answer]}"
+            assertEquals(expected, submitted.active?.feedback)
+        }
+    }
+
+    @Test fun submittedOrdersAndEvidenceAreIncludedBelowTheOutcome() {
+        val content = ReadingContent.forGame(ReadingGame.SEQUENCE, ReadingLevel.SPROUT).first()
+        val data = readingFixture(content)
+        val order = content.validOrders.first()
+        val incorrect = content.tiles.indices.toList().let { indices ->
+            if (indices in content.validOrders) indices.reversed() else indices
+        }
+        listOf(order, incorrect).forEach { given ->
+            val submitted = ReadingEngine.submit(readingOrder(data, given), "order")
+            assertEquals(
+                "${if (given in content.validOrders) "Correct!" else "Not quite."}\n" +
+                    "Submitted answer: ${given.joinToString(" ") { content.tiles[it] }}\n" +
+                    "Correct answer: ${order.joinToString(" ") { content.tiles[it] }}",
+                submitted.active?.feedback)
+        }
+        val detective = ReadingContent.forGame(ReadingGame.DETECTIVE, ReadingLevel.SPROUT).first()
+        val answered = readingAnswer(readingFixture(detective), requireNotNull(detective.question).answer)
+        detective.passage.indices.forEach { index ->
+            val submitted = ReadingEngine.submit(ReadingEngine.field(answered, "evidence", index.toString()), "evidence")
+            assertEquals(
+                "${if (index == detective.evidence) "Correct!" else "Not quite."}\n" +
+                    "Submitted answer: ${detective.passage[index]}\nCorrect answer: ${detective.passage[detective.evidence]}",
+                submitted.active?.feedback)
+        }
+    }
+
     @Test fun identicalSentenceWordsAreInterchangeableWithoutAcceptingIncorrectOrIncompleteOrders() {
         val words = "At the pond, the duck swims.".split(" ")
         val activity = ReadingContent.find("scramble-lantern").copy(
@@ -307,7 +344,9 @@ class ReadingModelTest {
             @Suppress("DEPRECATION") // Verify retries cannot award legacy checkpoint rewards.
             assertEquals(false, data.active?.checkpoints?.get("answer")?.rewardGranted)
             assertTrue(requireNotNull(data.active).earned("answer"))
-            assertTrue(requireNotNull(data.active).feedback.contains("Correct! Correct answer:"))
+            val answer = requireNotNull(data.active).content.question!!.let { it.choices[it.answer] }
+            assertTrue(requireNotNull(data.active).feedback.contains(
+                "Correct!\nSubmitted answer: $answer\nCorrect answer: $answer"))
             assertFalse(requireNotNull(data.active).feedback.contains(" point"))
             repeat(5) {
                 assertEquals(data, ReadingEngine.submit(data, "answer", rewardsEnabled = !enabledAtCompletion))
