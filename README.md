@@ -723,6 +723,13 @@ fragments. Removing a fragment never breaks a whole reward, and unavailable unit
 be removed. Adjustments are saved on this device without changing practice history,
 My Pokémons, or existing gift claims. **Back to Admin Menu** returns to the unlocked Admin Menu.
 
+Use **Admin Menu > Slot machine** to select a reward tier, then **Pull lever** to
+spin three vertically rolling fragment slots. Pulls are free and use enabled rewards
+and the saved Tier 3 chance settings. Three identical fragments automatically add
+one complete reward to My Rewards, preserving existing fragments and history.
+Non-matching rolls add nothing. Pulling again and leaving the dialog are disabled
+while spinning or saving; a failed save offers a retry without rerolling.
+
 In **Debug Menu**, expand **Reading activities**, then press **View reading activities database** to browse the installed activity library,
 filter by game and level, and inspect activity IDs, passages, questions, correct
 answers, orders, and story prompts. The browser is read-only and works offline.

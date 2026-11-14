@@ -57,6 +57,95 @@ class RewardsModelTest {
         return model
     }
 
+    @Test fun slotMachineMatchesAwardOneWholePreserveFragmentsAndPreventRepeatedClaims() {
+        val type = RewardType.LOLLIPOP
+        HistoryStore(file).addReward(type, fragment = true)
+        val model = model()
+        model.openSettings()
+        RewardType.entries.forEach { model.chooseRewardEnabled(it, it == type) }
+        model.chooseRewardsEnabled(false)
+        model.chooseSlotMachineTier(RewardTier.TIER_1)
+        model.spinSlotMachine()
+        val roll = requireNotNull(model.slotMachineRoll)
+        assertEquals(List(3) { type }, roll.reels)
+        assertTrue(model.slotMachineBusy)
+        model.spinSlotMachine()
+        model.chooseSlotMachineTier(RewardTier.TIER_2)
+        assertEquals(roll, model.slotMachineRoll)
+        assertEquals(RewardTier.TIER_1, model.slotMachineTier)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(SLOT_MACHINE_DURATION_MS.toLong()))
+        assertTrue(model.slotMachineAwarded)
+        assertEquals(RewardBalance(1, 1), model.rewardBalances[type])
+        repeat(3) { model.retrySlotMachinePrize() }
+        assertEquals(RewardBalance(1, 1), model().rewardBalances[type])
+        assertTrue(model.history.isEmpty())
+        model.spinSlotMachine()
+        assertNotEquals(roll, model.slotMachineRoll)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(SLOT_MACHINE_DURATION_MS.toLong()))
+        assertEquals(RewardBalance(2, 1), model().rewardBalances[type])
+    }
+
+    @Test fun slotMachineNonMatchingRollsDoNotChangeInventoryAndStayWithinTheirTier() {
+        val random = object : Random() {
+            private var next = 0
+            override fun nextBits(bitCount: Int): Int = 0
+            override fun nextInt(until: Int): Int = next++.mod(until)
+        }
+        val model = model(rewardRandom = random)
+        model.openSettings()
+        model.chooseSlotMachineTier(RewardTier.TIER_2)
+        model.spinSlotMachine()
+        val roll = requireNotNull(model.slotMachineRoll)
+        assertEquals(listOf(RewardType.VIDEO_GAME, RewardType.RESTAURANT, RewardType.VIDEO_GAME), roll.reels)
+        assertNull(roll.winner)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(SLOT_MACHINE_DURATION_MS.toLong()))
+        assertFalse(model.slotMachineBusy)
+        assertFalse(model.slotMachineAwarded)
+        assertTrue(model().rewardBalances.isEmpty())
+    }
+
+    @Test fun slotMachineRespectsTierThreeChancesAndRejectsEmptyTiers() {
+        val model = model()
+        model.chooseSlotMachineTier(RewardTier.TIER_3)
+        model.spinSlotMachine()
+        assertNull(model.slotMachineRoll)
+        model.openSettings()
+        model.chooseTier3RewardChances(0, 0, 0, 100)
+        model.spinSlotMachine()
+        assertEquals(List(3) { RewardType.GOOD_BEHAVIOR_POINT }, model.slotMachineRoll?.reels)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(SLOT_MACHINE_DURATION_MS.toLong()))
+        assertEquals(RewardBalance(1, 0), model().rewardBalances[RewardType.GOOD_BEHAVIOR_POINT])
+        model.chooseRewardEnabled(RewardType.GOOD_BEHAVIOR_POINT, false)
+        model.chooseSlotMachineTier(RewardTier.TIER_3)
+        model.spinSlotMachine()
+        assertNull(model.slotMachineRoll)
+        assertNotNull(model.slotMachineError)
+        assertFalse(model.slotMachineBusy)
+    }
+
+    @Test fun slotMachineFailedSaveRetriesTheSameWinExactlyOnce() {
+        val model = model()
+        model.openSettings()
+        RewardType.entries.forEach { model.chooseRewardEnabled(it, it == RewardType.LOLLIPOP) }
+        model.chooseSlotMachineTier(RewardTier.TIER_1)
+        assertTrue(blockedWrite.mkdir())
+        model.spinSlotMachine()
+        val roll = requireNotNull(model.slotMachineRoll)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(SLOT_MACHINE_DURATION_MS.toLong()))
+        assertNotNull(model.slotMachineError)
+        assertFalse(model.slotMachineAwarded)
+        assertTrue(model.rewardBalances.isEmpty())
+        model.spinSlotMachine()
+        assertEquals(roll, model.slotMachineRoll)
+        assertTrue(blockedWrite.delete())
+        repeat(3) { model.retrySlotMachinePrize() }
+        shadowOf(Looper.getMainLooper()).idle()
+        assertNull(model.slotMachineError)
+        assertTrue(model.slotMachineAwarded)
+        assertEquals(RewardBalance(1, 0), model().rewardBalances[RewardType.LOLLIPOP])
+        assertEquals(roll, model.slotMachineRoll)
+    }
+
     private fun start(model: MathViewModel, count: Int = 26, rewards: Boolean = true, minutes: Int = 0) {
         if (model.screen != Screen.SETUP) model.done()
         model.openRewardsGame()
