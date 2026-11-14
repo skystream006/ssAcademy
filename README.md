@@ -76,6 +76,7 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    **Mega Pokémons** celebration pool, exclusive to this game; ordinary multiplication
    games (even with 121 questions), Practice Game, and reading cannot award this tier.
 2. **Press Start when Ready** – press **Start** to begin. The timer starts now.
+   Timers show minutes and seconds only (for example, **125:09**), with no hours.
 3. **Play** – in Practice Game and Challenge- Basic Math, addition and subtraction use two random numbers
    between the minimum and maximum, inclusive. Subtraction never goes below zero.
    Multiplication picks each factor independently from 1 to its respective maximum.
@@ -83,7 +84,10 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    and a second number from 1 to its second maximum, choosing only exactly divisible pairs.
    A correct answer earns a point; a wrong answer is added to
    the **Wrong** tally in the bottom-left corner. Either way, a new problem of the
-   same type follows, with your question progress shown above it. A progress bar fills
+   same type follows, with your question progress shown above it.
+   Your submitted answer always appears below the correct or incorrect feedback in math
+   and reading games, so you can compare it with the correct answer when shown.
+   A progress bar fills
    after each answered question, correct or wrong, as an icon jumps to the next point.
    Each game randomly picks one of 10 colorful offline icons: rocket, star, balloon,
    ball, butterfly, fish, frog, bunny, cat, or robot. The same icon stays for every

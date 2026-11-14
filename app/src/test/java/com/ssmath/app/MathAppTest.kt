@@ -1760,6 +1760,11 @@ class MathAppTest {
         compose.onNodeWithText(revealedFeedback).assertDoesNotExist()
         compose.onNodeWithText("Not quite!").assertIsDisplayed()
         assertEquals(Feedback("Not quite!", false), model.feedback)
+        val submitted = compose.onNodeWithTag("submitted-answer")
+            .assertTextEquals("Submitted answer: ${first.answer + 1}").fetchSemanticsNode().boundsInRoot
+        assertTrue(submitted.top >= compose.onNodeWithTag("answer-feedback").fetchSemanticsNode().boundsInRoot.bottom)
+        compose.onNodeWithTag("answer-input").performTextReplacement("123")
+        compose.onNodeWithTag("submitted-answer").assertTextEquals("Submitted answer: ${first.answer + 1}")
 
         compose.onNodeWithContentDescription("Settings").performClick()
         compose.openGameSettings()
@@ -1780,8 +1785,10 @@ class MathAppTest {
         compose.onNodeWithTag("points").assertTextEquals("Points: 0")
         compose.onNodeWithTag("wrong-tally").assertTextEquals("Wrong: 2")
         compose.onNodeWithTag("question-progress").assertTextEquals("Question 3 of 20")
-        answer(model.game!!.problem.answer)
+        val correctAnswer = model.game!!.problem.answer
+        answer(correctAnswer)
         compose.onNodeWithText("Correct! +1 point").assertIsDisplayed()
+        compose.onNodeWithTag("submitted-answer").assertTextEquals("Submitted answer: $correctAnswer")
         compose.onNodeWithTag("points").assertTextEquals("Points: 1")
         compose.onNodeWithTag("wrong-tally").assertTextEquals("Wrong: 2")
         compose.runOnIdle {

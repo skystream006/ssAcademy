@@ -141,8 +141,11 @@ class EquationTest {
         compose.onNodeWithTag("submit-answer").performClick()
         compose.onNodeWithTag("feedback-equation").performScrollTo()
             .assertContentDescriptionEquals("${problem.text} = ${problem.answer}")
+        compose.onNodeWithTag("submitted-answer").performScrollTo()
+            .assertTextEquals("Submitted answer: ${problem.answer + 1}").assertIsDisplayed()
         compose.runOnIdle { model.chooseShowCorrectAnswers(false) }
         compose.onNodeWithTag("feedback-equation").assertDoesNotExist()
+        compose.onNodeWithTag("submitted-answer").assertTextEquals("Submitted answer: ${problem.answer + 1}")
         compose.runOnIdle { model.chooseShowCorrectAnswers(true) }
         compose.onNodeWithTag("feedback-equation").performScrollTo()
             .assertContentDescriptionEquals("${problem.text} = ${problem.answer}")

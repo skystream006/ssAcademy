@@ -341,7 +341,10 @@ class MathGameTest {
         assertEquals("00:00", formatDuration(0))
         assertEquals("00:00", formatDuration(-5))
         assertEquals("01:05", formatDuration(65_999))
-        assertEquals("1:00:01", formatDuration(3_601_000))
+        assertEquals("59:59", formatDuration(3_599_999))
+        assertEquals("60:00", formatDuration(3_600_000))
+        assertEquals("60:01", formatDuration(3_601_000))
+        assertEquals("125:09", formatDuration(7_509_000))
     }
 
     @Test fun everyGameEndsOnlyWhenWrongAnswersExceedTenPercentOfTheTotal() {

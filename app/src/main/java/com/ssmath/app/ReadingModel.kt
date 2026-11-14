@@ -378,9 +378,15 @@ object ReadingEngine {
             "evidence" -> a.content.passage[a.content.evidence]
             else -> null
         }
+        val submitted = when (key) {
+            "answer", "bonus" -> requireNotNull(question(a)).choices[a.fields.getValue("answer").toInt()]
+            "order" -> a.order.joinToString(" ") { a.content.tiles[it] }
+            "evidence" -> a.content.passage[a.fields.getValue("evidence").toInt()]
+            else -> a.fields.getValue(key)
+        }
         val feedback = if (answer != null)
-            "${if (correct) "Correct!" else "Not quite."} Correct answer: $answer"
-        else "Checkpoint saved."
+            "${if (correct) "Correct!" else "Not quite."}\nSubmitted answer: $submitted\nCorrect answer: $answer"
+        else "Checkpoint saved.\nSubmitted answer: $submitted"
         return a.copy(checkpoints = a.checkpoints + (key to check), feedback =
             if (a.game == ReadingGame.GRAMMAR) "$feedback\n${a.content.explanation}" else feedback)
     }
