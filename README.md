@@ -731,7 +731,8 @@ be removed. Adjustments are saved on this device without changing practice histo
 My Pokémons, or existing gift claims. **Back to Admin Menu** returns to the unlocked Admin Menu.
 
 Use **Admin Menu > Slot machine** to select a reward tier, then **Pull lever** to
-spin three vertically rolling slots. Toggle **Fragment reward** to choose whether
+spin three vertically rolling slots with repeating ding sounds (using the device's
+media volume; sounds stop when the app is in the background). Toggle **Fragment reward** to choose whether
 three matching symbols add one fragment or one whole reward to My Rewards.
 Whole rewards are the default, and the choice is saved on this device. Reel images
 and labels reflect the selected mode. Every 3 matching fragments in My Rewards
@@ -740,6 +741,8 @@ chance settings, preserving existing balances and history.
 Non-matching rolls add nothing. Pulling again and leaving the dialog are disabled
 while spinning or saving; a failed save offers a retry without rerolling. The reward
 mode cannot change during a spin or while a failed win is awaiting a save retry.
+After a three-item match is saved, a popup celebrates with a bouncing prize and
+confetti. Press **Keep playing** to dismiss it and return to the slot machine.
 
 In **Debug Menu**, expand **Reading activities**, then press **View reading activities database** to browse the installed activity library,
 filter by game and level, and inspect activity IDs, passages, questions, correct
