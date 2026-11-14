@@ -52,6 +52,17 @@ class MathViewModel(
     private val store = HistoryStore(File(application.filesDir, "practice_history.json"))
     private val storeLock = Mutex()
 
+    internal var slotMachineTier by mutableStateOf<RewardTier?>(null)
+        private set
+    internal var slotMachineRoll by mutableStateOf<SlotMachineRoll?>(null)
+        private set
+    internal var slotMachineBusy by mutableStateOf(false)
+        private set
+    internal var slotMachineError by mutableStateOf<String?>(null)
+        private set
+    internal var slotMachineAwarded by mutableStateOf(false)
+        private set
+
     var screen by mutableStateOf(Screen.SETUP)
         private set
     var mathGamesOpen by mutableStateOf(false)
@@ -1132,6 +1143,66 @@ class MathViewModel(
     }
 
     fun addReward(type: RewardType, fragment: Boolean) = adjustReward(type, fragment, add = true)
+
+    internal fun chooseSlotMachineTier(tier: RewardTier?) {
+        if (slotMachineBusy) return
+        slotMachineTier = tier
+        slotMachineRoll = null
+        slotMachineError = null
+        slotMachineAwarded = false
+    }
+
+    internal fun spinSlotMachine() {
+        val tier = slotMachineTier ?: return
+        if (overlay != Overlay.SETTINGS || slotMachineBusy || removingReward || slotMachineError != null) return
+        if (availableRewardsForTier(tier, disabledRewards, tier3RewardChances).isEmpty()) {
+            slotMachineError = "No rewards are available in this tier. Enable rewards in Available Rewards."
+            return
+        }
+        val roll = SlotMachineRoll(List(3) {
+            requireNotNull(selectRewardFromTier(tier, rewardRandom, disabledRewards, tier3RewardChances))
+        }, rollNumber = (slotMachineRoll?.rollNumber ?: 0) + 1)
+        slotMachineRoll = roll
+        slotMachineAwarded = false
+        slotMachineBusy = true
+        viewModelScope.launch {
+            try {
+                delay(SLOT_MACHINE_DURATION_MS.toLong())
+                saveSlotMachineWin(roll)
+            } finally {
+                slotMachineBusy = false
+            }
+        }
+    }
+
+    internal fun retrySlotMachinePrize() {
+        val roll = slotMachineRoll ?: return
+        if (slotMachineBusy || slotMachineAwarded || slotMachineError == null || roll.winner == null) return
+        slotMachineBusy = true
+        slotMachineError = null
+        viewModelScope.launch {
+            try {
+                saveSlotMachineWin(roll)
+            } finally {
+                slotMachineBusy = false
+            }
+        }
+    }
+
+    private suspend fun saveSlotMachineWin(roll: SlotMachineRoll) {
+        val winner = roll.winner ?: return
+        try {
+            storeLock.withLock {
+                applySnapshot(withContext(ioDispatcher) { store.addReward(winner, fragment = false) })
+            }
+            slotMachineAwarded = true
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            DebugLog.event(DebugEvent.HISTORY_FAILURE, error = error)
+            slotMachineError = "Unable to save your reward. Check the reward balance limit and device storage, then retry."
+        }
+    }
 
     fun removeReward(type: RewardType, fragment: Boolean) = adjustReward(type, fragment, add = false)
 

@@ -459,6 +459,7 @@ private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit, onTransfer:
     val context = LocalContext.current
     val pinStore = remember(context) { AdminPinStore(context.getSharedPreferences("settings", 0)) }
     var showingAdjustments by rememberSaveable { mutableStateOf(false) }
+    var showingSlotMachine by remember { mutableStateOf(false) }
     var changingPin by remember { mutableStateOf(false) }
     var showingReadingGames by rememberSaveable { mutableStateOf(false) }
     var showingReadingLevel by rememberSaveable { mutableStateOf(false) }
@@ -487,6 +488,10 @@ private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit, onTransfer:
         )
         return
     }
+    if (showingSlotMachine) {
+        SlotMachineDialog(model, onDismiss = { showingSlotMachine = false })
+        return
+    }
     if (showingReadingGames) {
         ActiveReadingGamesDialog(model, onDismiss = { showingReadingGames = false })
         return
@@ -507,6 +512,12 @@ private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit, onTransfer:
                     }
                     Button(onClick = { showingAdjustments = true }, modifier = Modifier.fillMaxWidth()) {
                         Text("Add/Remove Rewards", textAlign = TextAlign.Center)
+                    }
+                    Button(onClick = {
+                        model.chooseSlotMachineTier(null)
+                        showingSlotMachine = true
+                    }, modifier = Modifier.fillMaxWidth().testTag("slot-machine")) {
+                        Text("Slot machine", textAlign = TextAlign.Center)
                     }
                     Button(onClick = onTransfer, modifier = Modifier.fillMaxWidth().testTag("collection-transfer")) {
                         Text("Export / Import Collections", textAlign = TextAlign.Center)

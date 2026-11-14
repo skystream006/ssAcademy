@@ -170,13 +170,30 @@ fun selectPrize(
     if (!enabledAtStart || !enabledAtFinish ||
         !qualifiesForReward(questionCount, correct, answered, timedOut, rewardThresholds, matrixRewardTier)) return null
     val tier = rewardTierForGame(questionCount, rewardThresholds, matrixRewardTier) ?: return null
-    val prizes = RewardType.entries.filter { it.tier == tier && it !in disabledRewards }
+    return selectRewardFromTier(tier, random, disabledRewards, tier3RewardChances)
+}
+
+internal fun availableRewardsForTier(
+    tier: RewardTier,
+    disabledRewards: Set<RewardType>,
+    tier3RewardChances: Tier3RewardChances
+): List<RewardType> = RewardType.entries.filter {
+    it.tier == tier && it !in disabledRewards &&
+        (tier != RewardTier.TIER_3 || tier3RewardChances.percentage(it) > 0)
+}
+
+internal fun selectRewardFromTier(
+    tier: RewardTier,
+    random: Random,
+    disabledRewards: Set<RewardType>,
+    tier3RewardChances: Tier3RewardChances
+): RewardType? {
+    val prizes = availableRewardsForTier(tier, disabledRewards, tier3RewardChances)
     if (tier == RewardTier.TIER_3) {
-        val weighted = prizes.filter { tier3RewardChances.percentage(it) > 0 }
-        val total = weighted.sumOf { tier3RewardChances.percentage(it) }
+        val total = prizes.sumOf { tier3RewardChances.percentage(it) }
         if (total == 0) return null
         var ticket = random.nextInt(total)
-        return weighted.first {
+        return prizes.first {
             ticket -= tier3RewardChances.percentage(it)
             ticket < 0
         }

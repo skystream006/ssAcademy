@@ -3,6 +3,7 @@ package com.ssmath.app
 import android.app.Application
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.os.Looper
 import android.view.View
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -29,6 +30,9 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowDialog
+import org.robolectric.Shadows.shadowOf
+import kotlinx.coroutines.Dispatchers
+import java.time.Duration
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class, qualifiers = "w360dp-h800dp")
@@ -49,6 +53,53 @@ class AdminMenuTest {
         val appearance = compose.onNodeWithText("Appearance").fetchSemanticsNode().boundsInRoot
         val admin = compose.onNodeWithTag("admin-menu").fetchSemanticsNode().boundsInRoot
         assertTrue("Admin Menu should follow Appearance", admin.top >= appearance.bottom)
+    }
+
+    @Test fun slotMachineOpensBehindAdminPinAndSelectsAvailableTiers() {
+        val model = MathViewModel(application)
+        model.openSettings()
+        RewardType.entries.filter { it.tier == RewardTier.TIER_2 }.forEach { model.chooseRewardEnabled(it, false) }
+        compose.setContent { MathTheme { SettingsScreen(model) } }
+        compose.onNodeWithTag("slot-machine").assertDoesNotExist()
+        compose.openAdminSettings()
+        compose.onNodeWithTag("slot-machine").performScrollTo().performClick()
+        compose.onNodeWithTag("slot-machine-dialog").assertIsDisplayed()
+        compose.onNodeWithTag("slot-tier-TIER_2").assertIsNotEnabled()
+        compose.onNodeWithTag("slot-tier-TIER_1").performClick()
+        repeat(3) { compose.onNodeWithTag("slot-reel-$it").assertIsDisplayed() }
+        compose.onNodeWithTag("slot-lever").assertIsEnabled()
+        compose.onNodeWithText("Change tier").performScrollTo().performClick()
+        compose.onNodeWithTag("slot-tier-TIER_3").performClick()
+        compose.onNodeWithText("Slot machine - Tier 3").assertIsDisplayed()
+        compose.onNodeWithText("Back to Admin Menu").performClick()
+        compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
+    }
+
+    @Test fun slotMachinePullLocksControlsAndAwardsOnceAcrossRestorationAndRepeatedMatches() {
+        val model = MathViewModel(application, ioDispatcher = Dispatchers.Unconfined)
+        model.openSettings()
+        RewardType.entries.forEach { model.chooseRewardEnabled(it, it == RewardType.LOLLIPOP) }
+        model.chooseSlotMachineTier(RewardTier.TIER_1)
+        val restoration = StateRestorationTester(compose)
+        restoration.setContent { MathTheme { SlotMachineDialog(model, onDismiss = {}) } }
+        compose.mainClock.autoAdvance = false
+        repeat(2) { spin ->
+            compose.onNodeWithTag("slot-lever").performScrollTo().performClick()
+            compose.mainClock.advanceTimeBy(64)
+            compose.onNodeWithTag("slot-lever").assertIsNotEnabled()
+            compose.onNodeWithText("Back to Admin Menu").assertIsNotEnabled()
+            compose.onNodeWithText("Change tier").assertIsNotEnabled()
+            if (spin == 0) restoration.emulateSavedInstanceStateRestore()
+            compose.runOnIdle {
+                shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(SLOT_MACHINE_DURATION_MS.toLong()))
+            }
+            compose.mainClock.advanceTimeBy(SLOT_MACHINE_DURATION_MS.toLong() + 64)
+            repeat(3) { compose.onNodeWithTag("slot-label-$it").assertTextEquals("Lollipop Fragment") }
+            compose.onNodeWithTag("slot-status").assertTextEquals("You won Lollipop! One complete reward added.")
+            compose.onNodeWithTag("slot-lever").assertIsEnabled()
+            compose.runOnIdle { assertEquals(spin + 1, model.rewardBalances[RewardType.LOLLIPOP]?.whole) }
+        }
+        compose.mainClock.autoAdvance = true
     }
 
     @Test fun firstEntryRequiresValidMatchingPinAndEachReopeningRequiresVerification() {
