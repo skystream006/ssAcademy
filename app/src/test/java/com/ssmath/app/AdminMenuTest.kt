@@ -20,6 +20,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.*
 import org.junit.Before
@@ -30,9 +31,12 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowDialog
+import org.robolectric.shadows.ShadowToneGenerator
 import org.robolectric.Shadows.shadowOf
 import kotlinx.coroutines.Dispatchers
+import java.io.File
 import java.time.Duration
+import kotlin.random.Random
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class, qualifiers = "w360dp-h800dp")
@@ -101,11 +105,30 @@ class AdminMenuTest {
             compose.onNodeWithText("Back to Admin Menu").assertIsNotEnabled()
             compose.onNodeWithText("Change tier").assertIsNotEnabled()
             compose.onNodeWithTag("slot-fragment-reward").assertIsNotEnabled()
+            compose.onNodeWithTag("slot-win-dialog").assertDoesNotExist()
             restoration.emulateSavedInstanceStateRestore()
             compose.runOnIdle {
                 shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(SLOT_MACHINE_DURATION_MS.toLong()))
             }
+            compose.mainClock.advanceTimeBy(64)
+            val initialPrizeWidth = compose.onNodeWithTag("slot-win-reward")
+                .fetchSemanticsNode().boundsInRoot.width
             compose.mainClock.advanceTimeBy(SLOT_MACHINE_DURATION_MS.toLong() + 64)
+            val settledPrizeWidth = compose.onNodeWithTag("slot-win-reward")
+                .fetchSemanticsNode().boundsInRoot.width
+            assertTrue("The winning prize should pop into view", settledPrizeWidth > initialPrizeWidth)
+            compose.onNodeWithTag("slot-win-dialog").assertIsDisplayed()
+            compose.onNodeWithText(if (spin == 0) "You won Lollipop!"
+                else "You won Lollipop Fragment!").assertIsDisplayed()
+            compose.onNodeWithTag("slot-win-reward").assertContentDescriptionEquals(
+                rewardImageDescription(RewardType.LOLLIPOP, fragment = spin == 1))
+            compose.onNodeWithTag("slot-win-confetti").assertIsDisplayed()
+            compose.mainClock.autoAdvance = true
+            compose.onNodeWithTag("slot-win-dismiss").performClick()
+            compose.onNodeWithTag("slot-win-dialog").assertDoesNotExist()
+            restoration.emulateSavedInstanceStateRestore()
+            compose.onNodeWithTag("slot-win-dialog").assertDoesNotExist()
+            compose.mainClock.autoAdvance = false
             repeat(3) {
                 compose.onNodeWithTag("slot-label-$it").assertTextEquals(
                     if (spin == 0) "Lollipop" else "Lollipop Fragment")
@@ -118,6 +141,90 @@ class AdminMenuTest {
             compose.runOnIdle { assertEquals(RewardBalance(1, spin), model.rewardBalances[RewardType.LOLLIPOP]) }
         }
         compose.mainClock.autoAdvance = true
+    }
+
+    @Test fun slotMachineNonMatchDoesNotCelebrate() {
+        val random = object : Random() {
+            private var next = 0
+            override fun nextBits(bitCount: Int): Int = 0
+            override fun nextInt(until: Int): Int = next++.mod(until)
+        }
+        val model = MathViewModel(application, ioDispatcher = Dispatchers.Unconfined, rewardRandom = random)
+        model.openSettings()
+        model.chooseSlotMachineTier(RewardTier.TIER_2)
+        compose.setContent { MathTheme { SlotMachineDialog(model, onDismiss = {}) } }
+        compose.onNodeWithTag("slot-lever").performScrollTo().performClick()
+        compose.runOnIdle {
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(SLOT_MACHINE_DURATION_MS.toLong()))
+        }
+        compose.onNodeWithTag("slot-status").assertTextEquals("No match. Pull again!")
+        compose.onNodeWithTag("slot-win-dialog").assertDoesNotExist()
+    }
+
+    @Test fun slotMachineDingsOnlyWhileSpinningAndResumed() {
+        val model = MathViewModel(application, ioDispatcher = Dispatchers.Unconfined)
+        model.openSettings()
+        model.chooseSlotMachineTier(RewardTier.TIER_1)
+        compose.setContent { MathTheme { SlotMachineDialog(model, onDismiss = {}) } }
+        assertTrue(ShadowToneGenerator.getPlayedTones().isEmpty())
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithTag("slot-lever").performScrollTo()
+        compose.mainClock.advanceTimeBy(64)
+        compose.onNodeWithTag("slot-lever").performClick()
+        compose.mainClock.advanceTimeBy(64)
+        compose.runOnIdle {
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(360))
+        }
+        compose.mainClock.advanceTimeBy(360)
+        val rollingCount = ShadowToneGenerator.getPlayedTones().size
+        assertTrue("Expected repeated dings, got $rollingCount", rollingCount > 1)
+        compose.activityRule.scenario.moveToState(Lifecycle.State.STARTED)
+        compose.runOnIdle {
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(360))
+        }
+        compose.mainClock.advanceTimeBy(360)
+        assertEquals(rollingCount, ShadowToneGenerator.getPlayedTones().size)
+        compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
+        compose.runOnIdle {
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(360))
+        }
+        compose.mainClock.advanceTimeBy(360)
+        assertTrue(ShadowToneGenerator.getPlayedTones().size > rollingCount)
+        compose.runOnIdle {
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(SLOT_MACHINE_DURATION_MS.toLong()))
+        }
+        compose.mainClock.advanceTimeBy(SLOT_MACHINE_DURATION_MS.toLong() + 64)
+        val finishedCount = ShadowToneGenerator.getPlayedTones().size
+        compose.runOnIdle {
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(360))
+        }
+        compose.mainClock.advanceTimeBy(360)
+        assertEquals(finishedCount, ShadowToneGenerator.getPlayedTones().size)
+        compose.mainClock.autoAdvance = true
+    }
+
+    @Test fun slotMachineOnlyCelebratesAfterFailedSaveIsSuccessfullyRetried() {
+        val model = MathViewModel(application, ioDispatcher = Dispatchers.Unconfined)
+        model.openSettings()
+        RewardType.entries.forEach { model.chooseRewardEnabled(it, it == RewardType.LOLLIPOP) }
+        model.chooseSlotMachineTier(RewardTier.TIER_1)
+        val blockedWrite = File(application.filesDir, "practice_history.json.tmp")
+        assertTrue(blockedWrite.mkdir())
+        try {
+            compose.setContent { MathTheme { SlotMachineDialog(model, onDismiss = {}) } }
+            compose.onNodeWithTag("slot-lever").performScrollTo().performClick()
+            compose.runOnIdle {
+                shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(SLOT_MACHINE_DURATION_MS.toLong()))
+            }
+            compose.onNodeWithTag("slot-win-dialog").assertDoesNotExist()
+            compose.onNodeWithTag("slot-retry").assertIsDisplayed()
+            assertTrue(blockedWrite.delete())
+            compose.onNodeWithTag("slot-retry").performClick()
+            compose.onNodeWithTag("slot-win-dialog").assertIsDisplayed()
+            compose.onNodeWithText("One complete reward added to My Rewards.").assertIsDisplayed()
+        } finally {
+            blockedWrite.delete()
+        }
     }
 
     @Test fun firstEntryRequiresValidMatchingPinAndEachReopeningRequiresVerification() {

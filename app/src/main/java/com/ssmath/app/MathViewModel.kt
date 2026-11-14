@@ -60,6 +60,8 @@ class MathViewModel(
         private set
     internal var slotMachineBusy by mutableStateOf(false)
         private set
+    internal var slotMachineSpinning by mutableStateOf(false)
+        private set
     internal var slotMachineError by mutableStateOf<String?>(null)
         private set
     internal var slotMachineAwarded by mutableStateOf(false)
@@ -1177,11 +1179,14 @@ class MathViewModel(
         slotMachineRoll = roll
         slotMachineAwarded = false
         slotMachineBusy = true
+        slotMachineSpinning = true
         viewModelScope.launch {
             try {
                 delay(SLOT_MACHINE_DURATION_MS.toLong())
+                slotMachineSpinning = false
                 saveSlotMachineWin(roll)
             } finally {
+                slotMachineSpinning = false
                 slotMachineBusy = false
             }
         }

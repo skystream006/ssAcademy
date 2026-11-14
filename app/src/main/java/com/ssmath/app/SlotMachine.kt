@@ -1,18 +1,25 @@
 package com.ssmath.app
 
+import android.media.AudioManager
+import android.media.ToneGenerator
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
@@ -21,7 +28,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlin.math.floor
+import kotlin.math.sin
 
 internal const val SLOT_MACHINE_DURATION_MS = 2_600
 
@@ -43,6 +56,8 @@ internal fun SlotMachineDialog(model: MathViewModel, onDismiss: () -> Unit) {
     val roll = model.slotMachineRoll
     val busy = model.slotMachineBusy
     val fragmentReward = model.slotMachineFragmentReward
+    var celebrationDismissed by rememberSaveable(roll) { mutableStateOf(false) }
+    SlotMachineRollingSound(roll, model.slotMachineSpinning)
     SettingsDialog(
         onDismissRequest = { if (!busy) onDismiss() },
         title = { Text(if (tier == null) "Slot machine: select a tier" else "Slot machine - ${tier.label}") },
@@ -125,6 +140,97 @@ internal fun SlotMachineDialog(model: MathViewModel, onDismiss: () -> Unit) {
         },
         properties = DialogProperties(dismissOnBackPress = !busy, dismissOnClickOutside = !busy),
         modifier = Modifier.testTag("slot-machine-dialog")
+    )
+    if (model.slotMachineAwarded && !busy && !celebrationDismissed) {
+        roll?.takeIf { it.winner != null }?.let { winningRoll ->
+            SlotMachineWinDialog(winningRoll, onDismiss = { celebrationDismissed = true })
+        }
+    }
+}
+
+@Composable
+private fun SlotMachineRollingSound(roll: SlotMachineRoll?, spinning: Boolean) {
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(roll, spinning, lifecycle) {
+        if (roll == null || !spinning) return@LaunchedEffect
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            val sound = try {
+                ToneGenerator(AudioManager.STREAM_MUSIC, 55)
+            } catch (error: RuntimeException) {
+                DebugLog.event(DebugEvent.SOUND_FAILURE, error = error)
+                return@repeatOnLifecycle
+            }
+            try {
+                while (isActive) {
+                    if (!sound.startTone(ToneGenerator.TONE_PROP_BEEP, 45)) {
+                        DebugLog.event(DebugEvent.SOUND_FAILURE)
+                        break
+                    }
+                    delay(120)
+                }
+            } finally {
+                sound.stopTone()
+                sound.release()
+            }
+        }
+    }
+}
+
+@Composable
+private fun SlotMachineWinDialog(roll: SlotMachineRoll, onDismiss: () -> Unit) {
+    val winner = requireNotNull(roll.winner)
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val pop = remember(roll) { Animatable(0f) }
+    val burst = remember(roll) { Animatable(0f) }
+    LaunchedEffect(roll, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            pop.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 180f))
+        }
+    }
+    LaunchedEffect(roll, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            burst.animateTo(1f, tween(((1f - burst.value) * 1_600).toInt().coerceAtLeast(1)))
+        }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Three matching items!") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                val colors = listOf(MaterialTheme.colorScheme.primary,
+                    MaterialTheme.colorScheme.secondary, MaterialTheme.colorScheme.tertiary)
+                Box(Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+                    Canvas(Modifier.matchParentSize().testTag("slot-win-confetti")) {
+                        repeat(24) { index ->
+                            val progress = burst.value
+                            val x = size.width / 2 + (index % 9 - 4) * size.width / 9 * progress
+                            val y = size.height / 2 - sin(progress * Math.PI).toFloat() *
+                                size.height * (0.3f + index % 4 * 0.1f) + progress * size.height * 0.4f
+                            drawCircle(colors[index % colors.size], radius = (3 + index % 4).dp.toPx(),
+                                center = Offset(x, y), alpha = 1f - progress)
+                        }
+                    }
+                    RewardImage(winner, fragment = roll.fragmentReward,
+                        modifier = Modifier.size(144.dp).testTag("slot-win-reward").graphicsLayer {
+                            scaleX = 0.5f + pop.value * 0.5f
+                            scaleY = 0.5f + pop.value * 0.5f
+                            rotationZ = (1f - pop.value) * -12f
+                        })
+                }
+                Text("You won ${if (roll.fragmentReward) winner.fragmentLabel else winner.label}!",
+                    style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
+                Text(if (roll.fragmentReward) "One fragment added to My Rewards."
+                    else "One complete reward added to My Rewards.", textAlign = TextAlign.Center)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss, modifier = Modifier.testTag("slot-win-dismiss")) {
+                Text("Keep playing")
+            }
+        },
+        modifier = Modifier.testTag("slot-win-dialog")
     )
 }
 
