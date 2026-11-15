@@ -317,7 +317,7 @@ class PokemonSettingsTest {
         }
     }
 
-    @Test fun sevenDescriptionTapsOpenDebugMenuAndOnlyTheButtonAddsAnimations() {
+    @Test fun debugMenuRequiresAdminUnlockAndOnlyTheButtonAddsAnimations() {
         val store = HistoryStore(file)
         store.collectPokemon(Celebration.SQUIRTLE)
         val before = store.loadSnapshot()
@@ -327,11 +327,16 @@ class PokemonSettingsTest {
         compose.setContent { MathAppContent(model) }
         compose.onNodeWithText("Debug logging").performScrollTo().performClick()
         val description = compose.onNodeWithTag("debug-logging-description").performScrollTo()
-        repeat(6) { description.performClick() }
+        repeat(7) { description.performTouchInput { click() } }
         assertEquals(before.pokemons, model.pokemons)
         assertEquals(before, store.loadSnapshot())
         compose.onNodeWithText("Debug Menu").assertDoesNotExist()
-        description.performClick()
+        compose.onNodeWithTag("debug-menu").assertDoesNotExist()
+        compose.onNodeWithTag("admin-menu").performScrollTo().performClick()
+        compose.onNodeWithTag("admin-pin-dialog").assertIsDisplayed()
+        compose.onNodeWithTag("debug-menu").assertDoesNotExist()
+        compose.onNodeWithText("Cancel").performClick()
+        compose.openDebugSettings()
         compose.onNodeWithText("Debug Menu").assertIsDisplayed()
         listOf("Game Settings", "My Rewards", "Add/Remove Rewards", "Available Rewards").forEach {
             compose.onNodeWithText(it).assertDoesNotExist()
@@ -342,8 +347,9 @@ class PokemonSettingsTest {
         compose.onNodeWithText("Add all animations").assertIsDisplayed()
         assertEquals(before, store.loadSnapshot())
         compose.onNodeWithText("Close").performClick()
+        compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
         assertEquals(before.pokemons, model.pokemons)
-        repeat(7) { description.performClick() }
+        compose.openDebugSettings()
         compose.onNodeWithText("My Pokémons").performScrollTo().performClick()
         compose.onNodeWithText("Add all animations").performClick()
         val expected = before.copy(pokemons = Celebration.entries.toSet())
@@ -352,10 +358,11 @@ class PokemonSettingsTest {
         compose.onNodeWithText("Add all animations").assertIsNotEnabled()
         compose.onNodeWithText("${Celebration.entries.size}/${Celebration.entries.size} animations collected").assertIsDisplayed()
         compose.onNodeWithText("Close").performClick()
-        repeat(7) { description.performClick() }
+        compose.openDebugSettings()
         compose.onNodeWithText("My Pokémons").performScrollTo().performClick()
         compose.onNodeWithText("Add all animations").assertIsNotEnabled()
         assertEquals(expected, store.loadSnapshot())
+        compose.onNodeWithText("Close").performClick()
         compose.onNodeWithText("Close").performClick()
         assertFalse(DebugLog.enabled.value)
         compose.onNodeWithContentDescription("Debug logging").performScrollTo().assertIsOff()
@@ -373,9 +380,7 @@ class PokemonSettingsTest {
         val model = model()
         model.openSettings()
         compose.setContent { MathAppContent(model) }
-        compose.onNodeWithText("Debug logging").performScrollTo().performClick()
-        val description = compose.onNodeWithTag("debug-logging-description").performScrollTo()
-        repeat(7) { description.performClick() }
+        compose.openDebugSettings()
         compose.onNodeWithText("My Pokémons").performScrollTo().performClick()
         compose.onNodeWithText("162/${Celebration.entries.size} animations collected").assertIsDisplayed()
         compose.onNodeWithText("Add all animations").assertIsEnabled().performClick().assertIsNotEnabled()
@@ -391,15 +396,13 @@ class PokemonSettingsTest {
         model.chooseTextSize(200)
         model.openSettings()
         compose.setContent { MathAppContent(model) }
-        compose.onNodeWithText("Debug logging").performScrollTo().performClick()
-        val description = compose.onNodeWithTag("debug-logging-description").performScrollTo()
-        repeat(7) { description.performClick() }
+        compose.openDebugSettings()
         assertTextFits("Debug Menu")
         compose.onNodeWithText("My Pokémons").performScrollTo().performClick()
         compose.onNodeWithText("Add all animations").performScrollTo()
         assertTextFits("Add all animations")
         compose.onNodeWithText("Close").performClick()
-        compose.openAdminSettings()
+        compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
         compose.onNodeWithText("Available Rewards").performScrollTo().performClick()
         RewardTier.entries.forEach { tier ->
             val heading = tier.label

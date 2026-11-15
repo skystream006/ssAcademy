@@ -145,6 +145,10 @@ class AdminMenuTest {
         }
         compose.mainClock.advanceTimeBy(SLOT_MACHINE_DURATION_MS.toLong() + 64)
         compose.onNodeWithTag("slot-win-dialog").assertIsDisplayed()
+        val confetti = compose.onNodeWithTag("slot-win-confetti").getUnclippedBoundsInRoot()
+        assertEquals((confetti.right - confetti.left).value, (confetti.bottom - confetti.top).value, 1f)
+        val reward = compose.onNodeWithTag("slot-win-reward").getUnclippedBoundsInRoot()
+        assertEquals((confetti.right - confetti.left).value * 0.72f, (reward.right - reward.left).value, 1f)
         compose.onNodeWithText("Bonus: ${standard.collectionLabel}").assertIsDisplayed()
         compose.onNodeWithText("Bonus: ${mega.collectionLabel}").assertIsDisplayed()
         compose.runOnIdle {
@@ -376,7 +380,9 @@ class AdminMenuTest {
         val restoration = StateRestorationTester(compose)
         restoration.setContent { MathAppContent(model) }
         compose.openAdminSettings()
+        compose.openDebugSettings()
         restoration.emulateSavedInstanceStateRestore()
+        compose.onNodeWithTag("debug-dialog").assertDoesNotExist()
         compose.onNodeWithTag("admin-dialog").assertDoesNotExist()
         compose.onNodeWithTag("admin-menu").performScrollTo().performClick()
         compose.onNodeWithText("Enter Admin PIN").assertIsDisplayed()
@@ -522,6 +528,8 @@ class AdminMenuTest {
         compose.onNodeWithContentDescription("Disable Admin PIN lock").assertIsOff().performClick().assertIsOn()
         assertFalse(MathViewModel(application).adminPinLockEnabled)
         compose.onNodeWithText("Close").performClick()
+        compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
+        compose.onNodeWithText("Close").performClick()
         repeat(2) {
             compose.onNodeWithTag("admin-menu").performScrollTo().performClick()
             compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
@@ -529,12 +537,13 @@ class AdminMenuTest {
             compose.onNodeWithText("Close").performClick()
         }
         compose.openDebugSettings()
-        compose.onNodeWithContentDescription("Disable Admin PIN lock").performClick().assertIsOff()
-        compose.onNodeWithText("Close").performClick()
+        compose.onNodeWithContentDescription("Disable Admin PIN lock").performClick()
+        compose.onNodeWithTag("debug-dialog").assertDoesNotExist()
+        compose.onNodeWithTag("admin-dialog").assertDoesNotExist()
+        compose.onNodeWithTag("admin-pin-dialog").assertIsDisplayed()
         assertTrue(MathViewModel(application).adminPinLockEnabled)
         assertEquals(hash, preferences.getString("admin_pin_hash", null))
         assertEquals(salt, preferences.getString("admin_pin_salt", null))
-        compose.onNodeWithTag("admin-menu").performScrollTo().performClick()
         compose.onNodeWithText("Enter Admin PIN").assertIsDisplayed()
         submit("4826")
         awaitTag("admin-dialog")
@@ -717,6 +726,7 @@ class AdminMenuTest {
             compose.onNodeWithText("Close").performClick()
             compose.openDebugSettings()
             assertEquals(surface, dialogCornerColor())
+            compose.onNodeWithText("Close").performClick()
             compose.onNodeWithText("Close").performClick()
             compose.runOnIdle { assertEquals(if (dark) "dark" else "light", model.mode) }
         }

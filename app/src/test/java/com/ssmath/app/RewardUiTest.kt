@@ -44,6 +44,21 @@ class RewardUiTest {
         compose.mainClock.autoAdvance = false
     }
 
+    @Test
+    @Config(qualifiers = "w1000dp-h480dp")
+    fun wideGiftPopupGrowsProportionallyAndCanStillBeDismissed() {
+        compose.setContent {
+            MathTheme { RewardGiftDialog(result(), false, null, {}, {}) }
+        }
+        compose.mainClock.advanceTimeBy(64)
+        val bounds = compose.onNodeWithTag("gift-box").getUnclippedBoundsInRoot()
+        val height = bounds.bottom - bounds.top
+        val width = bounds.right - bounds.left
+        assertTrue(height > 220.dp)
+        assertEquals(width.value * 220f / 280f, height.value, 1f)
+        compose.onNodeWithText("Not now").assertIsDisplayed().performClick()
+    }
+
     @Test fun allRewardIllustrationsExposeAccurateImageDescriptions() {
         compose.setContent {
             MathTheme {

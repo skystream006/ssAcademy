@@ -6,8 +6,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -431,7 +431,7 @@ internal fun CelebrationDialog(
 
 @Composable
 internal fun CelebrationScene(celebration: Celebration, progress: () -> Float) {
-    Box(Modifier.fillMaxWidth().height(220.dp).clip(RoundedCornerShape(16.dp))
+    Box(Modifier.fillMaxWidth().aspectRatio(320f / 220f).clip(RoundedCornerShape(16.dp))
         .testTag("celebration-${celebration.name}").semantics {
             contentDescription = celebration.description
             role = Role.Image

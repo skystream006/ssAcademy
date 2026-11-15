@@ -145,7 +145,9 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    are collected on live presentation, never by replay, and do not require prize fragments
    to be enabled. Early exits and timeouts do not award celebrations.
    Each animation shows its name alongside the scene, which says **Hurray!!**. These animations
-   are drawn in the app and work offline. Press **Next celebration** after the
+   are drawn in the app and work offline. Popup scenes scale proportionally with their width
+   instead of using a fixed height; tall scenes can be scrolled without hiding the dialog actions.
+   Press **Next celebration** after the
    Mega animation, then **View results** after the standard animation, or wait for each to finish.
    Other games show **View results** after their single animation.
    In both math modes, the game ends when wrong answers go **above 10%** of the
@@ -186,7 +188,7 @@ Use **Change PIN** inside Admin Menu to enter your current PIN and confirm a new
 **4–8 digit PIN**, then press **Save PIN**. Successful changes return to the main Admin Menu;
 after closing the menu, the next entry requires the new PIN. Cancelling keeps the existing PIN. Incorrect current
 PINs share the same five-attempt, 30-second lockout.
-**Debug Menu > Disable Admin PIN lock** skips PIN entry and creation when enabled.
+**Admin Menu > Debug Menu > Disable Admin PIN lock** skips PIN entry and creation when enabled.
 It is off by default and remembered on this device. Anyone using the device can then
 open Admin Menu. Re-enabling the lock requires the existing PIN again (or creation if
 none was configured); disabling it never deletes the PIN.
@@ -726,8 +728,9 @@ Only event names, status numbers and exception class names are recorded — neve
 answers, practice results or other personal content. Logs are stored privately on
 the device and can be viewed, shared or cleared from Settings.
 
-Tap the description beginning **Off by default** below **Enable debug logging**
-seven times to open the **Debug Menu** dialog. Opening or closing it does not add animations.
+Open **Settings > Admin Menu > Debug Menu** after unlocking Admin Menu.
+The former seven-tap logging-description shortcut is no longer available.
+Closing Debug Menu returns to the unlocked Admin Menu. Opening or closing it does not add animations.
 Its **My Pokémons** and **Reading activities** sections start collapsed.
 Game settings and reward controls are instead in the PIN-protected **Admin Menu**.
 Expand **My Pokémons**, then press **Add all animations** to add all celebrations, including **Mega Pokémons**, to **My Pokémons**, without

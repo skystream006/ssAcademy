@@ -291,7 +291,7 @@ private fun SlotMachineWinDialog(roll: SlotMachineRoll, activityReward: Boolean,
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 val colors = listOf(MaterialTheme.colorScheme.primary,
                     MaterialTheme.colorScheme.secondary, MaterialTheme.colorScheme.tertiary)
-                Box(Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+                Box(Modifier.fillMaxWidth().aspectRatio(1f), contentAlignment = Alignment.Center) {
                     Canvas(Modifier.matchParentSize().testTag("slot-win-confetti")) {
                         repeat(24) { index ->
                             val progress = burst.value
@@ -303,7 +303,7 @@ private fun SlotMachineWinDialog(roll: SlotMachineRoll, activityReward: Boolean,
                         }
                     }
                     RewardImage(winner, fragment = roll.fragmentReward,
-                        modifier = Modifier.size(144.dp).testTag("slot-win-reward").graphicsLayer {
+                        modifier = Modifier.fillMaxWidth(0.72f).aspectRatio(1f).testTag("slot-win-reward").graphicsLayer {
                             scaleX = 0.5f + pop.value * 0.5f
                             scaleY = 0.5f + pop.value * 0.5f
                             rotationZ = (1f - pop.value) * -12f
