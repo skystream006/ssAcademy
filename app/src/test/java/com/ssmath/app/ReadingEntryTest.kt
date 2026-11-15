@@ -3,6 +3,7 @@ package com.ssmath.app
 import android.app.Application
 import android.os.Looper
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTextContains
@@ -16,6 +17,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ApplicationProvider
 import java.io.File
+import java.time.Duration
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -124,6 +126,7 @@ class ReadingEntryTest {
         store.save(ReadingEngine.addProfile(store.load(), "Ari", "reader-a"))
         val reading = reading()
         val app = show()
+        RewardType.entries.forEach { app.chooseRewardEnabled(it, it == RewardType.LOLLIPOP) }
         await { reading.data != null && reading.packStatus != null && !reading.saving }
         compose.onNodeWithTag("subject-Reading").performClick()
         compose.onNodeWithTag("reading-game-MISSING").performScrollTo().performClick()
@@ -149,8 +152,16 @@ class ReadingEntryTest {
         compose.onNodeWithTag("reading-session-summary").assertIsDisplayed()
         await { app.readingRewardResults.singleOrNull()?.pokemonReward != null }
         compose.runOnIdle { app.dismissReadingCelebration() }
-        compose.onNodeWithTag("gift-box").assertIsDisplayed().performClick()
-        await { app.readingRewardResult?.prize != null && !app.claimingReadingReward }
+        compose.onNodeWithTag("slot-machine-dialog").assertIsDisplayed()
+        compose.onNodeWithTag("gift-box").assertDoesNotExist()
+        compose.onNodeWithTag("slot-fragment-reward").assertDoesNotExist()
+        compose.onNodeWithTag("slot-lever").performScrollTo().performClick()
+        compose.runOnIdle {
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(SLOT_MACHINE_DURATION_MS.toLong()))
+        }
+        await { app.readingRewardResult?.prize != null && !app.slotMachineBusy }
+        compose.onNodeWithTag("slot-win-reward").assertContentDescriptionEquals(
+            rewardImageDescription(RewardType.LOLLIPOP, fragment = true))
         assertEquals(1, app.rewardBalances.values.sumOf { it.totalFragments })
         assertTrue(app.history.isEmpty())
         assertEquals(25, reading.data?.activeSession?.questionCount)

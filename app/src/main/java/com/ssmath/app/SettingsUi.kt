@@ -514,9 +514,9 @@ private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit, onTransfer:
                         Text("Add/Remove Rewards", textAlign = TextAlign.Center)
                     }
                     Button(onClick = {
-                        model.chooseSlotMachineTier(null)
+                        model.openAdminSlotMachine()
                         showingSlotMachine = true
-                    }, modifier = Modifier.fillMaxWidth().testTag("slot-machine")) {
+                    }, enabled = !model.slotMachineBusy, modifier = Modifier.fillMaxWidth().testTag("slot-machine")) {
                         Text("Slot machine", textAlign = TextAlign.Center)
                     }
                     Button(onClick = onTransfer, modifier = Modifier.fillMaxWidth().testTag("collection-transfer")) {
@@ -524,8 +524,10 @@ private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit, onTransfer:
                     }
                     HorizontalDivider()
                     CollapsibleSettingsSection("Available Rewards", defaultExpanded = false) {
-                        Text("Choose which rewards can be awarded when Math and Reading games finish. Existing prizes and fragments stay available.")
+                        Text("Choose which fragments can be won after Math and Reading games finish with 90% or more correct. " +
+                            "Existing prizes and earned slot rewards stay available.")
                         Text("Set minimum questions separately for each activity under Game Settings.")
+                        AdminSlotMachineBonuses(model.pokemons, tier = null)
                         RewardTier.entries.forEach { tier ->
                             Text(tier.label, Modifier.fillMaxWidth(),
                                 style = MaterialTheme.typography.titleSmall)
@@ -538,6 +540,9 @@ private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit, onTransfer:
                                 }
                             }
                             if (tier == RewardTier.TIER_3) Tier3ChanceSettings(model)
+                            SlotMachineAvailableRewards(
+                                slotMachineRewardPool(tier, model.disabledRewards, model.tier3RewardChances), tier,
+                                tagPrefix = "admin-slot")
                         }
                         Text("If no enabled reward has a positive chance in a tier, games in that tier give no prize.")
                     }
@@ -650,7 +655,8 @@ private fun Tier3ChanceSettings(model: MathViewModel) {
     val total = if (percentages.all { it != null }) percentages.sumOf { requireNotNull(it) } else null
     Text("Tier 3 chances must total 100%. Use whole percentages from 0 to 100; 0% never awards that reward. " +
         "Disabled rewards are excluded and the remaining enabled chances are scaled proportionally. " +
-        "Changes apply when a game finishes.")
+        "These are per-reel chances; matching all three determines the winning reward. " +
+        "Actual slot odds are shown below. Changes apply when a game finishes.")
     listOf(RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3,
         RewardType.GOOD_BEHAVIOR_POINT).forEachIndexed { index, type ->
         Text("${type.label} chance (%)", style = MaterialTheme.typography.bodyMedium)
@@ -775,7 +781,7 @@ private fun GameSettings(
         CollapsibleSettingsSection("Math Rewards System", defaultExpanded = false) {
             SubjectRewardsSetting(model, Subject.MATH,
                 "Earn prize fragments in math challenges by meeting each game's reward requirements " +
-                    "with over 90% correct.", title = "Enable math rewards")
+                    "with 90% or more correct, then win one fragment in the slot machine.", title = "Enable math rewards")
             Text("Choose rewards for each game. Games and earned rewards remain available when rewards are off.",
                 style = MaterialTheme.typography.bodySmall)
             MathRewardGame.entries.forEach { game ->
@@ -857,7 +863,7 @@ private fun GameSettings(
         CollapsibleSettingsSection("Reading Rewards System", defaultExpanded = false) {
             SubjectRewardsSetting(model, Subject.READING,
                 "Earn prize fragments by meeting each reading game's minimum questions " +
-                    "with over 90% correct.", title = "Enable reading rewards")
+                    "with 90% or more correct, then win one fragment in the slot machine.", title = "Enable reading rewards")
             Text("Choose rewards for each game. Games and earned rewards remain available when rewards are off.",
                 style = MaterialTheme.typography.bodySmall)
             ReadingGame.entries.forEach { game ->
@@ -1146,7 +1152,7 @@ fun PokemonsScreen(model: MathViewModel) {
                                 })
                         }
                         if (category == CelebrationCategory.MEGA_POKEMONS) {
-                            Text("Only obtainable in the Multiplication Matrix Rewards Game.",
+                            Text("Obtainable in the Multiplication Matrix Rewards Game and Tier 3 Admin slots.",
                                 style = MaterialTheme.typography.bodySmall,
                                 modifier = Modifier.padding(top = 4.dp))
                         }
@@ -1180,7 +1186,7 @@ fun PokemonsScreen(model: MathViewModel) {
             if (collected.isEmpty()) {
                 item(key = "empty-collection", span = { GridItemSpan(maxLineSpan) }) {
                     Text("Finish practices to collect Other celebrations. Pokémon can appear in math challenges after 15 or more questions. " +
-                        "Mega Pokémons are exclusive to the Multiplication Matrix Rewards Game.",
+                        "Mega Pokémons are earned in the Multiplication Matrix Rewards Game and Tier 3 Admin slots.",
                         Modifier.padding(8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
@@ -1203,8 +1209,10 @@ fun HistoryScreen(model: MathViewModel) {
             ResultsContent(detail, title = null, showCorrectAnswers = model.showCorrectAnswers,
                 verticalEquations = model.verticalEquations) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    if (detail.prizeType != null && detail.prize == null) {
-                        Button(onClick = { model.showRewardForResult(detail) }) { Text("Open gift box") }
+                    if (detail.hasUnclaimedReward) {
+                        Button(onClick = { model.showRewardForResult(detail) }) {
+                            Text(if (detail.slotReward != null) "Open slot machine" else "Open gift box")
+                        }
                     }
                     OutlinedButton(onClick = model::closeOverlay, modifier = Modifier.widthIn(min = 160.dp)) { Text("Back") }
                 }
@@ -1231,7 +1239,9 @@ fun HistoryScreen(model: MathViewModel) {
                                     Text("${formatFinishedAt(result.finishedAt)}\n${result.correct} right · ${result.wrong} wrong · ${formatDuration(result.durationMs)}")
                                     result.prize?.let { Text("Prize: ${it.type.fragmentLabel}") }
                                     result.pokemonRewards.forEach { Text("My Pokémons: ${it.collectionLabel}") }
-                                    if (result.prizeType != null && result.prize == null) Text("Prize waiting — open this result to claim")
+                                    if (result.hasUnclaimedReward) Text(if (result.slotReward != null)
+                                        "Fragment waiting — open this result to play the slot machine"
+                                        else "Prize waiting — open this result to claim")
                                 }
                             },
                             leadingContent = {

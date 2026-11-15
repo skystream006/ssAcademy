@@ -42,14 +42,14 @@ class ReadingSessionTest {
             val finished = ReadingEngine.finish(data, rewardsEnabled = finishEnabled,
                 rewardThresholds = RewardThresholds(1, 2, 3), tier3RewardChances = Tier3RewardChances(0, 100, 0))
             assertEquals(if (startEnabled && finishEnabled) RewardType.TOYS_2 else null,
-                finished.activeSession?.prizeType)
+                finished.activeSession?.slotReward?.weights?.keys?.single())
             ReadingEngine.validate(finished)
             val id = requireNotNull(finished.activeSession).id
             assertEquals(finished, ReadingEngine.endSession(finished, id, rewardsEnabled = true,
                 tier3RewardChances = Tier3RewardChances(100, 0, 0)))
             val disabled = ReadingEngine.finish(data, rewardThresholds = RewardThresholds(1, 2, 3),
                 disabledRewards = setOf(RewardType.TOYS_2), tier3RewardChances = Tier3RewardChances(0, 100, 0))
-            assertNull(disabled.activeSession?.prizeType)
+            assertNull(disabled.activeSession?.slotReward)
             ReadingEngine.validate(disabled)
         }
     }
@@ -84,7 +84,7 @@ class ReadingSessionTest {
             data = ReadingEngine.finish(data, rewardThresholds = thresholds)
             val session = requireNotNull(data.activeSession)
             assertEquals(thresholds, session.rewardThresholds)
-            assertEquals(thresholds.tierForQuestionCount(count), session.prizeType?.tier)
+            assertEquals(thresholds.tierForQuestionCount(count), session.slotReward?.tier)
             assertEquals(count - if (wrongFinalAnswer) 1 else 0, data.sessionCorrect(session))
             ReadingEngine.validate(data)
             assertEquals(data, ReadingEngine.finish(data, rewardsEnabled = false, rewardThresholds = RewardThresholds(999, 1000)))
@@ -102,11 +102,11 @@ class ReadingSessionTest {
             repeat(14) { data = ReadingEngine.nextSessionActivity(readingSolve(data)) }
             data = readingAnswer(data, readingCorrect(data))
             val completed = ReadingEngine.finish(data, rewardsEnabled = enabledAtFinish, rewardThresholds = thresholds)
-            assertEquals(enabledAtStart && enabledAtFinish, completed.activeSession?.prizeType != null)
+            assertEquals(enabledAtStart && enabledAtFinish, completed.activeSession?.slotReward != null)
             ReadingEngine.validate(completed)
             val disabled = ReadingEngine.finish(data, rewardThresholds = thresholds,
                 disabledRewards = RewardType.entries.filter { it.tier == RewardTier.TIER_1 }.toSet())
-            assertNull(disabled.activeSession?.prizeType)
+            assertNull(disabled.activeSession?.slotReward)
             ReadingEngine.validate(disabled)
         }
         var failed = readingSessionFixture()
@@ -117,7 +117,7 @@ class ReadingSessionTest {
         }
         assertNotNull(failed.activeSession?.finishedAt)
         assertEquals(thresholds, failed.activeSession?.rewardThresholds)
-        assertNull(failed.activeSession?.prizeType)
+        assertNull(failed.activeSession?.slotReward)
         ReadingEngine.validate(failed)
     }
 
@@ -311,7 +311,8 @@ class ReadingSessionTest {
             data = readingAnswer(data, readingCorrect(data))
             val disabled = RewardType.entries.toSet() - RewardType.LOLLIPOP
             data = ReadingEngine.finish(data, rewardsEnabled = enabledAtFinish, disabledRewards = disabled)
-            assertEquals(if (enabledAtStart && enabledAtFinish) RewardType.LOLLIPOP else null, data.activeSession?.prizeType)
+            assertEquals(if (enabledAtStart && enabledAtFinish) RewardType.LOLLIPOP else null,
+                data.activeSession?.slotReward?.weights?.keys?.single())
             @Suppress("DEPRECATION") // Session prizes must not re-enable legacy checkpoint rewards.
             assertTrue(data.attempts.all { it.checkpoints.values.none { c -> c.rewardGranted } })
             ReadingEngine.validate(data)
@@ -324,6 +325,7 @@ class ReadingSessionTest {
         assertEquals(45, data.sessionCorrect(requireNotNull(data.activeSession)))
         assertNotNull(data.activeSession?.finishedAt)
         assertNull(data.activeSession?.prizeType)
+        assertNotNull(data.activeSession?.slotReward)
         ReadingEngine.validate(data)
     }
 
@@ -338,6 +340,8 @@ class ReadingSessionTest {
             data.copy(sessions = listOf(session.copy(ownerId = "reader-b"))),
             data.copy(sessions = listOf(session.copy(game = ReadingGame.STUDIO))),
             data.copy(sessions = listOf(session.copy(prizeType = RewardType.LOLLIPOP))),
+            data.copy(sessions = listOf(session.copy(slotReward = SlotMachineRewardPool(
+                RewardTier.TIER_1, mapOf(RewardType.LOLLIPOP to 1))))),
             data.copy(sessions = listOf(session.copy(finishedAt = session.startedAt))),
             data.copy(sessions = listOf(session.copy(timedOut = true))),
             data.copy(sessions = listOf(session.copy(elapsedMs = -1)))

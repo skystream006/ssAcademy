@@ -125,7 +125,7 @@ class ReadingStoreTest {
             await { model.data?.activeSession?.finishedAt != null && !model.saving }
             val session = requireNotNull(storage.saved.activeSession)
             assertEquals(appModel.rewardThresholds(game), session.rewardThresholds)
-            assertEquals(RewardTier.TIER_1, session.prizeType?.tier)
+            assertEquals(RewardTier.TIER_1, session.slotReward?.tier)
             ReadingEngine.validate(storage.saved)
         }
     }
@@ -148,7 +148,7 @@ class ReadingStoreTest {
             await { model.data?.activeSession?.finishedAt != null && !model.saving }
             val session = requireNotNull(model.data?.activeSession)
             assertEquals(RewardThresholds(15, 25), session.rewardThresholds)
-            assertEquals(if (count == 15) RewardTier.TIER_1 else RewardTier.TIER_2, session.prizeType?.tier)
+            assertEquals(if (count == 15) RewardTier.TIER_1 else RewardTier.TIER_2, session.slotReward?.tier)
             settings.saveRewardThresholds(ReadingGame.MISSING.rewardPreferencePrefix, RewardThresholds(200, 300))
             settings.edit().putBoolean("reading_rewards_enabled", false).commit()
             val restored = ReadingStore(file).load()
@@ -173,7 +173,7 @@ class ReadingStoreTest {
         await { model.data?.activeSession?.finishedAt != null && !model.saving }
         val finished = requireNotNull(model.data)
         assertEquals(RewardThresholds(), finished.activeSession?.rewardThresholds)
-        assertNull(finished.activeSession?.prizeType)
+        assertNull(finished.activeSession?.slotReward)
         settings.edit().putInt("reward_tier_2_minimum", 25).commit()
         model.submit("answer")
         model.finishActivity()
@@ -215,7 +215,7 @@ class ReadingStoreTest {
                     if (completion.endsWith("finish")) model.finishActivity() else model.submit("answer")
                     await { model.data?.activeSession?.finishedAt != null && !model.saving }
                     val finished = requireNotNull(model.data)
-                    assertEquals(if (disableWinner) null else type, finished.activeSession?.prizeType)
+                    assertEquals(if (disableWinner) null else type, finished.activeSession?.slotReward?.weights?.keys?.single())
                     assertEquals(RewardThresholds(1, 2, 3), finished.activeSession?.rewardThresholds)
                     ReadingEngine.validate(finished)
                     val store = ReadingStore(file)
@@ -236,7 +236,7 @@ class ReadingStoreTest {
         var data = readingSessionFixture(count = 100)
         repeat(100) { data = ReadingEngine.nextSessionActivity(readingSolve(data)) }
         val original = requireNotNull(data.activeSession)
-        data = data.copy(sessions = listOf(original.copy(prizeType = RewardType.VIDEO_GAME,
+        data = data.copy(sessions = listOf(original.copy(prizeType = RewardType.VIDEO_GAME, slotReward = null,
             rewardThresholds = RewardThresholds(tier3Minimum = 1001))))
         for (entireRules in listOf(false, true)) {
             file.writeText(withoutTierThreeRules(data, entireRules).toString())
@@ -928,7 +928,7 @@ class ReadingStoreTest {
                 await { model.data?.activeSession?.finishedAt != null && !model.saving }
                 val session = requireNotNull(model.data?.activeSession)
                 assertEquals("$game: start=$atStart finish=$atFinish via $completion",
-                    atStart && atFinish, session.prizeType != null)
+                    atStart && atFinish, session.slotReward != null)
                 assertEquals(session, storage.load().activeSession)
                 math.chooseReadingGameRewardsEnabled(game, false)
                 model.finishActivity()
@@ -1237,7 +1237,7 @@ class ReadingStoreTest {
         assertEquals(300_000L, finished.activeSession?.elapsedMs)
         assertEquals(0L, resumed.sessionRemainingMs)
         assertEquals(0, finished.sessionAnswered(requireNotNull(finished.activeSession)))
-        assertNull(finished.activeSession?.prizeType)
+        assertNull(finished.activeSession?.slotReward)
         assertTrue(finished.attempts.all { it.abandoned })
         assertEquals(finished, ReadingStore(file).load())
         ReadingEngine.validate(finished)
@@ -1271,7 +1271,7 @@ class ReadingStoreTest {
             val finished = requireNotNull(model.data)
             assertEquals(1, finished.sessionAnswered(requireNotNull(finished.activeSession)))
             assertFalse(requireNotNull(finished.activeSession).timedOut)
-            assertNull(finished.activeSession?.prizeType)
+            assertNull(finished.activeSession?.slotReward)
             assertEquals(2_000L, finished.activeSession?.elapsedMs)
             assertEquals(finished, ReadingStore(file).load())
             assertEquals(30, settings.readReadingTimeLimitSeconds())
@@ -1337,7 +1337,7 @@ class ReadingStoreTest {
         storage.failSave = false
         model.retry()
         await { model.data?.activeSession?.finishedAt != null && model.storageError == null && !model.saving }
-        assertEquals(RewardType.LOLLIPOP, model.data?.activeSession?.prizeType)
+        assertEquals(RewardType.LOLLIPOP, model.data?.activeSession?.slotReward?.weights?.keys?.single())
         assertEquals(25, requireNotNull(model.data).sessionCorrect(requireNotNull(model.data?.activeSession)))
 
         val disabledStorage = RecordingStorage(data)
@@ -1345,7 +1345,7 @@ class ReadingStoreTest {
         await { disabledModel.data != null }
         disabledModel.finishActivity()
         await { disabledModel.data?.activeSession?.finishedAt != null && !disabledModel.saving }
-        assertNull(disabledModel.data?.activeSession?.prizeType)
+        assertNull(disabledModel.data?.activeSession?.slotReward)
     }
 
     private fun await(condition: () -> Boolean) {

@@ -14,7 +14,9 @@ For documentation-only changes, verify links/paths/symbols; do not run app tests
 | Contract | Existing focused selector |
 | --- | --- |
 | Tier boundaries | `RewardsTest.configurableThresholdsValidateAndMapEveryBoundary` |
-| Strict accuracy | `RewardsTest.accuracyMustBeStrictlyOverNinetyPercentWithoutRounding` |
+| Inclusive exact accuracy | `RewardsTest.accuracyIncludesNinetyPercentWithoutRoundingUpLowerScores` |
+| Completion slot pool and gates | `RewardsTest.completionSlotRewardsSnapshotOnlyAvailableWeightsWithoutSelectingAPrize`, `RewardsTest.completionSlotsKeepCompletionAccuracyEnablementAndEmptyTierGuards` |
+| Effective three-reel odds | `RewardsTest.slotOddsMatchIndependentReelsAndThePrizeDistributionWhenRetrying` |
 | Matrix tier exception | `RewardsTest.selectedMatrixTierIgnoresMinimaButNeverQualificationOrAvailability` |
 | Empty enabled tier | `RewardsTest.disablingAnEntireTierGivesNoPrizeAndNeverFallsBackToAnotherTier` |
 | Fragment carry | `RewardsTest.everyThirdFragmentBecomesAWholeRewardWithZeroRemainder` |
@@ -27,6 +29,11 @@ For documentation-only changes, verify links/paths/symbols; do not run app tests
 | Legacy mode compatibility | `HistoryStoreTest.legacyResultsDefaultToRewardsAndKeepPrizeClaimsAndCollections` |
 | Stored rule snapshots | `HistoryStoreTest.customMathAndReadingRuleSnapshotsRoundTripAndClaimOnlyOnce` |
 | Atomic idempotent claims | `HistoryStoreTest.claimsAreAtomicIdempotentAndConvertEveryThreeFragments` |
+| Activity slot persistence, shared carry, deletion | `HistoryStoreTest.activitySlotWinsPersistExactlyOneFragmentAndShareCarryAcrossSubjects` |
+| Failed slot claim atomicity | `HistoryStoreTest.failedActivitySlotClaimKeepsTheEntitlementAndInventoryForAnAtomicRetry` |
+| Admin prize/bonus atomicity | `HistoryStoreTest.failedAdminSlotWriteCannotPartiallyAwardItsPrizeOrBonuses` |
+| Admin animation ownership | `HistoryStoreTest.adminSlotBonusesStayCollectedAfterDeletingMathAndReadingOwners`, `CollectionBackupTest.mergesPreserveAdminBonusOwnershipButReplacementAllowsNewHistoryToOwnAnimations` |
+| Earned slot tier compatibility | `HistoryStoreTest.savedSlotPoolsKeepTheirEarnedTierWhenARewardChangesCategories` |
 | Cross-subject carry | `HistoryStoreTest.readingAndMathClaimsShareFragmentCarryWithoutDuplicateAwardsAfterRestart` |
 | Explicit deletion vs retention | `HistoryStoreTest.deletionRemovesRewardsButRetentionTrimmingPreservesThemWithoutDuplicatingClaims` |
 | Whole-to-fragment deletion accounting | `HistoryStoreTest.deletingAClaimedResultRemovesOnlyItsFragmentIncludingFromWholeRewards` |
@@ -42,6 +49,10 @@ For documentation-only changes, verify links/paths/symbols; do not run app tests
 | Contract | Existing focused selector |
 | --- | --- |
 | Start/finish per-game gates | `RewardsModelTest.eachMathGameRequiresItsOwnRewardsAtStartAndFinishAndKeepsTimerSnapshot` |
+| Free pulls until one fragment at exactly 90% | `RewardsModelTest.activityAtExactlyNinetyPercentAllowsFreeRetriesUntilOneFragmentAndNeverAWholeReward` |
+| Same-roll activity save retry | `RewardsModelTest.activityWinningSaveRetriesTheSameFragmentWithoutRerollingOrDuplicating` |
+| Admin standard bonuses | `RewardsModelTest.adminSlotsAwardOneUncollectedStandardAnimationInTheFirstTwoTiersWithoutGameHistory` |
+| Tier 3 Admin bonus retry | `RewardsModelTest.tierThreeAdminWinsAtomicallyAddStandardAndMegaBonusesAndRetryTheSameSelections` |
 | Persisted Math rules | `RewardsModelTest.ordinaryRewardsUseFinishThresholdsAndKeepTheirRulesThroughReloadAndClaim` |
 | Claim/delete serialization | `RewardsModelTest.deletionAndClearSerializeWithPendingClaimsInEitherOrder` |
 | Navigation-safe asynchronous work | `RewardsModelTest.lateSavesAndClaimsDoNotReopenResultsAfterNavigation` |
@@ -49,6 +60,7 @@ For documentation-only changes, verify links/paths/symbols; do not run app tests
 | Finished Reading rule ownership | `ReadingRewardsTest.readingReceiptsUseFinishedSessionThresholdsNotCurrentMathSettings` |
 | Live Reading collection before gift | `ReadingRewardsTest.completionCelebratesBeforeClaimAndCollectsOnlyTheActuallyPresentedScene` |
 | No replay/reclaim on restart | `ReadingRewardsTest.reopeningAndRestartingCannotReplayOrDuplicateButHistoryCanClaimAnEarnedGift` |
+| Cross-subject slot/gift context | `ReadingRewardsTest.readingGiftsAndSlotsDeferPendingMathSlotsWithoutReusingTheirContext` |
 | Durable Reading deletion cleanup | `ReadingRewardsTest.durableDeletionReceiptsFinishRewardCleanupAfterFailureAndRestart` |
 | Shared Math/Reading/admin mutex | `ReadingRewardsTest.readingClaimsSerializeWithMathClaimsAndAdminInventoryChanges` |
 
@@ -59,6 +71,9 @@ For documentation-only changes, verify links/paths/symbols; do not run app tests
 | Per-game settings persistence | `RewardsSettingsTest.everyAdminSectionAndSubjectStartsCollapsedAndMathChoicesPersist` |
 | Independent matrix tier UI | `RewardsSettingsTest.matrixRewardTierIsSelectableAtLargeTextSizeAndPersistsIndependently` |
 | Gift rapid taps/accessibility | `RewardUiTest.giftIsAnAccessibleButtonAndRapidTapsOnlyOpenOnce` |
+| Completion slot and history resume | `RewardsSettingsTest.fragmentSlotFollowsCelebrationAndUnfinishedPullsCanResumeFromHistory` |
+| Available rewards and exact odds at large text | `AdminMenuTest.slotAndAdminShowAvailableRewardsAndEffectiveOddsAtLargeTextSize` |
+| Admin standard/Mega presentation | `AdminMenuTest.tierThreeAdminWinPresentsItsStandardAndMegaBonusesWithoutCreatingGameHistory` |
 | Durable claim reveal | `RewardUiTest.successfulPersistenceRevealsTheFragmentAndUpdatedCarryBalancePermanently` |
 | Saved celebration names | `PokemonCollectionTest.originalPokemonsKeepExactLabelsAndAllStoredNamesAreStable` |
 | Live collection with earning disabled | `PokemonCollectionTest.eachPresentedCelebrationIsCollectedOnceEvenWithRewardsDisabled` |

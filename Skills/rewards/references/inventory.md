@@ -10,34 +10,47 @@ Search the named symbols in these exact files before widening scope:
 
 | File under `${SRC}` | Entry symbols / responsibility |
 | --- | --- |
-| `Rewards.kt` | `RewardTier`, `RewardThresholds`, `RewardType`, `RewardBalance`, `PrizeAward`, `qualifiesForReward`, `selectPrize`. |
+| `Rewards.kt` | `RewardTier`, `RewardThresholds`, `RewardType`, `RewardBalance`, `PrizeAward`, `qualifiesForReward`, `completionSlotReward`, `SlotMachineRewardPool`. |
 | `RewardSettings.kt` | `MathRewardGame`, `readReadingRewardsEnabled`, `readRewardThresholds`, `readMatrixRewardTier`. |
 | `HistoryStore.kt` | `PracticeResult`, `ReadingRewardResult`, `PracticeSnapshot`, `HistoryStore`; selection receipts and inventory persistence. |
 | `MathViewModel.kt` | `finish`, `persistResult`, `claimReward`, `useReward`, `adjustReward`, `applySnapshot`, `storeLock`; inspect only these portions. |
 | `MathViewModel.kt` | `prepareReadingReward`, `persistReadingResult`, `claimReadingReward`, `deleteReadingResults`; Reading receipt bridge. |
 | `MathViewModel.kt` | `deleteResult`, `clearHistory`, `removeDeletedResultReward`, `chooseRewardThresholds`, `chooseMatrixRewardTier`, reward-enabled setters. |
+| `MathViewModel.kt` / `SlotMachine.kt` | `spinSlotMachine`, `retrySlotMachinePrize`, `SlotMachineDialog`, `SlotMachineAvailableRewards`; activity and Admin slots. |
 | `RewardUi.kt` | Both `RewardGiftDialog` overloads, `RewardInventory`, `UseRewardsDialog`, `RewardImage`, `rewardImageDescription`. |
 | `MathUi.kt` | `RewardsQuestionCountChoices`, `RewardsCriteria`; shared question choices and eligibility display. |
 | `SettingsUi.kt` | `SubjectRewardsSetting`, `GameRewardsSetting`, `RewardMinimumSettings`, `AddRemoveRewardsDialog`, `RewardsScreen`. |
 
 ## Eligibility and balance invariants
 
-- Qualify only after all questions are answered, without timeout, with strictly
-  greater than 90% correct; do not round displayed percentages into eligibility.
+- Qualify only after all questions are answered, without timeout, with at least
+  90% correct; compare exact integer ratios rather than rounded display percentages.
 - Check earning at both start and finish, including subject and per-game switches.
   Disabling earning does not erase inventory or block an already-earned claim/use.
 - Ordinary tiers use `RewardThresholds`; finish-time rules are stored with results.
   Thresholds are ordered values in `1..1000`, defaulting to 25 and 50.
 - Matrix qualification uses its stored selected tier and exact matrix question
   count, not ordinary minima; other completion/accuracy/availability guards remain.
-- Select only enabled reward types in the eligible tier. An empty tier grants
-  nothing; never fall back to another tier or reroll a saved prize on retry.
+- New completions persist `slotReward` with the eligible tier's enabled positive
+  reel weights, not a randomly selected `prizeType`. An empty tier earns no slot.
+  Later settings changes must not rewrite an earned pool or fall back to another tier.
+  Persist the pool's earned tier independently of current reward categories.
+- Activity slots allow free pulls until one three-reel match adds one fragment,
+  atomically setting `prizeType`, `prize`, and claim metadata. Do not allow tier/mode
+  changes or another win. Failed winning saves retry the same roll. Unclaimed slots
+  resume from history; legacy gifts keep their original direct fragment claim path.
+- Display effective per-reel, per-pull (`p³`), and share-of-wins (`p³ / sum(p³)`)
+  chances from the same pool used to draw reels, on both slot and Admin screens.
+  The separate PIN-protected Admin slot retains whole/fragment mode and repeat wins.
+  Admin matches atomically add a standard animation, plus a Mega for Tier 3.
+  Store their independent ownership in `slotMachinePokemons`; do not attach fake game receipts.
 - A claim adds one fragment; three fragments carry into one whole reward.
   `RewardBalance` rejects invalid/overflowing balances and retains 0–2 fragments.
 - Using inventory consumes one whole. Admin removal consumes only the requested
   available unit; it does not break a whole to supply a missing loose fragment.
-- Gift opening waits for durable `PrizeAward`, not optimistic animation state.
+- Gift/slot win presentation waits for durable `PrizeAward`, not optimistic animation state.
   Preserve busy gates, request versions, explicit dismissal, and retry behavior.
+  Opening a Reading reward defers the Math dialog without removing its earned history slot.
 
 ## Persisted compatibility and atomicity
 
@@ -46,8 +59,10 @@ Search the named symbols in these exact files before widening scope:
 - `PracticeResult.gameMode` defaults to legacy `REWARDS`, not `PRACTICE`.
   Retain `prizeType`, `prize`, `rewardThresholds`, `matrixRewardTier`,
   `pokemonReward`, `megaPokemonReward`, and gameplay identity/answer metadata.
+  `slotReward` defaults to null for legacy Math results, Reading sessions, and receipts.
 - Keep all `PracticeSnapshot` fields: `history`, `rewards`, `claimedResultIds`,
-  `lastResultId`, `pokemons`, `readingResults`, `recordedReadingSessionIds`.
+  `lastResultId`, `pokemons`, `readingResults`, `recordedReadingSessionIds`,
+  `importedPokemons`, and `slotMachinePokemons`.
 - `ReadingRewardResult` is a session receipt, never a Math history result.
   Both subjects claim into the same `rewards` map and collection.
 - `HistoryStore` is not thread-safe. Serialize loads, ID allocation, claims,

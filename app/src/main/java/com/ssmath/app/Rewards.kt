@@ -1,5 +1,6 @@
 package com.ssmath.app
 
+import kotlin.math.pow
 import kotlin.random.Random
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
@@ -147,12 +148,66 @@ data class PrizeAward(
     val deductOnHistoryDeletion: Boolean = true
 )
 
+@Serializable
+data class SlotMachineRewardPool(val tier: RewardTier, val weights: Map<RewardType, Int>) {
+    init {
+        require(weights.isNotEmpty() && weights.values.all { it in 1..100 })
+    }
+
+    val winChance: Double get() = weights.keys.sumOf(::winChance)
+
+    fun reelChance(type: RewardType): Double =
+        (weights[type] ?: 0).toDouble() / weights.values.sum()
+
+    fun winChance(type: RewardType): Double = reelChance(type).pow(3)
+
+    fun prizeChance(type: RewardType): Double = winChance(type) / winChance
+
+    internal fun select(random: Random): RewardType {
+        if (tier != RewardTier.TIER_3) weights.keys.singleOrNull()?.let { return it }
+        var ticket = random.nextInt(weights.values.sum())
+        return weights.entries.first {
+            ticket -= it.value
+            ticket < 0
+        }.key
+    }
+}
+
+internal fun slotMachineRewardPool(
+    tier: RewardTier,
+    disabledRewards: Set<RewardType>,
+    tier3RewardChances: Tier3RewardChances
+): SlotMachineRewardPool? {
+    val weights = availableRewardsForTier(tier, disabledRewards, tier3RewardChances).associateWith {
+        if (tier == RewardTier.TIER_3) tier3RewardChances.percentage(it) else 1
+    }
+    return weights.takeIf { it.isNotEmpty() }?.let { SlotMachineRewardPool(tier, it) }
+}
+
 internal fun qualifiesForReward(questionCount: Int, correct: Int, answered: Int, timedOut: Boolean,
                                 rewardThresholds: RewardThresholds = RewardThresholds(),
                                 matrixRewardTier: RewardTier? = null): Boolean =
     !timedOut && rewardTierForGame(questionCount, rewardThresholds, matrixRewardTier) != null &&
         correct in 0..answered &&
-        answered == questionCount && correct.toLong() * 100 > questionCount.toLong() * 90
+        answered == questionCount && correct.toLong() * 100 >= questionCount.toLong() * 90
+
+internal fun completionSlotReward(
+    questionCount: Int,
+    correct: Int,
+    answered: Int,
+    enabledAtStart: Boolean,
+    enabledAtFinish: Boolean,
+    timedOut: Boolean = false,
+    disabledRewards: Set<RewardType> = emptySet(),
+    rewardThresholds: RewardThresholds = RewardThresholds(),
+    matrixRewardTier: RewardTier? = null,
+    tier3RewardChances: Tier3RewardChances = Tier3RewardChances()
+): SlotMachineRewardPool? {
+    if (!enabledAtStart || !enabledAtFinish ||
+        !qualifiesForReward(questionCount, correct, answered, timedOut, rewardThresholds, matrixRewardTier)) return null
+    val tier = rewardTierForGame(questionCount, rewardThresholds, matrixRewardTier) ?: return null
+    return slotMachineRewardPool(tier, disabledRewards, tier3RewardChances)
+}
 
 fun selectPrize(
     questionCount: Int,
@@ -187,16 +242,4 @@ internal fun selectRewardFromTier(
     random: Random,
     disabledRewards: Set<RewardType>,
     tier3RewardChances: Tier3RewardChances
-): RewardType? {
-    val prizes = availableRewardsForTier(tier, disabledRewards, tier3RewardChances)
-    if (tier == RewardTier.TIER_3) {
-        val total = prizes.sumOf { tier3RewardChances.percentage(it) }
-        if (total == 0) return null
-        var ticket = random.nextInt(total)
-        return prizes.first {
-            ticket -= tier3RewardChances.percentage(it)
-            ticket < 0
-        }
-    }
-    return prizes.singleOrNull() ?: prizes.randomOrNull(random)
-}
+): RewardType? = slotMachineRewardPool(tier, disabledRewards, tier3RewardChances)?.select(random)

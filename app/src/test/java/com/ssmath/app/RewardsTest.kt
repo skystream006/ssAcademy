@@ -53,7 +53,7 @@ class RewardsTest {
             assertNull(selectPrize(count, count, count, true, true, rewardThresholds = thresholds,
                 disabledRewards = RewardType.entries.filter { it.tier == thresholds.tierForQuestionCount(count) }.toSet()))
         }
-        assertNull(selectPrize(20, 18, 20, true, true, rewardThresholds = thresholds))
+        assertNotNull(selectPrize(20, 18, 20, true, true, rewardThresholds = thresholds))
         assertNotNull(selectPrize(20, 19, 20, true, true, rewardThresholds = thresholds))
     }
 
@@ -267,10 +267,11 @@ class RewardsTest {
         }
     }
 
-    @Test fun accuracyMustBeStrictlyOverNinetyPercentWithoutRounding() {
-        assertNull(prize(30, 27))
-        assertNull(prize(50, 45))
-        assertNull(prize(100, 90))
+    @Test fun accuracyIncludesNinetyPercentWithoutRoundingUpLowerScores() {
+        assertNotNull(prize(30, 27))
+        assertNotNull(prize(50, 45))
+        assertNotNull(prize(100, 90))
+        assertNull(prize(1000, 899))
         assertNotNull(prize(100, 91))
         assertNotNull(prize(25, 23))
         assertNull(prize(25, 22))
@@ -279,6 +280,53 @@ class RewardsTest {
         assertNotNull(prize(49, 45))
         assertNull(prize(49, 44))
         assertNotNull(prize(50, 46))
+    }
+
+    @Test fun completionSlotRewardsSnapshotOnlyAvailableWeightsWithoutSelectingAPrize() {
+        val pool = requireNotNull(completionSlotReward(100, 90, 100, true, true,
+            disabledRewards = setOf(RewardType.TOYS_2),
+            tier3RewardChances = Tier3RewardChances(10, 20, 0, 70)))
+        assertEquals(mapOf(RewardType.TOYS_1 to 10, RewardType.GOOD_BEHAVIOR_POINT to 70), pool.weights)
+        assertEquals(pool, Json.decodeFromString(SlotMachineRewardPool.serializer(),
+            Json.encodeToString(SlotMachineRewardPool.serializer(), pool)))
+        assertEquals(0.125, pool.reelChance(RewardType.TOYS_1), 0.000001)
+        assertEquals(0.0, pool.reelChance(RewardType.TOYS_2), 0.0)
+        repeat(80) { ticket ->
+            assertEquals(if (ticket < 10) RewardType.TOYS_1 else RewardType.GOOD_BEHAVIOR_POINT,
+                pool.select(TicketRandom(ticket, 80)))
+        }
+    }
+
+    @Test fun slotOddsMatchIndependentReelsAndThePrizeDistributionWhenRetrying() {
+        val pool = requireNotNull(slotMachineRewardPool(RewardTier.TIER_3, emptySet(),
+            Tier3RewardChances(20, 80, 0)))
+        assertEquals(0.008, pool.winChance(RewardType.TOYS_1), 0.000001)
+        assertEquals(0.512, pool.winChance(RewardType.TOYS_2), 0.000001)
+        assertEquals(0.52, pool.winChance, 0.000001)
+        assertEquals(0.008 / 0.52, pool.prizeChance(RewardType.TOYS_1), 0.000001)
+        assertEquals(1.0, pool.weights.keys.sumOf(pool::prizeChance), 0.000001)
+        val only = requireNotNull(slotMachineRewardPool(RewardTier.TIER_3, setOf(RewardType.TOYS_2),
+            Tier3RewardChances(20, 80, 0)))
+        assertEquals(1.0, only.winChance, 0.0)
+        assertEquals(1.0, only.prizeChance(RewardType.TOYS_1), 0.0)
+        val tiny = requireNotNull(slotMachineRewardPool(RewardTier.TIER_3, emptySet(),
+            Tier3RewardChances(1, 99, 0)))
+        assertEquals("0.0001", slotChancePercent(tiny.winChance(RewardType.TOYS_1)))
+    }
+
+    @Test fun completionSlotsKeepCompletionAccuracyEnablementAndEmptyTierGuards() {
+        assertNotNull(completionSlotReward(30, 27, 30, true, true))
+        assertNull(completionSlotReward(1000, 899, 1000, true, true))
+        assertNull(completionSlotReward(30, 27, 29, true, true))
+        assertNull(completionSlotReward(30, 30, 30, true, true, timedOut = true))
+        assertNull(completionSlotReward(30, 30, 30, false, true))
+        assertNull(completionSlotReward(30, 30, 30, true, false))
+        assertNull(completionSlotReward(24, 24, 24, true, true))
+        assertNull(completionSlotReward(100, 100, 100, true, true,
+            disabledRewards = setOf(RewardType.TOYS_2), tier3RewardChances = Tier3RewardChances(0, 100, 0)))
+        assertEquals(RewardTier.TIER_1,
+            completionSlotReward(121, 109, 121, true, true, rewardThresholds = RewardThresholds(200, 300),
+                matrixRewardTier = RewardTier.TIER_1)?.tier)
     }
 
     @Test fun selectionUsesOnlyEnabledRewardsFromTheEligibleTier() {

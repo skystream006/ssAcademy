@@ -42,8 +42,10 @@ data class PracticeResult(
     @Serializable(with = HistoricalRewardThresholdsSerializer::class)
     val rewardThresholds: RewardThresholds = RewardThresholds(tier3Minimum = 1001),
     val matrixRewardTier: RewardTier = RewardTier.TIER_2,
-    val isLogicMath: Boolean = false
+    val isLogicMath: Boolean = false,
+    val slotReward: SlotMachineRewardPool? = null
 ) {
+    val hasUnclaimedReward: Boolean get() = prize == null && (prizeType != null || slotReward != null)
     val pokemonRewards: Set<Celebration> get() = setOfNotNull(pokemonReward, megaPokemonReward)
     val gameLabel: String get() = when {
         isMultiplicationMatrix -> "Multiplication Matrix"
@@ -84,8 +86,10 @@ data class ReadingRewardResult(
     val celebration: Celebration? = null,
     val pokemonReward: Celebration? = null,
     @Serializable(with = HistoricalRewardThresholdsSerializer::class)
-    val rewardThresholds: RewardThresholds = RewardThresholds(tier3Minimum = 1001)
+    val rewardThresholds: RewardThresholds = RewardThresholds(tier3Minimum = 1001),
+    val slotReward: SlotMachineRewardPool? = null
 ) {
+    val hasUnclaimedReward: Boolean get() = prize == null && (prizeType != null || slotReward != null)
     val percentCorrectText: String
         get() {
             if (answered == 0) return "0"
@@ -105,8 +109,15 @@ data class PracticeSnapshot(
     val pokemons: Set<Celebration> = emptySet(),
     val readingResults: List<ReadingRewardResult> = emptyList(),
     val recordedReadingSessionIds: Set<String> = emptySet(),
-    val importedPokemons: Set<Celebration> = emptySet()
-)
+    val importedPokemons: Set<Celebration> = emptySet(),
+    val slotMachinePokemons: Set<Celebration> = emptySet()
+) {
+    init {
+        require(slotMachinePokemons.all { it in pokemons }) {
+            "Admin slot animations must be part of the collection."
+        }
+    }
+}
 
 data class SavedPractice(val result: PracticeResult, val snapshot: PracticeSnapshot)
 
@@ -188,18 +199,22 @@ class HistoryStore(private val file: File) {
             .sortedWith(compareByDescending<PracticeResult> { it.finishedAt }.thenByDescending { it.id })
     )
 
-    fun claimReward(id: Long): PracticeSnapshot {
+    fun claimReward(id: Long, slotWinner: RewardType? = null): PracticeSnapshot {
         val snapshot = loadSnapshot()
         val result = snapshot.history.find { it.id == id } ?: return snapshot
         if (result.gameMode != GameMode.REWARDS) return snapshot
         // Keep the awarded type even if its tier assignment changed after this game.
-        val type = result.prizeType ?: return snapshot
+        val type = if (result.slotReward != null)
+            slotWinner?.takeIf { it in result.slotReward.weights } ?: return snapshot
+        else result.prizeType ?: return snapshot
         val matrixTier = result.matrixRewardTier.takeIf { result.isMultiplicationMatrix }
         if (result.prize != null || id in snapshot.claimedResultIds ||
+            (result.slotReward != null && result.slotReward.tier !=
+                rewardTierForGame(result.questionCount, result.rewardThresholds, matrixTier)) ||
             !qualifiesForReward(result.questionCount, result.correct, result.attempts.size, result.timedOut,
                 result.rewardThresholds, matrixTier)) return snapshot
         val balance = (snapshot.rewards[type] ?: RewardBalance()).addFragment()
-        val claimed = result.copy(prize = PrizeAward(type, balance))
+        val claimed = result.copy(prizeType = type, prize = PrizeAward(type, balance))
         return save(snapshot.copy(
             history = snapshot.history.map { if (it.id == id) claimed else it },
             rewards = snapshot.rewards + (type to balance),
@@ -220,6 +235,10 @@ class HistoryStore(private val file: File) {
             prizeType = result.prizeType?.takeIf {
                 eligible && it.tier == result.rewardThresholds.tierForQuestionCount(result.questionCount)
             },
+            slotReward = result.slotReward?.takeIf {
+                eligible && result.prizeType == null &&
+                    it.tier == result.rewardThresholds.tierForQuestionCount(result.questionCount)
+            },
             celebration = result.celebration?.takeIf {
                 result.completed && it.isEligibleFor(result.questionCount)
             }
@@ -232,18 +251,20 @@ class HistoryStore(private val file: File) {
         ))
     }
 
-    fun claimReadingReward(sessionId: String): PracticeSnapshot {
+    fun claimReadingReward(sessionId: String, slotWinner: RewardType? = null): PracticeSnapshot {
         val snapshot = loadSnapshot()
         val result = snapshot.readingResults.find { it.sessionId == sessionId } ?: return snapshot
-        val type = result.prizeType ?: return snapshot
+        val type = if (result.slotReward != null)
+            slotWinner?.takeIf { it in result.slotReward.weights } ?: return snapshot
+        else result.prizeType ?: return snapshot
         if (result.prize != null || !result.rewardsEnabledAtStart ||
-            type.tier != result.rewardThresholds.tierForQuestionCount(result.questionCount) ||
+            (result.slotReward?.tier ?: type.tier) != result.rewardThresholds.tierForQuestionCount(result.questionCount) ||
             !qualifiesForReward(result.questionCount, result.correct, result.answered, result.timedOut,
                 result.rewardThresholds)) return snapshot
         val balance = (snapshot.rewards[type] ?: RewardBalance()).addFragment()
         return save(snapshot.copy(
             readingResults = snapshot.readingResults.map {
-                if (it.sessionId == sessionId) it.copy(prize = PrizeAward(type, balance)) else it
+                if (it.sessionId == sessionId) it.copy(prizeType = type, prize = PrizeAward(type, balance)) else it
             },
             rewards = snapshot.rewards + (type to balance)
         ))
@@ -281,6 +302,7 @@ class HistoryStore(private val file: File) {
             rewards = rewards,
             pokemons = if (replacing) backup.pokemons else snapshot.pokemons + backup.pokemons,
             importedPokemons = if (replacing) backup.pokemons else snapshot.importedPokemons + backup.pokemons,
+            slotMachinePokemons = if (replacing) emptySet() else snapshot.slotMachinePokemons,
             // Keep historical gifts visible, but do not subtract old claims from a replacement inventory.
             history = if (!replacing) snapshot.history else snapshot.history.map {
                 it.copy(prize = it.prize?.copy(deductOnHistoryDeletion = false))
@@ -291,12 +313,22 @@ class HistoryStore(private val file: File) {
         ))
     }
 
-    fun addReward(type: RewardType, fragment: Boolean): PracticeSnapshot {
+    fun addReward(type: RewardType, fragment: Boolean,
+                  slotMachineBonuses: List<Celebration> = emptyList()): PracticeSnapshot {
+        require(slotMachineBonuses.isEmpty() ||
+            (slotMachineBonuses.size == (if (type.tier == RewardTier.TIER_3) 2 else 1) &&
+                slotMachineBonuses.first().category != CelebrationCategory.MEGA_POKEMONS &&
+                (type.tier != RewardTier.TIER_3 ||
+                    slotMachineBonuses.last().category == CelebrationCategory.MEGA_POKEMONS))) {
+            "Admin slots require one standard animation and, for Tier 3, one Mega Pokémon."
+        }
         val snapshot = loadSnapshot()
         val balance = snapshot.rewards[type] ?: RewardBalance()
         val added = if (fragment) balance.addFragment() else balance.addWhole()
         return save(snapshot.copy(
-            rewards = snapshot.rewards + (type to added)
+            rewards = snapshot.rewards + (type to added),
+            pokemons = snapshot.pokemons + slotMachineBonuses,
+            slotMachinePokemons = snapshot.slotMachinePokemons + slotMachineBonuses
         ))
     }
 
@@ -355,7 +387,8 @@ class HistoryStore(private val file: File) {
         val snapshot = loadSnapshot()
         if (snapshot.rewards.isNotEmpty() || snapshot.claimedResultIds.isNotEmpty() ||
             snapshot.lastResultId != 0L || snapshot.pokemons.isNotEmpty() ||
-            snapshot.readingResults.isNotEmpty() || snapshot.recordedReadingSessionIds.isNotEmpty()) {
+            snapshot.readingResults.isNotEmpty() || snapshot.recordedReadingSessionIds.isNotEmpty() ||
+            snapshot.slotMachinePokemons.isNotEmpty()) {
             save(withoutResults(snapshot, snapshot.history))
         } else if (file.exists() && !file.delete()) throw IOException("Unable to clear practice history.")
         return emptyList()
@@ -377,7 +410,8 @@ class HistoryStore(private val file: File) {
         val remaining = snapshot.readingResults.filterNot { it.sessionId in sessionIds }
         val pokemonsToRemove = collected -
             remaining.mapNotNull { it.pokemonReward }.toSet() -
-            snapshot.history.flatMap { it.pokemonRewards }.toSet() - snapshot.importedPokemons
+            snapshot.history.flatMap { it.pokemonRewards }.toSet() -
+            snapshot.importedPokemons - snapshot.slotMachinePokemons
         return snapshot.copy(
             readingResults = remaining,
             recordedReadingSessionIds = snapshot.recordedReadingSessionIds + sessionIds,
@@ -393,7 +427,8 @@ class HistoryStore(private val file: File) {
         val remaining = snapshot.history.filterNot { it.id in ids }
         val pokemonsToRemove = removed.flatMap { it.pokemonRewards }.toSet() -
             remaining.flatMap { it.pokemonRewards }.toSet() -
-            snapshot.readingResults.mapNotNull { it.pokemonReward }.toSet() - snapshot.importedPokemons
+            snapshot.readingResults.mapNotNull { it.pokemonReward }.toSet() -
+            snapshot.importedPokemons - snapshot.slotMachinePokemons
         // Keep claimed IDs to prevent a stale save from restoring a deleted prize.
         return snapshot.copy(
             history = remaining,

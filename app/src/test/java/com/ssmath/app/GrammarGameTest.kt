@@ -116,7 +116,7 @@ class GrammarGameTest {
             repeat(25) { data = ReadingEngine.nextSessionActivity(readingSolve(data)) }
             assertNotNull(data.activeSession?.finishedAt)
             assertEquals(25, data.sessionCorrect(requireNotNull(data.activeSession)))
-            assertEquals(rewards, data.activeSession?.prizeType != null)
+            assertEquals(rewards, data.activeSession?.slotReward != null)
             assertEquals(data, ReadingEngine.finish(data))
             ReadingEngine.validate(data)
         }

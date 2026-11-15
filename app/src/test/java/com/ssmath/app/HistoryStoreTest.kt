@@ -125,6 +125,128 @@ class HistoryStoreTest {
         assertEquals(collected, HistoryStore(file).loadSnapshot())
     }
 
+    @Test fun activitySlotWinsPersistExactlyOneFragmentAndShareCarryAcrossSubjects() {
+        val pool = SlotMachineRewardPool(RewardTier.TIER_1, mapOf(RewardType.LOLLIPOP to 1))
+        val pending = eligible(1).copy(questionCount = 30, prizeType = null, slotReward = pool,
+            attempts = List(30) { index -> Attempt(Problem(1, 1, Operation.ADDITION), if (index < 27) 2 else 3) })
+        store.add(pending)
+        val before = HistoryStore(file).loadSnapshot()
+        assertEquals(pool, before.history.single().slotReward)
+        assertTrue(before.history.single().hasUnclaimedReward)
+        assertNull(before.history.single().prizeType)
+        assertEquals(before, store.claimReward(1))
+        assertEquals(before, store.claimReward(1, RewardType.VIDEO_GAME))
+        val first = store.claimReward(1, RewardType.LOLLIPOP)
+        assertEquals(RewardBalance(0, 1), first.rewards[RewardType.LOLLIPOP])
+        assertEquals(RewardType.LOLLIPOP, first.history.single().prizeType)
+        repeat(3) { assertEquals(first, HistoryStore(file).claimReward(1, RewardType.LOLLIPOP)) }
+        for (id in listOf("reading-one", "reading-two")) {
+            store.addReadingResult(reading(id).copy(questionCount = 30, answered = 30, correct = 27,
+                prizeType = null, slotReward = pool))
+            val unclaimed = store.loadSnapshot()
+            assertEquals(unclaimed, store.claimReadingReward(id))
+            assertEquals(unclaimed, store.claimReadingReward(id, RewardType.VIDEO_GAME))
+            val claimed = store.claimReadingReward(id, RewardType.LOLLIPOP)
+            repeat(3) { assertEquals(claimed, HistoryStore(file).claimReadingReward(id, RewardType.LOLLIPOP)) }
+        }
+        val complete = store.loadSnapshot()
+        assertEquals(RewardBalance(1, 0), complete.rewards[RewardType.LOLLIPOP])
+        assertFalse(complete.history.single().hasUnclaimedReward)
+        assertTrue(complete.readingResults.all { it.prize?.type == RewardType.LOLLIPOP && it.slotReward == pool })
+        store.delete(1)
+        val afterDeletion = store.loadSnapshot()
+        assertEquals(RewardBalance(0, 2), afterDeletion.rewards[RewardType.LOLLIPOP])
+        assertEquals(afterDeletion, store.claimReward(1, RewardType.LOLLIPOP))
+        store.deleteReadingResults(setOf("reading-one"))
+        val afterReadingDeletion = store.loadSnapshot()
+        assertEquals(RewardBalance(0, 1), afterReadingDeletion.rewards[RewardType.LOLLIPOP])
+        assertEquals(afterReadingDeletion, store.addReadingResult(reading("reading-one").copy(
+            prizeType = null, slotReward = pool)))
+    }
+
+    @Test fun failedActivitySlotClaimKeepsTheEntitlementAndInventoryForAnAtomicRetry() {
+        val pool = SlotMachineRewardPool(RewardTier.TIER_1, mapOf(RewardType.LOLLIPOP to 1))
+        store.add(eligible(1).copy(prizeType = null, slotReward = pool))
+        val before = store.loadSnapshot()
+        val blocked = File(directory, "practice_history.json.tmp")
+        assertTrue(blocked.mkdir())
+        try {
+            assertThrows(IOException::class.java) { store.claimReward(1, RewardType.LOLLIPOP) }
+            assertEquals(before, HistoryStore(file).loadSnapshot())
+        } finally {
+            assertTrue(blocked.delete())
+        }
+        val claimed = HistoryStore(file).claimReward(1, RewardType.LOLLIPOP)
+        assertEquals(RewardBalance(0, 1), claimed.rewards[RewardType.LOLLIPOP])
+        assertEquals(claimed, HistoryStore(file).claimReward(1, RewardType.LOLLIPOP))
+    }
+
+    @Test fun savedSlotPoolsKeepTheirEarnedTierWhenARewardChangesCategories() {
+        val pool = SlotMachineRewardPool(RewardTier.TIER_2,
+            mapOf(RewardType.BED_TIME to 1, RewardType.VIDEO_GAME to 1))
+        val math = eligible(1).copy(questionCount = 50, prizeType = null, slotReward = pool,
+            attempts = List(50) { Attempt(Problem(1, 1, Operation.ADDITION), 2) })
+        store.add(math)
+        store.addReadingResult(reading().copy(questionCount = 50, answered = 50, correct = 50,
+            prizeType = null, slotReward = pool))
+        val restored = HistoryStore(file).loadSnapshot()
+        assertEquals(pool, restored.history.single().slotReward)
+        assertEquals(pool, restored.readingResults.single().slotReward)
+        assertNull(SlotMachineRoll(listOf(RewardType.BED_TIME, RewardType.VIDEO_GAME, RewardType.BED_TIME)).winner)
+        store.claimReward(math.id, RewardType.BED_TIME)
+        val claimed = store.claimReadingReward(restored.readingResults.single().sessionId, RewardType.BED_TIME)
+        assertEquals(RewardBalance(0, 2), claimed.rewards[RewardType.BED_TIME])
+        assertEquals(RewardType.BED_TIME, claimed.history.single().prize?.type)
+        assertEquals(RewardType.BED_TIME, claimed.readingResults.single().prize?.type)
+    }
+
+    @Test fun adminSlotBonusesStayCollectedAfterDeletingMathAndReadingOwners() {
+        val standard = Celebration.PIKACHU
+        val mega = Celebration.megaPokemons.first()
+        val matrix = eligible(1).copy(operation = Operation.MULTIPLICATION, maximum = 11,
+            questionCount = 121, isMultiplicationMatrix = true,
+            attempts = List(121) { index -> MultiplicationMatrix.problemAt(index).let { Attempt(it, it.answer) } })
+        store.add(matrix)
+        store.collectPokemon(matrix.id, standard)
+        store.collectPokemon(matrix.id, mega)
+        val reader = reading().copy(celebration = standard)
+        store.addReadingResult(reader)
+        store.collectReadingCelebration(reader.sessionId, standard)
+        val awarded = store.addReward(RewardType.TOYS_1, fragment = true,
+            slotMachineBonuses = listOf(standard, mega))
+        assertEquals(RewardBalance(0, 1), awarded.rewards[RewardType.TOYS_1])
+        assertEquals(setOf(standard, mega), awarded.slotMachinePokemons)
+        assertEquals(awarded, HistoryStore(file).loadSnapshot())
+        store.delete(matrix.id)
+        store.deleteReadingResults(setOf(reader.sessionId))
+        store.clear()
+        val remaining = HistoryStore(file).loadSnapshot()
+        assertEquals(setOf(standard, mega), remaining.pokemons)
+        assertEquals(awarded.slotMachinePokemons, remaining.slotMachinePokemons)
+        assertEquals(awarded.rewards, remaining.rewards)
+    }
+
+    @Test fun failedAdminSlotWriteCannotPartiallyAwardItsPrizeOrBonuses() {
+        val before = store.addReward(RewardType.LOLLIPOP, fragment = true)
+        val bonuses = listOf(Celebration.PIKACHU, Celebration.megaPokemons.first())
+        val blocked = File(directory, "practice_history.json.tmp")
+        assertTrue(blocked.mkdir())
+        try {
+            assertThrows(IOException::class.java) {
+                store.addReward(RewardType.TOYS_1, fragment = false, slotMachineBonuses = bonuses)
+            }
+            assertEquals(before, HistoryStore(file).loadSnapshot())
+        } finally {
+            assertTrue(blocked.delete())
+        }
+        val awarded = store.addReward(RewardType.TOYS_1, fragment = false, slotMachineBonuses = bonuses)
+        assertEquals(RewardBalance(1, 0), awarded.rewards[RewardType.TOYS_1])
+        assertEquals(bonuses.toSet(), awarded.pokemons)
+        assertEquals(bonuses.toSet(), awarded.slotMachinePokemons)
+        assertEquals(before.history, awarded.history)
+        assertEquals(before.readingResults, awarded.readingResults)
+    }
+
     @Test fun divisionLimitsRoundTripWithoutReinterpretingLegacyResults() {
         val legacy = result(1).copy(operation = Operation.DIVISION, minimum = 3, maximum = 12)
         val current = legacy.copy(id = 2, finishedAt = 2, minimum = 1, maximum = 100, maximumSecond = 7)

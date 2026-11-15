@@ -98,7 +98,8 @@ data class ReadingSession(
     val timeLimitMs: Long? = null,
     val elapsedMs: Long = 0,
     @Serializable(with = HistoricalRewardThresholdsSerializer::class)
-    val rewardThresholds: RewardThresholds = RewardThresholds(tier3Minimum = 1001)
+    val rewardThresholds: RewardThresholds = RewardThresholds(tier3Minimum = 1001),
+    val slotReward: SlotMachineRewardPool? = null
 ) {
     val questionCount: Int get() = attemptIds.size
 }
@@ -499,12 +500,12 @@ object ReadingEngine {
         require(!timedOut || (session.timeLimitMs != null && session.elapsedMs >= session.timeLimitMs))
         require(abandoned || timedOut || data.sessionAnswered(session) == session.questionCount ||
             data.sessionWrong(session) * 10 > session.questionCount)
-        val prize = if (abandoned) null else selectPrize(session.questionCount, data.sessionCorrect(session),
-            data.sessionAnswered(session), session.rewardsEnabledAtStart, rewardsEnabled, timedOut, random, disabledRewards,
+        val slotReward = if (abandoned) null else completionSlotReward(session.questionCount, data.sessionCorrect(session),
+            data.sessionAnswered(session), session.rewardsEnabledAtStart, rewardsEnabled, timedOut, disabledRewards,
             rewardThresholds, tier3RewardChances = tier3RewardChances)
         return data.copy(sessions = data.sessions.map {
-            if (it.id == id) it.copy(finishedAt = now, abandoned = abandoned, timedOut = timedOut, prizeType = prize,
-                rewardThresholds = rewardThresholds) else it
+            if (it.id == id) it.copy(finishedAt = now, abandoned = abandoned, timedOut = timedOut, prizeType = null,
+                rewardThresholds = rewardThresholds, slotReward = slotReward) else it
         }, attempts = data.attempts.map {
             if (it.id in session.attemptIds && it.open) it.copy(abandoned = true) else it
         })
@@ -545,7 +546,7 @@ object ReadingEngine {
                 it.fields.isEmpty() && it.checkpoints.isEmpty() && it.order.isEmpty()
             })
             if (session.finishedAt == null) {
-                require(!session.abandoned && !session.timedOut && session.prizeType == null)
+                require(!session.abandoned && !session.timedOut && session.prizeType == null && session.slotReward == null)
                 require(answered < session.questionCount && data.sessionWrong(session) * 10 <= session.questionCount)
                 require(members.none { it.abandoned })
                 require(data.sessions.count { it.ownerId == session.ownerId && it.finishedAt == null } == 1)
@@ -559,6 +560,13 @@ object ReadingEngine {
             }
             session.prizeType?.let {
                 require(session.finishedAt != null && !session.abandoned && session.rewardsEnabledAtStart)
+                require(qualifiesForReward(session.questionCount, data.sessionCorrect(session), answered, session.timedOut,
+                    session.rewardThresholds))
+                require(it.tier == session.rewardThresholds.tierForQuestionCount(session.questionCount))
+            }
+            session.slotReward?.let {
+                require(session.finishedAt != null && !session.abandoned && session.rewardsEnabledAtStart &&
+                    session.prizeType == null)
                 require(qualifiesForReward(session.questionCount, data.sessionCorrect(session), answered, session.timedOut,
                     session.rewardThresholds))
                 require(it.tier == session.rewardThresholds.tierForQuestionCount(session.questionCount))

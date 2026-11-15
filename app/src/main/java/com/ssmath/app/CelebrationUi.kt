@@ -354,12 +354,14 @@ enum class Celebration(
                 isMultiplicationMatrix && questionCount == MultiplicationMatrix.QUESTION_COUNT -> megaPokemons
                 else -> standardCelebrations
             }
-            val eligible = pool.filter { it.isEligibleFor(questionCount, gameMode, isMultiplicationMatrix) }
-            val collectionComplete = collected.containsAll(pool)
-            return eligible.filter { collectionComplete || it !in collected }.randomOrNull(random)
+            return availableCelebrations(pool, collected)
+                .filter { it.isEligibleFor(questionCount, gameMode, isMultiplicationMatrix) }.randomOrNull(random)
         }
     }
 }
+
+internal fun availableCelebrations(pool: List<Celebration>, collected: Set<Celebration>): List<Celebration> =
+    pool.filterNot { it in collected }.ifEmpty { pool }
 
 internal fun Celebration.isEligibleFor(
     questionCount: Int,
@@ -417,7 +419,7 @@ internal fun CelebrationDialog(
         },
         confirmButton = {
             TextButton(onClick = onFinished, modifier = Modifier.testTag(if (replay) "close-celebration" else "view-results")) {
-                Text(if (replay) "Close" else if (hasNextCelebration) "Next celebration" else "View results")
+                Text(if (hasNextCelebration) "Next celebration" else if (replay) "Close" else "View results")
             }
         }
     )

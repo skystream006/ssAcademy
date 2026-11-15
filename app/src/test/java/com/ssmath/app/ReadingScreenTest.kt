@@ -1293,7 +1293,7 @@ class ReadingScreenTest {
         waitFor { it.activeSession?.finishedAt != null }
         compose.onNodeWithTag("reading-session-summary").assertIsDisplayed()
         compose.onNodeWithTag("reading-next").assertDoesNotExist()
-        assertNull(model.data?.activeSession?.prizeType)
+        assertNull(model.data?.activeSession?.slotReward)
         assertEquals(model.data, ReadingStore(file).load())
     }
 

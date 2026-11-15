@@ -1,6 +1,7 @@
 package com.ssmath.app
 
 import android.app.Application
+import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.activity.ComponentDialog
 import androidx.compose.runtime.mutableStateOf
@@ -12,6 +13,7 @@ import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.core.app.ApplicationProvider
 import java.io.File
+import java.time.Duration
 import kotlinx.coroutines.Dispatchers
 import org.junit.Assert.*
 import org.junit.Before
@@ -19,6 +21,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowDialog
@@ -693,7 +696,8 @@ class RewardsSettingsTest {
         compose.setContent { MathTheme { SettingsScreen(model) } }
         compose.openGameSettings()
         compose.onNodeWithText("Math Rewards System").performScrollTo().performClick()
-        compose.onNodeWithText("Earn prize fragments in math challenges by meeting each game's reward requirements with over 90% correct.")
+        compose.onNodeWithText("Earn prize fragments in math challenges by meeting each game's reward requirements " +
+            "with 90% or more correct, then win one fragment in the slot machine.")
             .performScrollTo().assertIsDisplayed()
         compose.onNodeWithContentDescription("Math Rewards System").performScrollTo().assertIsOn()
         compose.onNodeWithContentDescription("Show correct answers").performScrollTo().assertIsOn()
@@ -1223,9 +1227,10 @@ class RewardsSettingsTest {
         compose.onNodeWithContentDescription("Remove 1 whole Lollipop reward").performScrollTo().assertIsEnabled()
     }
 
-    @Test fun giftFollowsCelebrationAndUnopenedPrizeCanBeClaimedFromHistory() {
+    @Test fun fragmentSlotFollowsCelebrationAndUnfinishedPullsCanResumeFromHistory() {
         val model = MathViewModel(application, ioDispatcher = Dispatchers.Main.immediate)
         assertTrue(model.rewardsEnabled)
+        RewardType.entries.forEach { model.chooseRewardEnabled(it, it == RewardType.RESTAURANT) }
         model.openRewardsGame()
         model.updateRewardsQuestionCount("50")
         model.selectRewardsGame(Operation.ADDITION)
@@ -1243,30 +1248,48 @@ class RewardsSettingsTest {
         compose.onNodeWithTag("gift-box").assertDoesNotExist()
         compose.onNodeWithTag("view-results").performClick()
         compose.mainClock.advanceTimeBy(64)
-        compose.onNodeWithText("Congratulations! You've answered 100% correct! Tap to get a prize!").assertIsDisplayed()
-        compose.onNodeWithTag("gift-box").assertIsDisplayed()
+        compose.onNodeWithTag("slot-machine-dialog").assertIsDisplayed()
+        compose.onNodeWithTag("gift-box").assertDoesNotExist()
+        compose.onNodeWithTag("slot-fragment-reward").assertDoesNotExist()
+        compose.onNodeWithText("Change tier").assertDoesNotExist()
+        compose.mainClock.autoAdvance = true
+        compose.onNodeWithTag("slot-odds-RESTAURANT").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Per reel: 100% · Win per pull: 100%").assertIsDisplayed()
+        compose.onNodeWithText("Finish later").performClick()
         compose.runOnIdle {
-            model.dismissReward()
             model.done()
             model.openSettings()
             model.openHistory()
             model.showHistoryDetail(model.history.single())
         }
         compose.mainClock.advanceTimeBy(64)
-        compose.onNodeWithText("Open gift box").performClick()
+        compose.onNodeWithText("Open slot machine").performClick()
         compose.mainClock.advanceTimeBy(64)
-        compose.onNodeWithTag("gift-box").performClick()
-        compose.mainClock.advanceTimeBy(2_000)
+        compose.onNodeWithTag("slot-lever").performScrollTo()
+        compose.mainClock.autoAdvance = false
+        compose.mainClock.advanceTimeBy(64)
+        compose.onNodeWithTag("slot-lever").performClick()
+        compose.mainClock.advanceTimeBy(64)
+        compose.onNodeWithTag("slot-lever").assertIsNotEnabled()
+        compose.runOnIdle {
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(SLOT_MACHINE_DURATION_MS.toLong()))
+        }
+        compose.mainClock.advanceTimeBy(SLOT_MACHINE_DURATION_MS.toLong() + 64)
+        compose.onNodeWithTag("slot-win-dialog").assertIsDisplayed()
+        compose.onNodeWithTag("slot-win-reward").assertContentDescriptionEquals(
+            rewardImageDescription(RewardType.RESTAURANT, fragment = true))
         val type = model.history.single().prizeType!!
         compose.runOnIdle {
             assertEquals(RewardTier.TIER_2, type.tier)
             assertEquals(RewardBalance(fragments = 1), model.rewardBalances[type])
             assertNotNull(model.history.single().prize)
-            model.dismissReward()
         }
+        compose.mainClock.autoAdvance = true
+        compose.onNodeWithTag("slot-win-dismiss").performClick()
         compose.mainClock.advanceTimeBy(64)
         compose.onNodeWithText("Prize: ${type.fragmentLabel}").assertIsDisplayed()
         compose.onNodeWithText("Total collected: 1 fragments").assertIsDisplayed()
-        compose.onNodeWithText("Open gift box").assertDoesNotExist()
+        compose.onNodeWithText("Open slot machine").assertDoesNotExist()
+        compose.onNodeWithTag("slot-machine-dialog").assertDoesNotExist()
     }
 }

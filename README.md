@@ -64,8 +64,8 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    once per new matrix game, with every pair appearing exactly once. The option is off by
    default, is remembered for next time, and does not change a game already in progress.
    It does not change your other games' saved number limits or question counts.
-   The same rewards rules apply: finish all questions with **more than 90% correct** for an
-   enabled prize fragment, with Math Rewards System enabled at start and finish.
+   The same rewards rules apply: finish all questions with **90% or more correct** to open the
+   fragment-only slot machine, with Math Rewards System enabled at start and finish.
    **Matrix Reward Tier** under **Math Rewards System > Multiplication Matrix Rewards Game**
    appears only when Math rewards and that game's rewards are enabled. It chooses
    **Tier 1**, **Tier 2** (the default), or **Tier 3**,
@@ -73,7 +73,8 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    the game finishes; no prize is awarded if all rewards in that tier are disabled.
    The configured time limit per 5 questions scales to all 121 questions, and the game stops
    at **13 wrong answers** or when time runs out. Completing the matrix also unlocks the
-   **Mega Pokémons** celebration pool, exclusive to this game; ordinary multiplication
+   **Mega Pokémons** celebration pool, exclusive to this activity; Tier 3 Admin slot wins
+   can also grant Mega Pokémon bonuses. Ordinary multiplication
    games (even with 121 questions), Practice Game, and reading cannot award this tier.
 2. **Press Start when Ready** – press **Start** to begin. The timer starts now.
    Timers show minutes and seconds only (for example, **125:09**), with no hours.
@@ -305,15 +306,19 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   Rewards Game question counts are no longer used. Editing defaults during a game
   leaves its active questions unchanged and its timer paused until you leave Settings.
 - **Math Rewards System** – under Math Settings, on by default. In math challenges, earn
-  prizes for completing the configured minimum questions with **more than 90% correct**.
+  a slot-machine reward for completing the configured minimum questions with **90% or more correct**.
   Both the subject and the selected game's rewards must be enabled at start and finish.
   These settings never enable prizes in Practice Game.
-  After the celebration, tap the hopping gift box to open it and release confetti.
-  By default, **Tier 1** rewards are for sessions of **25–49 questions**: a random Lollipop,
+  After the celebration, the slot machine opens in the earned tier. Pull its lever for free
+  until three matching fragments win **one fragment**, then press **Done**. Activity slots never
+  award a whole reward directly and stop after the first win. **Finish later** keeps the earned
+  slot reward available from the result's history entry. The tier, available fragments, and reel
+  weights are saved when the activity finishes, so later Admin changes do not erase an earned reward.
+  By default, **Tier 1** rewards are for sessions of **25–49 questions**: a Lollipop,
   Ice Cream Cone, Gummi Bear, Ramen, or Bed Time Fragment. **Tier 2** rewards are for sessions
-  of **50–99 questions**: a random Video Game or Restaurant Fragment.
+  of **50–99 questions**: a Video Game or Restaurant Fragment.
   **Tier 3** rewards are for sessions of **100 or more questions**: a **$1 Toys**,
-  **$2 Toys**, **$3 Toys**, or **1 Good Behavior Point** Fragment, selected using the saved Tier 3 chances.
+  **$2 Toys**, **$3 Toys**, or **1 Good Behavior Point** Fragment, using the saved Tier 3 reel chances.
   Bed Time features a sleeping child, floating Zs, and twinkling stars; Restaurant
   features a swaying striped awning and a steaming meal. Their artwork animates
   when revealed and in My Rewards and Use rewards. All three toy rewards also have
@@ -331,7 +336,7 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   Tier 3 at or above its minimum, Tier 2 from its minimum to below Tier 3's minimum, Tier 1 from its
   minimum to below Tier 2's minimum, and no prize below Tier 1's minimum. Matrix games use their
   separately selected tier instead. Changing these settings never changes saved prizes or claims.
-  **Tier 3 chances** in Available Rewards are whole percentages from **0 to 100** and must
+  **Tier 3 chances** in Available Rewards are per-reel whole percentages from **0 to 100** and must
   add up to **100% across all four rewards** before **Save Tier 3 chances** is enabled.
   Defaults are **35%** for **$1 Toys**, **25%** for **$2 Toys**, **10%** for **$3 Toys**,
   and **30%** for **1 Good Behavior Point**. Existing saved chances are preserved; older
@@ -340,20 +345,27 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   Only enabled rewards from the qualifying tier are selected. Disabled Tier 3 rewards are excluded,
   and remaining positive chances are scaled proportionally (for example, 60% and 40% become
   100% and 0% if the second toy is disabled). If no enabled reward has a positive chance,
-  no prize is awarded; the app never falls back to another tier. Tier 1 and Tier 2 remain uniformly random.
+  no slot reward is earned; the app never falls back to another tier. Tier 1 and Tier 2 use equal reel chances.
+  Both the slot screen and **Admin Menu > Available Rewards** show the obtainable fragments,
+  each fragment's **per-reel chance**, **win chance per pull**, and **share of wins**, plus the
+  total win and no-match chances. Reels are independent: a reward with reel chance `p` matches
+  all three with chance `p³` per pull. Its share of wins is `p³ / sum(p³)` when pulling until a match;
+  this differs from the configured per-reel percentage for unequal Tier 3 weights.
   Existing prizes and fragments remain available, including after changing chances.
-  Fewer than the configured Tier 1 minimum (except matrix games) and exactly 90% correct do not qualify.
+  Fewer than the configured Tier 1 minimum (except matrix games), incomplete or timed-out games,
+  and scores below 90% do not qualify. Exactly 90% qualifies without rounding up lower scores.
   Every 3 fragments of the same type automatically become 1 whole prize, with the
   fragment counter returning to 0. Prizes and their cumulative totals are saved
   with the result; deleting a result removes its claimed fragment from your available rewards.
-  A gift dismissed before opening can still be claimed from its history entry.
+  Previously saved random gifts remain claimable through their original gift boxes.
   All reward illustrations and animations are drawn in the app and work offline.
 - **Reading Rewards System** – under Reading Settings, enables the same prize fragments
   as math challenges, using independent minimum-question settings for each reading game
   and the shared Rewards inventory.
-  Complete all selected activities and meet a tier's minimum with **more than 90% correct**
+  Complete all selected activities and meet a tier's minimum with **90% or more correct**
   to qualify; both the subject and the selected game's rewards must be on at start and finish.
-  Disabled reward types are excluded from new prizes. Existing gifts remain claimable.
+  The same fragment-only slot machine opens after the celebration, with pulls until its first win.
+  Disabled reward types are excluded from new slot rewards. Existing gifts and earned slot rewards remain claimable.
   Reading checkpoint points have been removed; checkpoints still track activity progress.
 - **Show timer** – off by default. Show or hide the timer while practicing. The timer pauses while
   Settings, any subject's Practice History, My Rewards, or My Pokémons is open.
@@ -738,11 +750,25 @@ Whole rewards are the default, and the choice is saved on this device. Reel imag
 and labels reflect the selected mode. Every 3 matching fragments in My Rewards
 become 1 whole reward. Pulls are free and use enabled rewards and the saved Tier 3
 chance settings, preserving existing balances and history.
+The selected tier's available rewards and effective reel, per-pull, and share-of-wins odds
+are shown on the slot screen and under **Admin Menu > Available Rewards**.
 Non-matching rolls add nothing. Pulling again and leaving the dialog are disabled
 while spinning or saving; a failed save offers a retry without rerolling. The reward
 mode cannot change during a spin or while a failed win is awaiting a save retry.
-After a three-item match is saved, a popup celebrates with a bouncing prize and
-confetti. Press **Keep playing** to dismiss it and return to the slot machine.
+Each Admin match also awards one **Pokémon or Other animation**. A **Tier 3** match additionally
+awards one **Mega Pokémon**. Each pool chooses uniformly from its uncollected entries first;
+when a pool is complete, it can repeat. Available pool counts and each entry's chance per win
+are shown in the Admin Menu and on the slot screen.
+The prize and bonus animations are saved together, without creating game history. Failed saves
+retry the same prize and bonus selections. Admin-awarded animations remain collected when Math
+or Reading history is deleted; replacing imported collections resets that independent ownership.
+After a three-item match is saved, a popup celebrates with a bouncing prize, confetti, and the
+bonus names. Press **View bonus** or **View bonuses** to play the standard animation and, for
+Tier 3, its Mega animation. **Next celebration** advances to the Mega; **Close** returns to the
+slot machine. These displays do not award anything again.
+This PIN-protected Admin tool retains its whole/fragment choice and repeat wins. Activity-earned
+slots are separate, always fragment-only, locked to the earned tier, and finish after one win;
+their gameplay celebrations keep the existing activity rules.
 
 In **Debug Menu**, expand **Reading activities**, then press **View reading activities database** to browse the installed activity library,
 filter by game and level, and inspect activity IDs, passages, questions, correct

@@ -105,7 +105,7 @@ class ReadingSqliteStoreTest {
             }
             store.save(data)
             assertEquals(thresholds, data.activeSession?.rewardThresholds)
-            assertEquals(thresholds.tierForQuestionCount(count), data.activeSession?.prizeType?.tier)
+            assertEquals(thresholds.tierForQuestionCount(count), data.activeSession?.slotReward?.tier)
         }
         val sessions = data.sessions
         database.close()
@@ -114,7 +114,7 @@ class ReadingSqliteStoreTest {
         val restored = store.load()
         assertEquals(sessions, restored.sessions)
         assertEquals(listOf(RewardTier.TIER_1, RewardTier.TIER_1, RewardTier.TIER_2, RewardTier.TIER_3, RewardTier.TIER_3),
-            restored.sessions.map { it.prizeType?.tier })
+            restored.sessions.map { it.slotReward?.tier })
         assertEquals(restored, ReadingEngine.endSession(restored, sessions.first().id,
             rewardThresholds = RewardThresholds(999, 1000)))
     }
@@ -123,7 +123,8 @@ class ReadingSqliteStoreTest {
         var data = readingSessionFixture(count = 100)
         repeat(100) { data = ReadingEngine.nextSessionActivity(readingSolve(data)) }
         data = data.copy(sessions = listOf(requireNotNull(data.activeSession).copy(
-            prizeType = RewardType.RESTAURANT, rewardThresholds = RewardThresholds(tier3Minimum = 1001))))
+            prizeType = RewardType.RESTAURANT, slotReward = null,
+            rewardThresholds = RewardThresholds(tier3Minimum = 1001))))
         legacy.writeText(withoutTierThreeRules(data, entireRules = true).toString())
         val imported = store.load()
         assertEquals(data.sessions, imported.sessions)

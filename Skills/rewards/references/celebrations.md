@@ -47,6 +47,12 @@ collection eligibility. Selection and persistence entry points above come first.
   must not replay the automatic celebration. History can still claim its gift.
 - Explicit admin `collectAllCelebrations` is separate from gameplay eligibility:
   it may include Mega without fabricating game history or inventory awards.
+- Admin slot matches award one uncollected-first standard animation; Tier 3
+  also awards one independently selected Mega. Save both with the material prize,
+  cache selections on the roll for retries, and use callback-free replay to present
+  the already-awarded animations. Do not extend the Mega exception to activity slots.
+- `PracticeSnapshot.slotMachinePokemons` preserves independent Admin ownership
+  against Math/Reading history deletion; collection replacement clears that ownership.
 - Preserve shared-owner deletion accounting and mutex/atomic-save guarantees
   described in [inventory](inventory.md).
 

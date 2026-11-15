@@ -97,13 +97,13 @@ class ReadingRewardsTest {
             open(model, data)
             assertEquals(CelebrationCategory.POKEMONS, model.readingCelebration?.category)
             assertEquals(RewardThresholds(15, 25), model.readingRewardResult?.rewardThresholds)
-            assertEquals(type, model.readingRewardResult?.prizeType)
+            assertEquals(type, model.readingRewardResult?.slotReward?.weights?.keys?.single())
             model.dismissReadingSessionReward()
             val restored = model()
             restored.openSubjectHistory(Subject.READING)
             restored.showReadingRewardForSession(data, data.sessions.single())
             shadowOf(Looper.getMainLooper()).idle()
-            repeat(3) { restored.claimReadingReward() }
+            repeat(3) { restored.claimDisplayedReward() }
             assertEquals(RewardBalance(0, 1), restored.rewardBalances[type])
             assertEquals(PrizeAward(type, RewardBalance(0, 1)), restored.readingRewardResult?.prize)
             assertEquals(RewardThresholds(15, 25), restored.readingRewardResult?.rewardThresholds)
@@ -121,9 +121,13 @@ class ReadingRewardsTest {
             Triple("good-behavior-point", RewardType.GOOD_BEHAVIOR_POINT, RewardThresholds())
         )
         for ((id, type, thresholds) in cases) {
-            val data = finished(id, count = 100, disabled = RewardType.entries.toSet() - type,
+            val completed = finished(id, count = 100, disabled = RewardType.entries.toSet() - type,
                 thresholds = thresholds, chances = Tier3RewardChances(25, 25, 25, 25))
-            assertEquals(type, data.sessions.single().prizeType)
+            val data = if (id == "old-tier-two") completed.copy(sessions = completed.sessions.map {
+                it.copy(prizeType = type, slotReward = null)
+            }) else completed
+            if (id == "old-tier-two") assertEquals(type, data.sessions.single().prizeType)
+            else assertEquals(type, data.sessions.single().slotReward?.weights?.keys?.single())
             val model = model()
             open(model, data)
             model.dismissReadingSessionReward()
@@ -136,13 +140,13 @@ class ReadingRewardsTest {
             assertNull(restored.readingCelebration)
             restored.openSubjectHistory(Subject.READING)
             restored.showReadingRewardForSession(data, data.sessions.single())
-            repeat(3) { restored.claimReadingReward() }
+            repeat(3) { restored.claimDisplayedReward() }
             assertEquals(PrizeAward(type, RewardBalance(0, 1)), restored.readingRewardResult?.prize)
             assertEquals(thresholds, restored.readingRewardResult?.rewardThresholds)
             val again = model()
             again.openSubjectHistory(Subject.READING)
             again.showReadingRewardForSession(data, data.sessions.single())
-            again.claimReadingReward()
+            again.claimDisplayedReward()
             assertEquals(RewardBalance(0, 1), again.rewardBalances[type])
             assertTrue(again.history.isEmpty())
         }
@@ -156,7 +160,7 @@ class ReadingRewardsTest {
         assertTrue(model.history.isEmpty())
         assertTrue(model.pokemons.isEmpty())
         assertNull(model.readingRewardResults.single().pokemonReward)
-        model.claimReadingReward()
+        model.claimDisplayedReward()
         assertTrue(model.rewardBalances.isEmpty())
         model.collectPresentedReadingCelebration(Celebration.entries.first { it != selected })
         assertTrue(model.pokemons.isEmpty())
@@ -165,7 +169,7 @@ class ReadingRewardsTest {
         assertEquals(selected, model.readingRewardResults.single().pokemonReward)
         model.dismissReadingCelebration()
         assertTrue(model.readingRewardDialogVisible)
-        repeat(3) { model.claimReadingReward() }
+        repeat(3) { model.claimDisplayedReward() }
         assertEquals(RewardBalance(0, 1), model.rewardBalances[RewardType.LOLLIPOP])
         assertEquals(model.readingRewardResults.single(), model.readingRewardResult)
         assertTrue(model.history.isEmpty())
@@ -194,13 +198,13 @@ class ReadingRewardsTest {
         restored.showReadingRewardForSession(data, data.sessions.single())
         assertNull(restored.readingCelebration)
         assertTrue(restored.readingRewardDialogVisible)
-        restored.claimReadingReward()
+        restored.claimDisplayedReward()
         val claimed = requireNotNull(restored.readingRewardResult?.prize)
         assertEquals(RewardBalance(0, 1), claimed.balance)
         val again = model()
         again.openSubjectHistory(Subject.READING)
         again.showReadingRewardForSession(data, data.sessions.single())
-        repeat(3) { again.claimReadingReward() }
+        repeat(3) { again.claimDisplayedReward() }
         assertEquals(claimed, again.readingRewardResult?.prize)
         assertEquals(RewardBalance(0, 1), again.rewardBalances[RewardType.LOLLIPOP])
         assertTrue(again.pokemons.isEmpty())
@@ -214,7 +218,7 @@ class ReadingRewardsTest {
         val selected = requireNotNull(model.readingCelebration)
         model.collectPresentedReadingCelebration(selected)
         model.dismissReadingCelebration()
-        model.claimReadingReward()
+        model.claimDisplayedReward()
         model.deleteReadingResults(setOf("session"))
         shadowOf(Looper.getMainLooper()).idle()
         assertNull(model.readingRewardResult)
@@ -224,7 +228,7 @@ class ReadingRewardsTest {
         assertEquals(RewardBalance(), model.rewardBalances[RewardType.LOLLIPOP])
         model.showReadingRewardForSession(data, data.sessions.single())
         model.collectPresentedReadingCelebration(selected)
-        model.claimReadingReward()
+        model.claimDisplayedReward()
         assertNull(model.readingRewardResult)
         val restored = model()
         restored.openSubjectHistory(Subject.READING)
@@ -239,7 +243,7 @@ class ReadingRewardsTest {
         val model = model()
         open(model, data)
         model.dismissReadingCelebration()
-        model.claimReadingReward()
+        model.claimDisplayedReward()
         val deleted = ReadingEngine.clearHistory(data, "reader")
         assertEquals(setOf("session"), deleted.deletedSessionIds)
         assertTrue(blockedWrite.mkdir())
@@ -292,10 +296,10 @@ class ReadingRewardsTest {
             finished(id = "partial", answered = 20, wrong = 3),
             finished(id = "timeout", timedOut = true),
             finished(id = "unfinished").let { data ->
-                data.copy(sessions = data.sessions.map { it.copy(finishedAt = null, prizeType = null) })
+                data.copy(sessions = data.sessions.map { it.copy(finishedAt = null, prizeType = null, slotReward = null) })
             },
             finished(id = "abandoned").let { data ->
-                data.copy(sessions = data.sessions.map { it.copy(abandoned = true, prizeType = null) })
+                data.copy(sessions = data.sessions.map { it.copy(abandoned = true, prizeType = null, slotReward = null) })
             }
         ).forEach { data ->
             open(model, data)
@@ -314,7 +318,7 @@ class ReadingRewardsTest {
             finished(id = "disabled-at-start", enabledAtStart = false),
             finished(id = "disabled-at-finish", enabledAtFinish = false),
             finished(id = "disabled-tier", disabled = RewardType.entries.filter { it.tier == RewardTier.TIER_1 }.toSet()),
-            finished(id = "ninety-percent", count = 30, wrong = 3)
+            finished(id = "below-ninety-percent", count = 30, wrong = 4)
         ).forEach { data ->
             open(model, data)
             assertNotNull(model.readingCelebration)
@@ -324,12 +328,12 @@ class ReadingRewardsTest {
         }
         model.chooseRewardsEnabled(false)
         open(model, finished(id = "reading-independent", wrong = 2))
-        assertEquals(RewardType.LOLLIPOP, model.readingRewardResult?.prizeType)
+        assertEquals(RewardType.LOLLIPOP, model.readingRewardResult?.slotReward?.weights?.keys?.single())
         assertEquals("92", model.readingRewardResult?.percentCorrectText)
         model.dismissReadingSessionReward()
         open(model, finished(id = "tier-two", count = 50,
             disabled = RewardType.entries.toSet() - RewardType.RESTAURANT))
-        assertEquals(RewardType.RESTAURANT, model.readingRewardResult?.prizeType)
+        assertEquals(RewardType.RESTAURANT, model.readingRewardResult?.slotReward?.weights?.keys?.single())
     }
 
     @Test fun collectionRequiresLiveReadingPresentationAndNavigationDismissesBothDialogs() {
@@ -362,6 +366,48 @@ class ReadingRewardsTest {
         assertFalse(model.readingRewardDialogVisible)
     }
 
+    @Test fun readingGiftsAndSlotsDeferPendingMathSlotsWithoutReusingTheirContext() {
+        val model = model()
+        RewardType.entries.forEach { model.chooseRewardEnabled(it, it == RewardType.LOLLIPOP) }
+        for (legacy in listOf(true, false)) {
+            model.done()
+            model.openRewardsGame()
+            model.updateRewardsQuestionCount("25")
+            model.selectRewardsGame(Operation.ADDITION)
+            model.start()
+            repeat(25) {
+                model.updateAnswer(requireNotNull(model.game).problem.answer.toString())
+                model.submitAnswer()
+            }
+            shadowOf(Looper.getMainLooper()).idle()
+            model.dismissCelebration()
+            val math = requireNotNull(model.lastResult)
+            assertTrue(model.rewardDialogVisible)
+            assertTrue(model.slotMachineActivityReward)
+            val completed = finished(id = "reading-$legacy")
+            val data = if (legacy) completed.copy(sessions = completed.sessions.map {
+                it.copy(prizeType = RewardType.LOLLIPOP, slotReward = null)
+            }) else completed
+            model.openSubjectHistory(Subject.READING)
+            model.showReadingRewardForSession(data, data.sessions.single())
+            shadowOf(Looper.getMainLooper()).idle()
+            assertNull(model.rewardResult)
+            assertTrue(model.readingRewardDialogVisible)
+            assertEquals(!legacy, model.slotMachineActivityReward)
+            assertTrue(model.history.first { it.id == math.id }.hasUnclaimedReward)
+            model.claimDisplayedReward()
+            assertNotNull(model.readingRewardResult?.prize)
+            model.dismissReadingSessionReward()
+            model.closeOverlay()
+            model.closeOverlay()
+            model.showRewardForResult(math)
+            assertTrue(model.slotMachineActivityReward)
+            model.claimDisplayedReward()
+            assertNotNull(model.history.first { it.id == math.id }.prize)
+        }
+        assertEquals(4, model.rewardBalances[RewardType.LOLLIPOP]?.totalFragments)
+    }
+
     @Test fun queuedSaveAndClaimCannotReopenDialogsAfterNavigationOrDuplicateRapidTaps() {
         val dispatcher = QueuedDispatcher()
         val model = model(dispatcher)
@@ -380,11 +426,11 @@ class ReadingRewardsTest {
         model.openSubjectHistory(Subject.READING)
         model.showReadingRewardForSession(data, data.sessions.single())
         dispatcher.drain()
-        repeat(3) { model.claimReadingReward() }
-        assertTrue(model.claimingReadingReward)
+        repeat(3) { model.claimDisplayedReward() }
+        assertTrue(model.slotMachineBusy)
         model.openRewards()
         dispatcher.drain()
-        assertFalse(model.claimingReadingReward)
+        assertFalse(model.slotMachineBusy)
         assertFalse(model.readingRewardDialogVisible)
         assertNull(model.readingRewardResult)
         assertEquals(RewardBalance(0, 1), model.rewardBalances[RewardType.LOLLIPOP])
@@ -399,12 +445,13 @@ class ReadingRewardsTest {
         assertTrue(model.readingRewardDialogVisible)
         assertTrue(model.readingRewardResults.isEmpty())
         assertTrue(model.pokemons.isEmpty())
-        model.claimReadingReward()
+        model.claimDisplayedReward()
         assertFalse(model.claimingReadingReward)
         assertNotNull(model.readingRewardError)
         assertTrue(model.rewardBalances.isEmpty())
         assertTrue(blockedWrite.delete())
-        model.claimReadingReward()
+        model.retrySlotMachinePrize()
+        shadowOf(Looper.getMainLooper()).idle()
         assertNull(model.readingRewardError)
         assertNotNull(model.readingRewardResult?.prize)
         assertEquals(RewardBalance(0, 1), model.rewardBalances[RewardType.LOLLIPOP])
@@ -430,14 +477,14 @@ class ReadingRewardsTest {
         }
         dispatcher.drain()
         model.dismissCelebration()
-        model.claimReward()
+        model.claimDisplayedReward()
         model.done()
         val data = finished()
         open(model, data)
         dispatcher.drain()
         assertEquals(RewardBalance(0, 1), model.rewardBalances[RewardType.LOLLIPOP])
         model.dismissReadingCelebration()
-        model.claimReadingReward()
+        model.claimDisplayedReward()
         model.openSettings()
         model.removeReward(RewardType.LOLLIPOP, fragment = true)
         dispatcher.drain()
@@ -455,10 +502,10 @@ class ReadingRewardsTest {
         open(model, finished())
         dispatcher.drain()
         model.dismissReadingCelebration()
-        model.claimReadingReward()
+        model.claimDisplayedReward()
         model.openSettings()
         model.addReward(RewardType.LOLLIPOP, fragment = true)
-        assertTrue(model.claimingReadingReward)
+        assertTrue(model.slotMachineBusy)
         assertTrue(model.removingReward)
         dispatcher.drain()
         assertEquals(RewardBalance(0, 2), model.rewardBalances[RewardType.LOLLIPOP])
@@ -477,7 +524,7 @@ class ReadingRewardsTest {
         assertTrue(model.history.isEmpty())
         assertEquals(RewardBalance(1, 1), model.rewardBalances[RewardType.LOLLIPOP])
         assertFalse(model.removingReward)
-        assertFalse(model.claimingReadingReward)
+        assertFalse(model.slotMachineBusy)
         assertEquals(model.rewardBalances, model().rewardBalances)
     }
 

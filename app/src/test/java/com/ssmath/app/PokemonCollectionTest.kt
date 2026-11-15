@@ -263,7 +263,7 @@ class PokemonCollectionTest {
         restored.collectPresentedCelebration(Celebration.MEW)
         restored.dismissCelebration()
         assertTrue(restored.rewardDialogVisible)
-        restored.claimReward()
+        restored.claimDisplayedReward()
         assertEquals(1, restored.rewardBalances.values.sumOf { it.totalFragments })
         assertEquals(Celebration.standardCelebrations.toSet(), model().pokemons)
     }
@@ -333,7 +333,7 @@ class PokemonCollectionTest {
         model.dismissCelebration()
         assertFalse(model.selectingCelebration)
         assertTrue(model.rewardDialogVisible)
-        model.claimReward()
+        model.claimDisplayedReward()
         dispatcher.drain()
         assertNull(model.celebration)
         assertTrue(model.pokemons.isEmpty())
@@ -404,7 +404,7 @@ class PokemonCollectionTest {
         repeat(25) { answer(model) }
         repeat(3) { model.collectPresentedCelebration(Celebration.PIKACHU) }
         model.dismissCelebration()
-        model.claimReward()
+        model.claimDisplayedReward()
         model.clearHistory()
         dispatcher.drain()
         assertNull(model.celebration)
@@ -443,7 +443,7 @@ class PokemonCollectionTest {
         repeat(25) { answer(model) }
         model.collectPresentedCelebration(Celebration.PIKACHU)
         model.dismissCelebration()
-        model.claimReward()
+        model.claimDisplayedReward()
         repeat(2) { model.collectAllCelebrations() }
         model.clearHistory()
         dispatcher.drain()
