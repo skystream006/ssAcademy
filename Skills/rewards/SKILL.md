@@ -20,7 +20,7 @@ belong here; unrelated gameplay and shell behavior do not.
 - [Inventory](references/inventory.md): eligibility, settings, balances, claims,
   durable snapshots, deletion, and reading receipt orchestration.
 - [Celebrations](references/celebrations.md): selection, live collection,
-  replay, matrix-only Mega queues, gallery behavior, and exact drawing families.
+  replay, Tier 3 and Matrix Mega queues, gallery behavior, and exact drawing families.
 - [Tests](references/tests.md): choose an existing focused class or method after
   identifying the changed contract; shared commands live in
   [validation](../repo-router/references/validation.md).

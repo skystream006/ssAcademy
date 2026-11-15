@@ -279,15 +279,68 @@ class ReadingRewardsTest {
         assertFalse(requireNotNull(model.readingCelebration) in model.pokemons)
     }
 
-    @Test fun readingWith121QuestionsCannotUnlockMegaEvenAfterFinishingTheStandardCollection() {
+    @Test fun legacyTierTwoReadingCannotUnlockMegaEvenAfterFinishingTheStandardCollection() {
         HistoryStore(file).collectPokemons(Celebration.standardCelebrations)
         val model = model()
-        open(model, finished(count = 121))
+        open(model, finished(count = 121, thresholds = RewardThresholds(tier3Minimum = 1001)))
         val selected = requireNotNull(model.readingCelebration)
         assertNotEquals(CelebrationCategory.MEGA_POKEMONS, selected.category)
         model.collectPresentedReadingCelebration(selected)
         assertEquals(Celebration.standardCelebrations.toSet(), model.pokemons)
         assertEquals(selected, model.readingRewardResults.single().pokemonReward)
+    }
+
+    @Test fun tierThreeReadingCollectsMegaThenStandardUsingSavedThresholdsWithoutFragments() {
+        val data = finished(count = 10, thresholds = RewardThresholds(1, 2, 10), enabledAtFinish = false)
+        val model = model()
+        model.chooseRewardThresholds(ReadingGame.MISSING, 100, 200, 300)
+        open(model, data)
+        val mega = requireNotNull(model.readingCelebration)
+        assertEquals(CelebrationCategory.MEGA_POKEMONS, mega.category)
+        assertTrue(model.hasNextReadingCelebration)
+        assertTrue(model.pokemons.isEmpty())
+        assertNull(model.readingRewardResult)
+        assertTrue(blockedWrite.mkdir())
+        model.collectPresentedReadingCelebration(mega)
+        shadowOf(Looper.getMainLooper()).idle()
+        assertTrue(model.pokemons.isEmpty())
+        assertNotNull(model.message)
+        assertTrue(blockedWrite.delete())
+        repeat(3) { model.collectPresentedReadingCelebration(mega) }
+        model.dismissReadingCelebration()
+        val normal = requireNotNull(model.readingCelebration)
+        assertEquals(CelebrationCategory.OTHER, normal.category)
+        repeat(3) { model.collectPresentedReadingCelebration(normal) }
+        model.dismissReadingCelebration()
+        assertNull(model.readingCelebration)
+        assertFalse(model.hasNextReadingCelebration)
+        val saved = HistoryStore(file).loadSnapshot()
+        assertEquals(setOf(mega, normal), saved.readingResults.single().pokemonRewards)
+        assertEquals(saved.pokemons, model().pokemons)
+        model.dismissReadingSessionReward()
+        val restored = model()
+        open(restored, data)
+        assertNull(restored.readingCelebration)
+        assertEquals(saved, HistoryStore(file).loadSnapshot())
+        restored.deleteReadingResults(setOf("session"))
+        assertTrue(HistoryStore(file).loadSnapshot().pokemons.isEmpty())
+    }
+
+    @Test fun leavingTierThreeReadingDropsUnpresentedStandardAndDoesNotReplayMega() {
+        val data = finished(count = 100, disabled = RewardType.entries.toSet() - RewardType.TOYS_3)
+        val model = model()
+        open(model, data)
+        val mega = requireNotNull(model.readingCelebration)
+        model.collectPresentedReadingCelebration(mega)
+        model.dismissReadingSessionReward()
+        model.dismissReadingCelebration()
+        assertNull(model.readingCelebration)
+        assertEquals(setOf(mega), model.pokemons)
+        val restored = model()
+        open(restored, data)
+        assertNull(restored.readingCelebration)
+        restored.showReadingRewardForSession(data, data.sessions.single())
+        assertTrue(restored.readingRewardDialogVisible)
     }
 
     @Test fun partialTimedOutAbandonedAndUnfinishedSessionsNeverCelebrateOrGrantRewards() {

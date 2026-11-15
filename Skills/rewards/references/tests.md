@@ -81,8 +81,11 @@ For documentation-only changes, verify links/paths/symbols; do not run app tests
 | Catalog replay lifecycle | `CelebrationUiTest.everyCelebrationCanReplayWithItsLabelAndCloseOrFinish` |
 | Matrix's independent two-scene queue | `MegaRewardsTest.matrixAlwaysSelectsBothPoolsIndependentlyAndDoesNotRequirePrizes` |
 | Unpresented queue disposal | `MegaRewardsTest.leavingOrDeletingResultsDropsTheQueuedCelebrationWithoutCollectingIt` |
-| Matrix identity, not count alone | `MegaRewardsTest.ordinaryMultiplicationWith121QuestionsCannotEarnMega` |
-| Reading cannot unlock Mega | `ReadingRewardsTest.readingWith121QuestionsCannotUnlockMegaEvenAfterFinishingTheStandardCollection` |
+| Basic/Logic saved Tier 3 eligibility | `MegaRewardsTest.basicAndLogicUseSavedTierThreeThresholdsEvenWhenFragmentsAreDisabled` |
+| Ordinary Tier 3 multiplication | `MegaRewardsTest.ordinaryMultiplicationTierThreeCompletionCollectsMegaAndStandard` |
+| Reading Tier 3 queue and save retry | `ReadingRewardsTest.tierThreeReadingCollectsMegaThenStandardUsingSavedThresholdsWithoutFragments` |
+| Reading live Mega/standard/slots ordering | `ReadingEntryTest.tierThreeReadingPresentsMegaThenStandardBeforeFragmentSlots` |
+| Legacy Tier 2 Reading stays standard-only | `ReadingRewardsTest.legacyTierTwoReadingCannotUnlockMegaEvenAfterFinishingTheStandardCollection` |
 | Kanto metadata | `KantoCatalogTest.everyRequestedPokemonHasItsExactLabelCategoryAndNdex` |
 | Mega serialized names | `MegaCatalogTest.allEnumNamesRoundTripWithoutCollidingWithStandardPokemon` |
 | Whole/fragment art | `RewardDrawingsTest.allRewardsRenderDistinctWholeAndPartialArtwork` |

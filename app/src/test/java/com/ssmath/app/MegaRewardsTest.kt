@@ -53,18 +53,22 @@ class MegaRewardsTest {
         shadowOf(Looper.getMainLooper()).idle()
     }
 
-    @Test fun everyMegaIsReachableOnlyFromTheMatrixPool() {
+    @Test fun everyMegaIsReachableFromMatrixAndTierThreePoolsButNeverPractice() {
         val matrixSelections = (0..10_000).map {
             Celebration.select(121, Random(it), standard, isMultiplicationMatrix = true)
         }.toSet()
         assertEquals(Celebration.megaPokemons.toSet(), matrixSelections)
+        val tierThreeSelections = (0..10_000).map {
+            Celebration.select(10, Random(it), standard, rewardTier = RewardTier.TIER_3)
+        }.toSet()
+        assertEquals(Celebration.megaPokemons.toSet(), tierThreeSelections)
         listOf(1, 14, 15, 25, 50, 121, 1000).forEach { count ->
             repeat(100) { seed ->
                 assertNotEquals(CelebrationCategory.MEGA_POKEMONS,
                     Celebration.select(count, Random(seed), standard)?.category)
                 assertEquals(CelebrationCategory.OTHER,
                     Celebration.select(count, Random(seed), standard, GameMode.PRACTICE,
-                        isMultiplicationMatrix = true)?.category)
+                        isMultiplicationMatrix = true, rewardTier = RewardTier.TIER_3)?.category)
                 if (count != 121) {
                     assertNotEquals(CelebrationCategory.MEGA_POKEMONS,
                         Celebration.select(count, Random(seed), standard, isMultiplicationMatrix = true)?.category)
@@ -131,7 +135,7 @@ class MegaRewardsTest {
         assertTrue(model.lastResult!!.pokemonRewards.isEmpty())
     }
 
-    @Test fun ordinaryMultiplicationWith121QuestionsCannotEarnMega() {
+    @Test fun ordinaryMultiplicationTierThreeCompletionCollectsMegaAndStandard() {
         HistoryStore(file).collectPokemons(standard)
         val model = model()
         model.openRewardsGame()
@@ -140,9 +144,45 @@ class MegaRewardsTest {
         model.start()
         repeat(121) { answer(model) }
         assertFalse(model.lastResult!!.isMultiplicationMatrix)
-        assertTrue(model.celebration in standard)
-        model.collectPresentedCelebration(Celebration.MEGA_MEGANIUM)
-        assertEquals(standard, model.pokemons)
+        val mega = requireNotNull(model.celebration)
+        assertEquals(CelebrationCategory.MEGA_POKEMONS, mega.category)
+        model.collectPresentedCelebration(mega)
+        model.dismissCelebration()
+        val normal = requireNotNull(model.celebration)
+        assertTrue(normal in standard)
+        model.collectPresentedCelebration(normal)
+        assertEquals(standard + mega, model.pokemons)
+        assertEquals(setOf(mega, normal), HistoryStore(file).load().single().pokemonRewards)
+    }
+
+    @Test fun basicAndLogicUseSavedTierThreeThresholdsEvenWhenFragmentsAreDisabled() {
+        listOf(MathRewardGame.BASIC, MathRewardGame.LOGIC).forEach { game ->
+            file.delete()
+            val model = model()
+            model.chooseRewardThresholds(game, 1, 2, 10)
+            model.chooseRewardsEnabled(false)
+            if (game == MathRewardGame.LOGIC) model.openLogicMathGame() else model.openRewardsGame()
+            model.updateRewardsQuestionCount("10")
+            model.selectRewardsGame(Operation.ADDITION)
+            model.start()
+            repeat(10) { answer(model, correct = it != 0) }
+            assertEquals(RewardTier.TIER_3, model.lastResult!!.rewardTier)
+            assertNull(model.lastResult!!.slotReward)
+            val mega = requireNotNull(model.celebration)
+            assertEquals(CelebrationCategory.MEGA_POKEMONS, mega.category)
+            model.chooseRewardThresholds(game, 100, 200, 300)
+            repeat(3) { model.collectPresentedCelebration(mega) }
+            model.dismissCelebration()
+            val normal = requireNotNull(model.celebration)
+            assertEquals(CelebrationCategory.OTHER, normal.category)
+            model.collectPresentedCelebration(normal)
+            model.dismissCelebration()
+            assertNull(model.celebration)
+            assertEquals(setOf(mega, normal), model().pokemons)
+            model.deleteResult(model.lastResult!!.id)
+            assertTrue(HistoryStore(file).loadSnapshot().pokemons.isEmpty())
+            model.done()
+        }
     }
 
     @Test fun matrixAlwaysSelectsBothPoolsIndependentlyAndDoesNotRequirePrizes() {
@@ -253,20 +293,24 @@ class MegaRewardsTest {
         assertEquals(2, model.history.size)
     }
 
-    @Test fun persistenceRejectsNonMatrixIncompleteTimedOutAndPracticeMegaClaims() {
+    @Test fun persistenceRejectsLowerTierIncompleteTimedOutAndPracticeMegaClaims() {
         val attempts = List(121) { index ->
             val problem = MultiplicationMatrix.problemAt(index)
             Attempt(problem, problem.answer)
         }
         val completed = PracticeResult(1, 1, Operation.MULTIPLICATION, 11, 1000, attempts,
             minimum = 1, questionCount = 121, isMultiplicationMatrix = true)
+        val tierThree = completed.copy(isMultiplicationMatrix = false, rewardThresholds = RewardThresholds())
         val store = HistoryStore(file)
         listOf(
             completed.copy(isMultiplicationMatrix = false),
             completed.copy(attempts = attempts.dropLast(1)),
             completed.copy(timedOut = true),
             completed.copy(gameMode = GameMode.PRACTICE),
-            completed.copy(questionCount = 120, attempts = attempts.dropLast(1))
+            completed.copy(questionCount = 120, attempts = attempts.dropLast(1)),
+            tierThree.copy(timedOut = true),
+            tierThree.copy(attempts = attempts.dropLast(1)),
+            tierThree.copy(gameMode = GameMode.PRACTICE)
         ).forEach { invalid ->
             file.delete()
             store.add(invalid)
@@ -278,6 +322,49 @@ class MegaRewardsTest {
         store.add(completed)
         assertEquals(setOf(Celebration.MEGA_MEGANIUM),
             store.collectPokemon(completed.id, Celebration.MEGA_MEGANIUM).pokemons)
+        file.delete()
+        store.add(tierThree)
+        val saved = store.collectPokemon(tierThree.id, Celebration.MEGA_MEGANIUM)
+        assertEquals(setOf(Celebration.MEGA_MEGANIUM), saved.pokemons)
+        assertEquals(saved, store.collectPokemon(tierThree.id, Celebration.MEGA_EMBOAR))
+    }
+
+    @Test fun tierThreeReadingClaimsBothScenesOnceAndPreservesSharedMathOwnershipOnDeletion() {
+        val store = HistoryStore(file)
+        val mega = Celebration.MEGA_MEGANIUM
+        val receipt = ReadingRewardResult("session", "reader", ReadingGame.MISSING, ReadingLevel.SPROUT,
+            1, 10, 9, 10, celebration = Celebration.PARTY, rewardThresholds = RewardThresholds(1, 2, 10),
+            megaCelebration = mega)
+        listOf(receipt.copy(answered = 9), receipt.copy(timedOut = true),
+            receipt.copy(rewardThresholds = RewardThresholds())).forEach {
+            file.delete()
+            assertNull(store.addReadingResult(it).readingResults.single().megaCelebration)
+            val before = file.readText()
+            store.collectReadingCelebration(it.sessionId, mega)
+            assertEquals(before, file.readText())
+        }
+        file.delete()
+        store.addReadingResult(receipt)
+        store.collectReadingCelebration(receipt.sessionId, mega)
+        val both = store.collectReadingCelebration(receipt.sessionId, Celebration.PARTY)
+        assertEquals(setOf(mega, Celebration.PARTY), both.readingResults.single().pokemonRewards)
+        assertEquals(both, store.collectReadingCelebration(receipt.sessionId, mega))
+        assertEquals(both, store.collectReadingCelebration(receipt.sessionId, Celebration.MEGA_EMBOAR))
+        val attempts = List(121) { index ->
+            val problem = MultiplicationMatrix.problemAt(index)
+            Attempt(problem, problem.answer)
+        }
+        store.add(PracticeResult(1, 1, Operation.MULTIPLICATION, 11, 1000, attempts,
+            questionCount = 121, isMultiplicationMatrix = true))
+        store.collectPokemon(1, mega)
+        store.delete(1)
+        assertEquals(setOf(mega, Celebration.PARTY), store.loadSnapshot().pokemons)
+        store.add(PracticeResult(2, 2, Operation.MULTIPLICATION, 11, 1000, attempts,
+            questionCount = 121, isMultiplicationMatrix = true))
+        store.collectPokemon(2, mega)
+        assertEquals(setOf(mega), store.deleteReadingResults(setOf(receipt.sessionId)).pokemons)
+        store.delete(2)
+        assertTrue(store.loadSnapshot().pokemons.isEmpty())
     }
 
     @Test fun readingReceiptsCannotGrantMegaButAdminAddsAllWithoutChangingHistoryOrRewards() {

@@ -347,15 +347,17 @@ enum class Celebration(
             random: Random = Random.Default,
             collected: Set<Celebration> = emptySet(),
             gameMode: GameMode = GameMode.REWARDS,
-            isMultiplicationMatrix: Boolean = false
+            isMultiplicationMatrix: Boolean = false,
+            rewardTier: RewardTier? = null
         ): Celebration? {
             val pool = when {
                 gameMode == GameMode.PRACTICE -> entries.filter { it.category == CelebrationCategory.OTHER }
                 isMultiplicationMatrix && questionCount == MultiplicationMatrix.QUESTION_COUNT -> megaPokemons
+                rewardTier == RewardTier.TIER_3 -> megaPokemons
                 else -> standardCelebrations
             }
             return availableCelebrations(pool, collected)
-                .filter { it.isEligibleFor(questionCount, gameMode, isMultiplicationMatrix) }.randomOrNull(random)
+                .filter { it.isEligibleFor(questionCount, gameMode, isMultiplicationMatrix, rewardTier) }.randomOrNull(random)
         }
     }
 }
@@ -366,12 +368,14 @@ internal fun availableCelebrations(pool: List<Celebration>, collected: Set<Celeb
 internal fun Celebration.isEligibleFor(
     questionCount: Int,
     gameMode: GameMode = GameMode.REWARDS,
-    isMultiplicationMatrix: Boolean = false
+    isMultiplicationMatrix: Boolean = false,
+    rewardTier: RewardTier? = null
 ): Boolean = when (category) {
     CelebrationCategory.OTHER -> true
     CelebrationCategory.POKEMONS -> gameMode == GameMode.REWARDS && questionCount >= 15
-    CelebrationCategory.MEGA_POKEMONS -> gameMode == GameMode.REWARDS && isMultiplicationMatrix &&
-        questionCount == MultiplicationMatrix.QUESTION_COUNT
+    CelebrationCategory.MEGA_POKEMONS -> gameMode == GameMode.REWARDS &&
+        (rewardTier == RewardTier.TIER_3 ||
+            (isMultiplicationMatrix && questionCount == MultiplicationMatrix.QUESTION_COUNT))
 }
 
 internal const val CELEBRATION_DURATION_MS = 7_200
