@@ -190,6 +190,7 @@ internal fun MathAppContent(model: MathViewModel) {
                     }
                     if (model.overlay == Overlay.READING) model.readingCelebration?.let { celebration ->
                         CelebrationDialog(celebration, onFinished = model::dismissReadingCelebration,
+                            hasNextCelebration = model.hasNextReadingCelebration,
                             onPresented = { model.collectPresentedReadingCelebration(celebration) })
                     }
                     model.readingRewardResult?.let { result ->

@@ -1186,7 +1186,7 @@ fun PokemonsScreen(model: MathViewModel) {
             if (collected.isEmpty()) {
                 item(key = "empty-collection", span = { GridItemSpan(maxLineSpan) }) {
                     Text("Finish practices to collect Other celebrations. Pokémon can appear in math challenges after 15 or more questions. " +
-                        "Mega Pokémons are earned in the Multiplication Matrix Rewards Game and Tier 3 Admin slots.",
+                        "Mega Pokémons are earned from Tier 3 Math and Reading completions, all Multiplication Matrix completions, and Tier 3 Admin slots.",
                         Modifier.padding(8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }

@@ -194,6 +194,8 @@ class MathViewModel(
         private set
     var readingCelebration by mutableStateOf<Celebration?>(null)
         private set
+    private var queuedReadingCelebrations by mutableStateOf<List<Celebration>>(emptyList())
+    val hasNextReadingCelebration: Boolean get() = queuedReadingCelebrations.isNotEmpty()
     var readingSelectingCelebration by mutableStateOf(false)
         private set
     var claimingReadingReward by mutableStateOf(false)
@@ -720,8 +722,10 @@ class MathViewModel(
                     if (pendingResult === pending) {
                         val selected = if (selectingCelebration && collectionLoaded) buildList {
                             Celebration.select(state.questionCount, celebrationRandom, pokemons, result.gameMode,
-                                isMultiplicationMatrix = result.isMultiplicationMatrix)?.let { add(it) }
-                            if (result.isMultiplicationMatrix) {
+                                isMultiplicationMatrix = result.isMultiplicationMatrix,
+                                rewardTier = result.rewardTier)?.let { add(it) }
+                            if (result.isMultiplicationMatrix ||
+                                (result.gameMode == GameMode.REWARDS && result.rewardTier == RewardTier.TIER_3)) {
                                 Celebration.select(state.questionCount, celebrationRandom, pokemons, result.gameMode)
                                     ?.let { add(it) }
                             }
@@ -774,7 +778,7 @@ class MathViewModel(
         val pending = pendingResult ?: return
         if (celebration != presented || overlay != null || presented in pending.result.pokemonRewards) return
         if (!presented.isEligibleFor(pending.result.questionCount, pending.result.gameMode,
-                pending.result.isMultiplicationMatrix)) return
+                pending.result.isMultiplicationMatrix, pending.result.rewardTier)) return
         collectCelebrations(listOf(presented), pending)
     }
 
@@ -991,6 +995,7 @@ class MathViewModel(
         readingRewardOverlay = overlay
         readingCelebrationDismissed = !automatic
         readingCelebration = null
+        queuedReadingCelebrations = emptyList()
         readingSelectingCelebration = true
         readingRewardResult = null
         readingRewardError = null
@@ -1004,9 +1009,11 @@ class MathViewModel(
                             pending.saved && (it.prizeType != null || it.slotReward != null) && (!automatic || created)
                         }
                         prepareReadingSlotMachine(pending, request)
-                        readingCelebration = pending.result.celebration.takeIf {
-                            created && !readingCelebrationDismissed
-                        }
+                        val selected = if (created && !readingCelebrationDismissed)
+                            listOfNotNull(pending.result.megaCelebration, pending.result.celebration)
+                        else emptyList()
+                        readingCelebration = selected.firstOrNull()
+                        queuedReadingCelebrations = selected.drop(1)
                     }
                 }
             } catch (error: CancellationException) {
@@ -1043,8 +1050,12 @@ class MathViewModel(
             val selected = if (pending.result.completed)
                 Celebration.select(pending.result.questionCount, celebrationRandom, snapshot.pokemons, GameMode.REWARDS)
             else null
+            val mega = if (pending.result.completed && pending.result.rewardTier == RewardTier.TIER_3)
+                Celebration.select(pending.result.questionCount, celebrationRandom, snapshot.pokemons,
+                    rewardTier = pending.result.rewardTier)
+            else null
             snapshot = withContext(ioDispatcher) {
-                store.addReadingResult(pending.result.copy(celebration = selected))
+                store.addReadingResult(pending.result.copy(celebration = selected, megaCelebration = mega))
             }
         }
         snapshot.readingResults.find { it.sessionId == id }?.let {
@@ -1057,7 +1068,8 @@ class MathViewModel(
 
     fun dismissReadingCelebration() {
         readingCelebrationDismissed = true
-        readingCelebration = null
+        readingCelebration = queuedReadingCelebrations.firstOrNull()
+        queuedReadingCelebrations = queuedReadingCelebrations.drop(1)
     }
 
     fun dismissReadingReward() {
@@ -1069,6 +1081,7 @@ class MathViewModel(
     }
 
     fun dismissReadingSessionReward() {
+        queuedReadingCelebrations = emptyList()
         dismissReadingCelebration()
         dismissReadingReward()
         readingRewardOverlay = null
@@ -1079,7 +1092,7 @@ class MathViewModel(
         val pending = pendingReadingResult ?: return
         if (!foreground || overlay != Overlay.READING || overlay != readingRewardOverlay ||
             readingSelectingCelebration || readingCelebration != presented || !pending.saved ||
-            pending.result.pokemonReward != null) return
+            presented in pending.result.pokemonRewards) return
         viewModelScope.launch {
             try {
                 storeLock.withLock {

@@ -31,11 +31,12 @@ collection eligibility. Selection and persistence entry points above come first.
   no prize type is enabled, or accuracy does not qualify for a fragment.
 - Prefer uncollected eligible entries. Repeats become available only when the
   entire selected pool is collected, not merely its currently eligible subset.
-- Mega selection requires actual Multiplication Matrix identity and its exact
-  121-question count in rewards mode. Ordinary multiplication with 121 questions
-  and Reading sessions cannot unlock Mega forms.
-- Matrix completion selects Mega and standard pools independently, queuing Mega
-  first, then a standard celebration, before the gift. Preserve both result slots.
+- Mega selection requires a Tier 3 Math or Reading completion, or actual
+  Multiplication Matrix identity and its exact 121-question count in rewards mode.
+  Use saved completion thresholds/Matrix tier, never current settings or prize availability.
+- These completions select Mega and standard pools independently, queuing Mega
+  first, then a standard celebration, before slots/gifts. Preserve both collected
+  result slots and Reading's selected `megaCelebration`/collected `megaPokemonReward`.
 - Leaving or deleting results drops unpresented queued scenes without collecting
   them. Selection alone is not collection.
 - `CelebrationDialog` invokes `onPresented` while lifecycle state is `RESUMED`;
@@ -50,7 +51,8 @@ collection eligibility. Selection and persistence entry points above come first.
 - Admin slot matches award one uncollected-first standard animation; Tier 3
   also awards one independently selected Mega. Save both with the material prize,
   cache selections on the roll for retries, and use callback-free replay to present
-  the already-awarded animations. Do not extend the Mega exception to activity slots.
+  the already-awarded animations. Activity Mega awards remain completion celebrations,
+  not extra payouts on activity slot wins.
 - `PracticeSnapshot.slotMachinePokemons` preserves independent Admin ownership
   against Math/Reading history deletion; collection replacement clears that ownership.
 - Preserve shared-owner deletion accounting and mutex/atomic-save guarantees

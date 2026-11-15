@@ -73,9 +73,9 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    the game finishes; no prize is awarded if all rewards in that tier are disabled.
    The configured time limit per 5 questions scales to all 121 questions, and the game stops
    at **13 wrong answers** or when time runs out. Completing the matrix also unlocks the
-   **Mega Pokémons** celebration pool, exclusive to this activity; Tier 3 Admin slot wins
-   can also grant Mega Pokémon bonuses. Ordinary multiplication
-   games (even with 121 questions), Practice Game, and reading cannot award this tier.
+   **Mega Pokémons** celebration pool at any selected reward tier. All Tier 3 Math
+   and Reading completions also award a Mega Pokémon; Tier 3 Admin slot wins
+   grant a Mega Pokémon bonus. Practice Game cannot award Mega Pokémon.
 2. **Press Start when Ready** – press **Start** to begin. The timer starts now.
    Timers show minutes and seconds only (for example, **125:09**), with no hours.
 3. **Play** – in Practice Game and Challenge- Basic Math, addition and subtraction use two random numbers
@@ -130,19 +130,22 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    Math challenges below 15 questions go straight to results without an animation.
    Practice Game uses only the five Other scenes, regardless of question count,
    without awarding prizes or Pokémon.
-   Matrix completions award **two animations**: one of **95 Mega Pokémon forms** and
+   Matrix completions and all Tier 3 Math and Reading completions award **two animations**:
+   one of **95 Mega Pokémon forms** and
    one standard **Pokémon or Other** scene, shown in that order before any prize gift. Mega forms include
    the separate X/Y/Z variants and three Tatsugiri entries. Each shows **Mega Pokémon**,
    its name and its supplied Ndex (including form suffixes) followed by `-M`
    (for example, `#0154-M` or `#0026x-M`) and appears in the separate
    **Mega Pokémons** collection section, with an offline preview and replay.
-   Matrix games prefer uncollected scenes independently in the Mega and standard pools,
-   allowing repeats in each pool once it is complete. Both celebrations are saved with the result.
+   These completions prefer uncollected scenes independently in the Mega and standard pools,
+   allowing repeats in each pool once it is complete. Both celebrations are saved with the result
+   or Reading receipt. Tier eligibility uses the activity's saved completion thresholds
+   (or the selected Matrix tier), not later Admin edits.
    Mega celebrations, like other animations,
    are collected on live presentation, never by replay, and do not require prize fragments
    to be enabled. Early exits and timeouts do not award celebrations.
    Each animation shows its name alongside the scene, which says **Hurray!!**. These animations
-   are drawn in the app and work offline. Press **Next celebration** after the matrix's
+   are drawn in the app and work offline. Press **Next celebration** after the
    Mega animation, then **View results** after the standard animation, or wait for each to finish.
    Other games show **View results** after their single animation.
    In both math modes, the game ends when wrong answers go **above 10%** of the
@@ -729,7 +732,8 @@ Its **My Pokémons** and **Reading activities** sections start collapsed.
 Game settings and reward controls are instead in the PIN-protected **Admin Menu**.
 Expand **My Pokémons**, then press **Add all animations** to add all celebrations, including **Mega Pokémons**, to **My Pokémons**, without
 duplicating ones already collected or changing history and rewards. This debug action
-unlocks every animation; earning Mega Pokémons through gameplay still requires the math matrix game.
+unlocks every animation; earning Mega Pokémons through gameplay requires a completed math matrix
+or a Tier 3 Math or Reading completion.
 
 In **Settings > Admin Menu**, expand **My Rewards**, then press **Add/Remove Rewards** to
 view balances by tier in rows of four rewards. Each reward has separate **Whole** and

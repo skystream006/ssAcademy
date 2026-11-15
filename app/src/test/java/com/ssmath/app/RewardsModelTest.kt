@@ -1184,6 +1184,7 @@ class RewardsModelTest {
                 val pool = requireNotNull(model.lastResult!!.slotReward)
                 assertEquals(rewardTierForQuestionCount(count), pool.tier)
                 model.dismissCelebration()
+                if (pool.tier == RewardTier.TIER_3) model.dismissCelebration()
                 model.claimDisplayedReward()
                 assertTrue(model.lastResult!!.prize!!.type in pool.weights)
                 assertEquals(model.lastResult, HistoryStore(file).load().first())

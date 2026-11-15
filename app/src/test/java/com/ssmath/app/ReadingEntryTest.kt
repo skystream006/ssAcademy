@@ -77,6 +77,10 @@ class ReadingEntryTest {
 
     private fun await(condition: () -> Boolean) {
         compose.waitUntil(10_000) {
+            if (!compose.mainClock.autoAdvance) {
+                compose.mainClock.advanceTimeByFrame()
+                compose.waitForIdle()
+            }
             shadowOf(Looper.getMainLooper()).idle()
             condition()
         }
@@ -119,6 +123,37 @@ class ReadingEntryTest {
         compose.onNodeWithTag("reading-import-required").assertDoesNotExist()
         assertEquals(Overlay.READING, app.overlay)
         assertTrue(requireNotNull(reading.data).attempts.isEmpty())
+    }
+
+    @Test fun tierThreeReadingPresentsMegaThenStandardBeforeFragmentSlots() {
+        var data = readingSessionFixture(count = 25)
+        repeat(24) { data = ReadingEngine.nextSessionActivity(readingSolve(data)) }
+        data = ReadingEngine.finish(readingAnswer(data, readingCorrect(data)),
+            rewardThresholds = RewardThresholds(1, 2, 25), tier3RewardChances = Tier3RewardChances(0, 0, 100))
+        val session = requireNotNull(data.activeSession)
+        val reading = reading(Dispatchers.Unconfined)
+        await { reading.data != null && !reading.saving }
+        val app = show()
+        compose.activity.viewModelStore.put("tier-three-rewards", app)
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle {
+            app.openReading()
+            app.openReadingSessionReward(data, session)
+        }
+        await { app.readingRewardResults.singleOrNull()?.megaPokemonReward != null }
+        assertEquals(CelebrationCategory.MEGA_POKEMONS, app.readingCelebration?.category)
+        compose.onNodeWithText("Mega Pokémon").assertExists()
+        compose.onNodeWithText("Next celebration").performClick()
+        assertFalse(app.readingRewardDialogVisible)
+        await { app.readingRewardResults.singleOrNull()?.pokemonReward != null }
+        compose.runOnIdle { app.dismissReadingCelebration() }
+        compose.mainClock.autoAdvance = true
+        compose.onNodeWithTag("slot-machine-dialog").assertIsDisplayed()
+        val snapshot = HistoryStore(File(application.filesDir, "practice_history.json")).loadSnapshot()
+        assertEquals(2, snapshot.pokemons.size)
+        assertEquals(snapshot.pokemons, snapshot.readingResults.single().pokemonRewards)
+        assertTrue(snapshot.rewards.isEmpty())
+        assertTrue(snapshot.history.isEmpty())
     }
 
     @Test fun completedReadingBatchPresentsAndClaimsSharedRewardsWithoutMathHistory() {
