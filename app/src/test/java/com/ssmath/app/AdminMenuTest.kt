@@ -16,8 +16,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.lifecycle.Lifecycle
@@ -80,6 +82,92 @@ class AdminMenuTest {
         compose.onNodeWithTag("slot-fragment-reward").assertIsOn()
         compose.onNodeWithText("Back to Admin Menu").performClick()
         compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
+    }
+
+    @Test
+    @Config(qualifiers = "w320dp-h800dp")
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun slotAndAdminShowAvailableRewardsAndEffectiveOddsAtLargeTextSize() {
+        val model = MathViewModel(application, ioDispatcher = Dispatchers.Unconfined)
+        model.openSettings()
+        model.chooseTier3RewardChances(20, 80, 0)
+        model.chooseTextSize(200)
+        compose.setContent { MathTheme(textSizePercent = 200) { SettingsScreen(model) } }
+        compose.openAdminSettings()
+        compose.onNodeWithText("Available Rewards").performScrollTo().performClick()
+        compose.onNodeWithTag("admin-slot-odds-TOYS_1").performScrollTo().assertIsDisplayed()
+        compose.onNode(hasText("Per reel: 20% · Win per pull: 0.8%") and
+            hasAnyAncestor(hasTestTag("admin-slot-odds-TOYS_1"))).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("admin-slot-total-odds-TIER_3").performScrollTo()
+            .assertTextEquals("Win per pull: 52% · No match: 48%")
+        compose.onNodeWithTag("admin-slot-odds-TOYS_3").assertDoesNotExist()
+        compose.onNodeWithTag("admin-slot-odds-GOOD_BEHAVIOR_POINT").assertDoesNotExist()
+        compose.onNodeWithContentDescription("${RewardType.TOYS_2.label} reward").performScrollTo().performClick()
+        compose.onNodeWithTag("admin-slot-odds-TOYS_2").assertDoesNotExist()
+        compose.onNodeWithTag("admin-slot-total-odds-TIER_3").performScrollTo()
+            .assertTextEquals("Win per pull: 100% · No match: 0%")
+        compose.onNodeWithTag("slot-machine").performScrollTo().performClick()
+        compose.onNodeWithTag("slot-tier-TIER_3").performScrollTo().performClick()
+        compose.onNodeWithTag("slot-odds-TOYS_1").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("slot-odds-TOYS_2").assertDoesNotExist()
+        compose.onNodeWithTag("slot-odds-TOYS_3").assertDoesNotExist()
+        val odds = compose.onNode(hasText("Per reel: 100% · Win per pull: 100%") and
+            hasAnyAncestor(hasTestTag("slot-odds-TOYS_1")))
+        odds.performScrollTo().assertIsDisplayed()
+        val layouts = mutableListOf<TextLayoutResult>()
+        odds.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        assertTrue(layouts.isNotEmpty())
+        assertTrue(layouts.any { it.lineCount > 1 })
+        assertTrue(layouts.none { it.hasVisualOverflow })
+        compose.onNodeWithTag("slot-total-odds-TIER_3").performScrollTo()
+            .assertTextEquals("Win per pull: 100% · No match: 0%")
+        compose.onNodeWithText("Back to Admin Menu").performClick()
+        compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
+    }
+
+    @Test fun tierThreeAdminWinPresentsItsStandardAndMegaBonusesWithoutCreatingGameHistory() {
+        val standard = Celebration.PIKACHU
+        val mega = Celebration.megaPokemons.first()
+        val file = File(application.filesDir, "practice_history.json")
+        HistoryStore(file).collectPokemons(Celebration.entries - setOf(standard, mega), includeMegaPokemons = true)
+        val model = MathViewModel(application, ioDispatcher = Dispatchers.Unconfined)
+        model.openSettings()
+        model.chooseTier3RewardChances(100, 0, 0)
+        model.chooseSlotMachineFragmentReward(true)
+        model.chooseSlotMachineTier(RewardTier.TIER_3)
+        compose.setContent { MathTheme { SlotMachineDialog(model, onDismiss = {}) } }
+        compose.onNodeWithTag("slot-lever").performScrollTo()
+        compose.mainClock.autoAdvance = false
+        compose.mainClock.advanceTimeBy(64)
+        compose.onNodeWithTag("slot-lever").performClick()
+        compose.runOnIdle {
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(SLOT_MACHINE_DURATION_MS.toLong()))
+        }
+        compose.mainClock.advanceTimeBy(SLOT_MACHINE_DURATION_MS.toLong() + 64)
+        compose.onNodeWithTag("slot-win-dialog").assertIsDisplayed()
+        compose.onNodeWithText("Bonus: ${standard.collectionLabel}").assertIsDisplayed()
+        compose.onNodeWithText("Bonus: ${mega.collectionLabel}").assertIsDisplayed()
+        compose.runOnIdle {
+            assertEquals(setOf(standard, mega), HistoryStore(file).loadSnapshot().slotMachinePokemons)
+        }
+        compose.onNodeWithTag("slot-win-dismiss").performClick()
+        compose.mainClock.advanceTimeBy(64)
+        compose.onNodeWithTag("celebration-${standard.name}").assertIsDisplayed()
+        compose.onNodeWithText("You answered every question!").assertDoesNotExist()
+        compose.onNodeWithTag("close-celebration").assertTextEquals("Next celebration").performClick()
+        compose.mainClock.advanceTimeBy(64)
+        compose.onNodeWithTag("celebration-${standard.name}").assertDoesNotExist()
+        compose.onNodeWithTag("celebration-${mega.name}").assertIsDisplayed()
+        compose.onNodeWithTag("close-celebration").assertTextEquals("Close").performClick()
+        compose.mainClock.advanceTimeBy(64)
+        compose.onNodeWithTag("celebration-${mega.name}").assertDoesNotExist()
+        compose.onNodeWithTag("slot-lever").assertIsEnabled()
+        compose.runOnIdle {
+            assertEquals(RewardBalance(0, 1), model.rewardBalances[RewardType.TOYS_1])
+            assertTrue(model.history.isEmpty())
+            assertTrue(model.readingRewardResults.isEmpty())
+        }
+        compose.mainClock.autoAdvance = true
     }
 
     @Test fun slotMachinePullLocksControlsAndAwardsOnceAcrossRestorationAndRepeatedMatches() {

@@ -33,6 +33,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import java.util.Locale
 import kotlin.math.floor
 import kotlin.math.sin
 
@@ -44,33 +45,46 @@ internal data class SlotMachineRoll(
     val fragmentReward: Boolean = false
 ) {
     init {
-        require(reels.size == 3 && reels.all { it.tier == reels.first().tier })
+        require(reels.size == 3)
     }
+
+    // Cache bonuses without replacing the roll or restarting its reels on a save retry.
+    internal var celebrationRewards by mutableStateOf<List<Celebration>?>(null)
 
     val winner: RewardType? get() = reels.first().takeIf { type -> reels.all { it == type } }
 }
 
 @Composable
 internal fun SlotMachineDialog(model: MathViewModel, onDismiss: () -> Unit) {
-    val tier = model.slotMachineTier
+    val tier = model.slotMachineSelectedTier
+    val pool = model.slotMachinePool
     val roll = model.slotMachineRoll
     val busy = model.slotMachineBusy
-    val fragmentReward = model.slotMachineFragmentReward
+    val activityReward = model.slotMachineActivityReward
+    val fragmentReward = model.slotMachineIsFragmentReward
     var celebrationDismissed by rememberSaveable(roll) { mutableStateOf(false) }
+    var bonusIndex by rememberSaveable(roll) { mutableIntStateOf(0) }
     SlotMachineRollingSound(roll, model.slotMachineSpinning)
     SettingsDialog(
         onDismissRequest = { if (!busy) onDismiss() },
         title = { Text(if (tier == null) "Slot machine: select a tier" else "Slot machine - ${tier.label}") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (fragmentReward) "Reward: Fragment" else "Reward: Whole reward",
-                        Modifier.weight(1f))
-                    Switch(fragmentReward, model::chooseSlotMachineFragmentReward,
-                        enabled = !busy && model.slotMachineError == null,
-                        modifier = Modifier.testTag("slot-fragment-reward").semantics {
-                            contentDescription = "Fragment reward"
-                        })
+                if (activityReward) {
+                    Text("Reward: Fragment")
+                    Text("You earned a reward! Pull for free until you win one fragment. No whole rewards are awarded.")
+                    val saveError = if (model.rewardDialogVisible) model.rewardError else model.readingRewardError
+                    saveError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                } else {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text(if (fragmentReward) "Reward: Fragment" else "Reward: Whole reward",
+                            Modifier.weight(1f))
+                        Switch(fragmentReward, model::chooseSlotMachineFragmentReward,
+                            enabled = !busy && model.slotMachineError == null,
+                            modifier = Modifier.testTag("slot-fragment-reward").semantics {
+                                contentDescription = "Fragment reward"
+                            })
+                    }
                 }
                 Text(if (fragmentReward) "Match three fragments to win one fragment. Each pull is free."
                     else "Match three rewards to win one complete reward. Each pull is free.")
@@ -85,17 +99,20 @@ internal fun SlotMachineDialog(model: MathViewModel, onDismiss: () -> Unit) {
                         }
                         if (available.isEmpty()) Text("${option.label}: no available rewards")
                     }
+                    AdminSlotMachineBonuses(model.pokemons, tier)
                 } else {
-                    val types = remember(tier) { RewardType.entries.filter { it.tier == tier } }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        repeat(3) { index ->
-                            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                                SlotMachineReel(types, roll, index, fragmentReward, Modifier.fillMaxWidth())
-                                val type = roll?.reels?.get(index)
-                                Text(if (busy) "Spinning..." else if (fragmentReward) type?.fragmentLabel ?: "Fragment"
-                                    else type?.label ?: "Reward",
-                                    textAlign = TextAlign.Center, style = MaterialTheme.typography.labelSmall,
-                                    modifier = Modifier.testTag("slot-label-$index"))
+                    val types = pool?.weights?.keys?.toList().orEmpty()
+                    if (types.isNotEmpty()) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            repeat(3) { index ->
+                                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    SlotMachineReel(types, roll, index, fragmentReward, Modifier.fillMaxWidth())
+                                    val type = roll?.reels?.get(index)
+                                    Text(if (busy) "Spinning..." else if (fragmentReward) type?.fragmentLabel ?: "Fragment"
+                                        else type?.label ?: "Reward",
+                                        textAlign = TextAlign.Center, style = MaterialTheme.typography.labelSmall,
+                                        modifier = Modifier.testTag("slot-label-$index"))
+                                }
                             }
                         }
                     }
@@ -115,7 +132,7 @@ internal fun SlotMachineDialog(model: MathViewModel, onDismiss: () -> Unit) {
                     }
                     Button(onClick = model::spinSlotMachine,
                         enabled = !busy && !model.removingReward && model.slotMachineError == null &&
-                            availableRewardsForTier(tier, model.disabledRewards, model.tier3RewardChances).isNotEmpty(),
+                            pool != null && !(activityReward && model.slotMachineAwarded),
                         modifier = Modifier.fillMaxWidth().testTag("slot-lever")) {
                         val leverColor = MaterialTheme.colorScheme.onPrimary
                         Canvas(Modifier.size(36.dp)) {
@@ -129,21 +146,94 @@ internal fun SlotMachineDialog(model: MathViewModel, onDismiss: () -> Unit) {
                         Spacer(Modifier.width(8.dp))
                         Text(if (busy) "Lever pulled" else "Pull lever")
                     }
-                    TextButton(onClick = { model.chooseSlotMachineTier(null) }, enabled = !busy) {
-                        Text("Change tier")
+                    SlotMachineAvailableRewards(pool, tier, fragmentReward)
+                    if (!activityReward) {
+                        AdminSlotMachineBonuses(model.pokemons, tier)
+                        TextButton(onClick = { model.chooseSlotMachineTier(null) }, enabled = !busy) {
+                            Text("Change tier")
+                        }
                     }
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss, enabled = !busy) { Text("Back to Admin Menu") }
+            TextButton(onClick = onDismiss, enabled = !busy) {
+                Text(if (!activityReward) "Back to Admin Menu" else if (model.slotMachineAwarded) "Done" else "Finish later")
+            }
         },
         properties = DialogProperties(dismissOnBackPress = !busy, dismissOnClickOutside = !busy),
         modifier = Modifier.testTag("slot-machine-dialog")
     )
     if (model.slotMachineAwarded && !busy && !celebrationDismissed) {
         roll?.takeIf { it.winner != null }?.let { winningRoll ->
-            SlotMachineWinDialog(winningRoll, onDismiss = { celebrationDismissed = true })
+            SlotMachineWinDialog(winningRoll, activityReward, onDismiss = {
+                celebrationDismissed = true
+                if (activityReward) onDismiss()
+            })
+        }
+    }
+    val bonuses = roll?.celebrationRewards.orEmpty()
+    if (!activityReward && model.slotMachineAwarded && !busy && celebrationDismissed && bonusIndex < bonuses.size) {
+        val index = bonusIndex
+        CelebrationDialog(bonuses[index], replay = true, hasNextCelebration = index + 1 < bonuses.size,
+            onFinished = { if (bonusIndex == index) bonusIndex++ })
+    }
+}
+
+@Composable
+internal fun AdminSlotMachineBonuses(collected: Set<Celebration>, tier: RewardTier?) {
+    val standard = remember(collected) { availableCelebrations(Celebration.standardCelebrations, collected) }
+    val mega = remember(collected) { availableCelebrations(Celebration.megaPokemons, collected) }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Bonus animations", style = MaterialTheme.typography.titleSmall)
+        Text("Every Admin match also gives a Pokémon or Other animation. " +
+            "${standard.size} available · ${slotChancePercent(1.0 / standard.size)}% each per win.",
+            style = MaterialTheme.typography.bodySmall)
+        if (tier == null || tier == RewardTier.TIER_3) {
+            Text("Tier 3 matches also give one Mega Pokémon. " +
+                "${mega.size} available · ${slotChancePercent(1.0 / mega.size)}% each per win.",
+                style = MaterialTheme.typography.bodySmall)
+        }
+        Text("Uncollected animations are selected first; completed pools may repeat.",
+            style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+internal fun slotChancePercent(chance: Double): String =
+    if (chance > 0 && chance * 100 < 0.0001) "<0.0001"
+    else String.format(Locale.ROOT, "%.4f", chance * 100).trimEnd('0').trimEnd('.')
+
+@Composable
+internal fun SlotMachineAvailableRewards(pool: SlotMachineRewardPool?, tier: RewardTier,
+                                         fragmentReward: Boolean = true, tagPrefix: String = "slot") {
+    Column(Modifier.fillMaxWidth().testTag("$tagPrefix-available-${tier.name}"),
+        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Available ${if (fragmentReward) "fragments" else "rewards"} - ${tier.label}",
+            style = MaterialTheme.typography.titleMedium)
+        if (pool == null) {
+            Text("${tier.label}: no available rewards")
+        } else {
+            Text("Each pull uses three independent reels. Share of wins is the chance of receiving that reward " +
+                "when playing until a match.", style = MaterialTheme.typography.bodySmall)
+            pool.weights.keys.forEach { type ->
+                Row(Modifier.fillMaxWidth().testTag("$tagPrefix-odds-${type.name}"),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    RewardImage(type, fragment = fragmentReward, modifier = Modifier.size(48.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(if (fragmentReward) type.fragmentLabel else type.label)
+                        Text("Per reel: ${slotChancePercent(pool.reelChance(type))}% · " +
+                            "Win per pull: ${slotChancePercent(pool.winChance(type))}%",
+                            style = MaterialTheme.typography.bodySmall)
+                        Text("Share of wins: ${slotChancePercent(pool.prizeChance(type))}%",
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+            Text("Win per pull: ${slotChancePercent(pool.winChance)}% · " +
+                "No match: ${slotChancePercent(1 - pool.winChance)}%",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.testTag("$tagPrefix-total-odds-${tier.name}"))
         }
     }
 }
@@ -177,7 +267,7 @@ private fun SlotMachineRollingSound(roll: SlotMachineRoll?, spinning: Boolean) {
 }
 
 @Composable
-private fun SlotMachineWinDialog(roll: SlotMachineRoll, onDismiss: () -> Unit) {
+private fun SlotMachineWinDialog(roll: SlotMachineRoll, activityReward: Boolean, onDismiss: () -> Unit) {
     val winner = requireNotNull(roll.winner)
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val pop = remember(roll) { Animatable(0f) }
@@ -223,11 +313,15 @@ private fun SlotMachineWinDialog(roll: SlotMachineRoll, onDismiss: () -> Unit) {
                     style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
                 Text(if (roll.fragmentReward) "One fragment added to My Rewards."
                     else "One complete reward added to My Rewards.", textAlign = TextAlign.Center)
+                roll.celebrationRewards.orEmpty().forEach {
+                    Text("Bonus: ${it.collectionLabel}", textAlign = TextAlign.Center)
+                }
             }
         },
         confirmButton = {
             TextButton(onClick = onDismiss, modifier = Modifier.testTag("slot-win-dismiss")) {
-                Text("Keep playing")
+                Text(if (activityReward) "Done" else if (roll.celebrationRewards.isNullOrEmpty()) "Keep playing"
+                    else if (requireNotNull(roll.celebrationRewards).size > 1) "View bonuses" else "View bonus")
             }
         },
         modifier = Modifier.testTag("slot-win-dialog")

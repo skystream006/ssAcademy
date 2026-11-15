@@ -356,10 +356,10 @@ class GameModesTest {
         assertEquals("Challenge - Logic Math · Multiplication", result.gameLabel)
         assertEquals(first, result.attempts.first().problem)
         assertTrue(result.attempts.all { it.problem.logicPuzzle != null && it.correct })
-        assertEquals(RewardTier.TIER_1, result.prizeType?.tier)
+        assertEquals(RewardTier.TIER_1, result.slotReward?.tier)
         assertEquals(CelebrationCategory.POKEMONS, model.celebration?.category)
         model.dismissCelebration()
-        model.claimReward()
+        model.claimDisplayedReward()
         shadowOf(Looper.getMainLooper()).idle()
         assertNotNull(model.lastResult?.prize)
         assertEquals(model.lastResult, model().history.first())
@@ -386,7 +386,7 @@ class GameModesTest {
         assertTrue(requireNotNull(model.lastResult).timedOut)
         assertTrue(requireNotNull(model.lastResult).isLogicMath)
         assertEquals(1, model.lastResult?.attempts?.size)
-        assertNull(model.lastResult?.prizeType)
+        assertNull(model.lastResult?.slotReward)
         model.done()
         model.chooseSubjectRewardsEnabled(Subject.MATH, false)
         model.openLogicMathGame()
@@ -398,7 +398,7 @@ class GameModesTest {
         repeat(2) { answer(model, correct = false) }
         assertEquals(Screen.RESULTS, model.screen)
         assertEquals(2, model.lastResult?.wrong)
-        assertNull(model.lastResult?.prizeType)
+        assertNull(model.lastResult?.slotReward)
         model.done()
         model.openLogicMathGame()
         model.updateRewardsQuestionCount("25")
@@ -406,7 +406,7 @@ class GameModesTest {
         model.start()
         repeat(25) { answer(model) }
         assertEquals(25, model.lastResult?.correct)
-        assertNull(model.lastResult?.prizeType)
+        assertNull(model.lastResult?.slotReward)
     }
 
     @Test fun matrixUsesFinishTierRegardlessOfMinimaAndClaimsStoredTierAfterSettingsChange() {
@@ -422,7 +422,7 @@ class GameModesTest {
                 answer(model)
                 val result = requireNotNull(model.lastResult)
                 assertEquals(109, result.correct)
-                assertEquals(tier, result.prizeType?.tier)
+                assertEquals(tier, result.slotReward?.tier)
                 assertEquals(tier, result.matrixRewardTier)
                 assertEquals(thresholds, result.rewardThresholds)
                 assertNotNull(model.celebration)
@@ -431,11 +431,11 @@ class GameModesTest {
                 model.dismissCelebration()
                 model.chooseMatrixRewardTier(RewardTier.entries.first { it != tier })
                 model.chooseRewardThresholds(MathRewardGame.MATRIX, 999, 1000)
-                model.claimReward()
+                model.claimDisplayedReward()
                 shadowOf(Looper.getMainLooper()).idle()
                 val claimed = requireNotNull(model.lastResult)
                 assertNotNull(claimed.prize)
-                assertEquals(result.prizeType, claimed.prize?.type)
+                assertTrue(claimed.prize?.type in requireNotNull(result.slotReward).weights)
                 assertEquals(claimed, model().history.first { it.id == result.id })
                 model.done()
             }
@@ -451,7 +451,7 @@ class GameModesTest {
             model.openMultiplicationMatrixGame()
             model.start()
             repeat(121) { answer(model) }
-            assertNull(model.lastResult?.prizeType)
+            assertNull(model.lastResult?.slotReward)
             assertNotNull(model.celebration)
             assertTrue(model.hasNextCelebration)
             assertTrue(model.rewardBalances.isEmpty())
@@ -467,14 +467,14 @@ class GameModesTest {
         readyPractice(model, count = 25, operation = Operation.MULTIPLICATION)
         model.start()
         repeat(25) { answer(model) }
-        assertNull(model.lastResult?.prizeType)
+        assertNull(model.lastResult?.slotReward)
         assertEquals(GameMode.PRACTICE, model.lastResult?.gameMode)
         assertEquals(CelebrationCategory.OTHER, model.celebration?.category)
         model.done()
         readyRewards(model, count = 25, operation = Operation.MULTIPLICATION)
         model.start()
         repeat(25) { answer(model) }
-        assertEquals(RewardTier.TIER_2, model.lastResult?.prizeType?.tier)
+        assertEquals(RewardTier.TIER_2, model.lastResult?.slotReward?.tier)
         assertFalse(requireNotNull(model.lastResult).isMultiplicationMatrix)
         assertEquals(CelebrationCategory.POKEMONS, model.celebration?.category)
         assertEquals(defaults, model.rewardsDefaults)
@@ -526,11 +526,11 @@ class GameModesTest {
         assertEquals(GameMode.REWARDS, result.gameMode)
         assertEquals(109, result.correct)
         assertEquals("90.08", result.percentCorrectText)
-        assertEquals(RewardTier.TIER_2, result.prizeType!!.tier)
+        assertEquals(RewardTier.TIER_2, result.slotReward!!.tier)
         model.dismissCelebration()
         assertNotNull(model.celebration)
         model.dismissCelebration()
-        model.claimReward()
+        model.claimDisplayedReward()
         shadowOf(Looper.getMainLooper()).idle()
         assertNotNull(model.lastResult!!.prize)
         val restored = model()
@@ -581,7 +581,7 @@ class GameModesTest {
         assertEquals(rowOrder.toSet(), order.toSet())
         assertNotEquals(rowOrder, order)
         assertEquals(109, result.correct)
-        assertEquals(RewardTier.TIER_2, result.prizeType!!.tier)
+        assertEquals(RewardTier.TIER_2, result.slotReward!!.tier)
         assertEquals(result, model().history.first { it.id == result.id })
 
         model.backToSetup()
@@ -619,7 +619,7 @@ class GameModesTest {
         assertEquals(13, model.lastResult!!.attempts.size)
         assertEquals(121, model.lastResult!!.questionCount)
         assertTrue(model.lastResult!!.isMultiplicationMatrix)
-        assertNull(model.lastResult!!.prizeType)
+        assertNull(model.lastResult!!.slotReward)
         assertNull(model.celebration)
     }
 
@@ -633,7 +633,7 @@ class GameModesTest {
         assertEquals(121, model.lastResult!!.attempts.size)
         assertEquals(108, model.lastResult!!.correct)
         assertEquals("89.26", model.lastResult!!.percentCorrectText)
-        assertNull(model.lastResult!!.prizeType)
+        assertNull(model.lastResult!!.slotReward)
     }
 
     @Test fun multiplicationMatrixDoesNotFallBackToTierOneWhenTierTwoIsDisabled() {
@@ -644,7 +644,7 @@ class GameModesTest {
         model.start()
         repeat(121) { answer(model) }
         assertEquals(121, model.lastResult!!.correct)
-        assertNull(model.lastResult!!.prizeType)
+        assertNull(model.lastResult!!.slotReward)
     }
 
     @Test fun multiplicationMatrixScalesAndSnapshotsTimerAndRejectsAnswersAtTheDeadline() {
@@ -667,7 +667,7 @@ class GameModesTest {
         assertTrue(model.lastResult!!.timedOut)
         assertEquals(1, model.lastResult!!.attempts.size)
         assertEquals(726_000L, model.lastResult!!.durationMs)
-        assertNull(model.lastResult!!.prizeType)
+        assertNull(model.lastResult!!.slotReward)
         assertNull(model.celebration)
     }
 
@@ -680,7 +680,7 @@ class GameModesTest {
         model.start()
         assertNull(model.activeTimeLimitMs)
         repeat(121) { answer(model) }
-        assertNull(model.lastResult!!.prizeType)
+        assertNull(model.lastResult!!.slotReward)
         assertNotNull(model.celebration)
     }
 
@@ -1416,14 +1416,14 @@ class GameModesTest {
             val scene = requireNotNull(model.celebration)
             assertEquals(CelebrationCategory.OTHER, scene.category)
             assertEquals(GameMode.PRACTICE, model.lastResult!!.gameMode)
-            assertNull(model.lastResult!!.prizeType)
+            assertNull(model.lastResult!!.slotReward)
             assertNull(model.rewardResult)
             model.collectPresentedCelebration(Celebration.PIKACHU)
             assertNull(model.lastResult!!.pokemonReward)
             model.collectPresentedCelebration(scene)
             assertEquals(scene, model.lastResult!!.pokemonReward)
             model.dismissCelebration()
-            model.claimReward()
+            model.claimDisplayedReward()
             assertFalse(model.rewardDialogVisible)
             assertTrue(model.rewardBalances.isEmpty())
             assertTrue(model.pokemons.all { it.category == CelebrationCategory.OTHER })
@@ -1457,7 +1457,7 @@ class GameModesTest {
         model.start()
         repeat(15) { answer(model) }
         assertEquals(CelebrationCategory.POKEMONS, model.celebration!!.category)
-        assertNull(model.lastResult!!.prizeType)
+        assertNull(model.lastResult!!.slotReward)
     }
 
     @Test fun completeCollectionStillCannotGivePracticeAPokemon() {
@@ -1467,7 +1467,7 @@ class GameModesTest {
         model.start()
         repeat(50) { answer(model) }
         assertEquals(CelebrationCategory.OTHER, model.celebration!!.category)
-        assertNull(model.lastResult!!.prizeType)
+        assertNull(model.lastResult!!.slotReward)
         assertEquals(Celebration.entries.toSet(), model.pokemons)
     }
 
@@ -1482,12 +1482,12 @@ class GameModesTest {
             val scene = requireNotNull(model.celebration)
             assertEquals(CelebrationCategory.POKEMONS, scene.category)
             assertFalse(scene in model.pokemons)
-            assertEquals(tier, model.lastResult!!.prizeType!!.tier)
+            assertEquals(tier, model.lastResult!!.slotReward!!.tier)
             assertFalse(model.rewardDialogVisible)
             model.collectPresentedCelebration(scene)
             model.dismissCelebration()
             assertTrue(model.rewardDialogVisible)
-            model.claimReward()
+            model.claimDisplayedReward()
             assertNotNull(model.lastResult!!.prize)
             model.done()
         }
@@ -1515,7 +1515,7 @@ class GameModesTest {
                 assertEquals(limit, model.lastResult!!.wrong)
                 assertNotNull(model.earlyFinishMessage)
                 assertNull(model.celebration)
-                assertNull(model.lastResult!!.prizeType)
+                assertNull(model.lastResult!!.slotReward)
                 assertTrue(model.pokemons.isEmpty())
                 model.done()
             }
@@ -1544,7 +1544,7 @@ class GameModesTest {
         assertTrue(model.lastResult!!.isMultiplicationMatrix)
         assertTrue(model.lastResult!!.timedOut)
         assertEquals(726_000L, model.lastResult!!.durationMs)
-        assertNull(model.lastResult!!.prizeType)
+        assertNull(model.lastResult!!.slotReward)
         assertNull(model.celebration)
     }
 
@@ -1565,7 +1565,7 @@ class GameModesTest {
         assertFalse(model.lastResult!!.timedOut)
         assertEquals(300_001L, model.lastResult!!.durationMs)
         assertEquals(CelebrationCategory.OTHER, model.celebration!!.category)
-        assertNull(model.lastResult!!.prizeType)
+        assertNull(model.lastResult!!.slotReward)
         model.done()
 
         readyRewards(model)
@@ -1575,7 +1575,7 @@ class GameModesTest {
         assertTrue(model.checkTimeLimit())
         assertTrue(model.lastResult!!.timedOut)
         assertNull(model.celebration)
-        assertNull(model.lastResult!!.prizeType)
+        assertNull(model.lastResult!!.slotReward)
     }
 
     @Test fun storedPracticeResultsCannotExposeOrClaimAnInjectedPrize() {
@@ -1586,7 +1586,7 @@ class GameModesTest {
         val model = model()
         model.openHistory()
         model.showRewardForResult(result)
-        model.claimReward()
+        model.claimDisplayedReward()
         assertNull(model.rewardResult)
         assertTrue(model.rewardBalances.isEmpty())
     }

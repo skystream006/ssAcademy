@@ -182,16 +182,22 @@ internal fun MathAppContent(model: MathViewModel) {
                         }
                     }
                     model.rewardResult?.let { result ->
-                        if (model.rewardDialogVisible) RewardGiftDialog(result, model.claimingReward, model.rewardError,
-                            onOpen = model::claimReward, onDismiss = model::dismissReward)
+                        if (model.rewardDialogVisible) {
+                            if (model.slotMachineActivityReward) SlotMachineDialog(model, model::dismissReward)
+                            else RewardGiftDialog(result, model.claimingReward, model.rewardError,
+                                onOpen = model::claimReward, onDismiss = model::dismissReward)
+                        }
                     }
                     if (model.overlay == Overlay.READING) model.readingCelebration?.let { celebration ->
                         CelebrationDialog(celebration, onFinished = model::dismissReadingCelebration,
                             onPresented = { model.collectPresentedReadingCelebration(celebration) })
                     }
                     model.readingRewardResult?.let { result ->
-                        if (model.readingRewardDialogVisible) RewardGiftDialog(result, model.claimingReadingReward,
-                            model.readingRewardError, model::claimReadingReward, model::dismissReadingReward)
+                        if (model.readingRewardDialogVisible) {
+                            if (model.slotMachineActivityReward) SlotMachineDialog(model, model::dismissReadingReward)
+                            else RewardGiftDialog(result, model.claimingReadingReward,
+                                model.readingRewardError, model::claimReadingReward, model::dismissReadingReward)
+                        }
                     }
                 }
             }
@@ -225,9 +231,11 @@ private fun MainContent(model: MathViewModel) {
             ResultsContent(result, title = "Results", showCorrectAnswers = model.showCorrectAnswers,
                 verticalEquations = model.verticalEquations) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    if (result.prizeType != null && result.prize == null && model.celebration == null &&
+                    if (result.hasUnclaimedReward && model.celebration == null &&
                         !model.selectingCelebration) {
-                        Button(onClick = { model.showRewardForResult(result) }) { Text("Open gift box") }
+                        Button(onClick = { model.showRewardForResult(result) }) {
+                            Text(if (result.slotReward != null) "Open slot machine" else "Open gift box")
+                        }
                     }
                     Button(onClick = model::done, modifier = Modifier.widthIn(min = 160.dp).testTag("done-button")) { Text("Done") }
                 }
@@ -468,6 +476,7 @@ internal fun RewardsQuestionCountChoices(questionCount: Int?, onSelect: (Int) ->
 private fun RewardsCriteria(model: MathViewModel) {
     Column(Modifier.fillMaxWidth().testTag("rewards-criteria"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Obtainable rewards (requires 90% correct)", style = MaterialTheme.typography.titleMedium)
+        Text("Finish all questions with 90% or more correct to pull the slot machine until you win one fragment.")
         Text("• Pokémon: 15 or more questions.")
         if (!model.rewardsEnabled) {
             Text("Prize fragments are unavailable while Math Rewards System is OFF.")
@@ -652,7 +661,7 @@ private fun ReadyDialog(model: MathViewModel) {
             Text(if (model.randomizeMatrixQuestions)
                 "Answer all 121 questions in random order, with each pair from 1 × 1 to 11 × 11 appearing once."
                 else "Answer each row in order: 1 × 1 to 1 × 11, then 2 × 1 to 2 × 11, up to 11 × 11.")
-            Text("The same challenge rules apply: finish all 121 questions with more than 90% correct " +
+            Text("The same challenge rules apply: finish all 121 questions with 90% or more correct " +
                 "before the time limit, if enabled. The game ends at 13 wrong answers.")
             Text("Complete the matrix to collect both a Mega Pokémon and a Pokémon or Other animation.")
             if (model.currentGameRewardsEnabled) {
@@ -895,8 +904,9 @@ internal fun ResultsContent(result: PracticeResult, title: String?, showCorrectA
                         Text("${prize.balance.whole} ${prize.type.pluralLabel} · ${prize.balance.fragments}/3 fragments",
                             style = MaterialTheme.typography.bodySmall)
                     }
-                    if (result.prizeType != null && result.prize == null) {
-                        Text("Your prize is waiting!", style = MaterialTheme.typography.titleMedium)
+                    if (result.hasUnclaimedReward) {
+                        Text(if (result.slotReward != null) "Your fragment is waiting! Open the slot machine."
+                            else "Your prize is waiting!", style = MaterialTheme.typography.titleMedium)
                     }
                     Text(formatFinishedAt(result.finishedAt), style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)

@@ -21,6 +21,22 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.LooperMode
 
+internal fun MathViewModel.claimDisplayedReward() {
+    if (!slotMachineActivityReward) {
+        if (readingRewardDialogVisible) claimReadingReward() else claimReward()
+        return
+    }
+    if (!rewardDialogVisible && !readingRewardDialogVisible) return
+    repeat(500) {
+        if (slotMachineAwarded || slotMachineBusy || slotMachineError != null) return
+        val previous = slotMachineRoll
+        spinSlotMachine()
+        if (slotMachineRoll === previous) return
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(SLOT_MACHINE_DURATION_MS.toLong()))
+    }
+    fail("The seeded slot machine did not produce a match.")
+}
+
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 @LooperMode(LooperMode.Mode.PAUSED)
@@ -48,10 +64,12 @@ class RewardsModelTest {
 
     private fun model(
         dispatcher: CoroutineDispatcher = Dispatchers.Unconfined,
-        rewardRandom: Random = Random(3)
+        rewardRandom: Random = Random(3),
+        celebrationRandom: Random = Random.Default
     ): MathViewModel {
         val model = MathViewModel(application, ProblemGenerator(Random(7)), clock = { now },
-            wallClock = { wallTime }, ioDispatcher = dispatcher, rewardRandom = rewardRandom)
+            wallClock = { wallTime }, ioDispatcher = dispatcher, rewardRandom = rewardRandom,
+            celebrationRandom = celebrationRandom)
         models += ViewModelStore().apply { put("model", model) }
         shadowOf(Looper.getMainLooper()).idle()
         return model
@@ -104,6 +122,8 @@ class RewardsModelTest {
         assertFalse(model.slotMachineBusy)
         assertFalse(model.slotMachineAwarded)
         assertTrue(model().rewardBalances.isEmpty())
+        assertTrue(model.pokemons.isEmpty())
+        assertNull(roll.celebrationRewards)
     }
 
     @Test fun slotMachineFragmentChoicePersistsCombinesFragmentsAndSwitchesBackToWholeRewards() {
@@ -185,6 +205,159 @@ class RewardsModelTest {
         assertEquals(roll, model.slotMachineRoll)
     }
 
+    @Test fun adminSlotsAwardOneUncollectedStandardAnimationInTheFirstTwoTiersWithoutGameHistory() {
+        for (type in listOf(RewardType.LOLLIPOP, RewardType.VIDEO_GAME)) {
+            file.delete()
+            HistoryStore(file).collectPokemons(Celebration.standardCelebrations - Celebration.PARTY)
+            val model = model()
+            model.openSettings()
+            model.chooseRewardsEnabled(false)
+            RewardType.entries.forEach { model.chooseRewardEnabled(it, it == type) }
+            model.chooseSlotMachineFragmentReward(true)
+            model.chooseSlotMachineTier(type.tier)
+            model.spinSlotMachine()
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(SLOT_MACHINE_DURATION_MS.toLong()))
+            assertTrue(model.slotMachineAwarded)
+            assertEquals(listOf(Celebration.PARTY), model.slotMachineRoll?.celebrationRewards)
+            assertEquals(RewardBalance(0, 1), model.rewardBalances[type])
+            val saved = HistoryStore(file).loadSnapshot()
+            assertEquals(setOf(Celebration.PARTY), saved.slotMachinePokemons)
+            assertEquals(Celebration.standardCelebrations.toSet(), saved.pokemons)
+            assertTrue(saved.history.isEmpty())
+            assertTrue(saved.readingResults.isEmpty())
+            assertTrue(saved.claimedResultIds.isEmpty())
+            assertEquals(saved.pokemons, model().pokemons)
+        }
+    }
+
+    @Test fun tierThreeAdminWinsAtomicallyAddStandardAndMegaBonusesAndRetryTheSameSelections() {
+        val standard = Celebration.PIKACHU
+        val mega = Celebration.megaPokemons.first()
+        HistoryStore(file).collectPokemons(Celebration.entries - setOf(standard, mega), includeMegaPokemons = true)
+        var selections = 0
+        val random = object : Random() {
+            override fun nextBits(bitCount: Int): Int = error("Expected a bounded bonus selection")
+            override fun nextInt(until: Int): Int {
+                assertEquals(1, until)
+                selections++
+                return 0
+            }
+        }
+        val model = model(celebrationRandom = random)
+        model.openSettings()
+        model.chooseTier3RewardChances(100, 0, 0)
+        model.chooseSlotMachineFragmentReward(true)
+        model.chooseSlotMachineTier(RewardTier.TIER_3)
+        assertTrue(blockedWrite.mkdir())
+        model.spinSlotMachine()
+        val roll = requireNotNull(model.slotMachineRoll)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(SLOT_MACHINE_DURATION_MS.toLong()))
+        assertNotNull(model.slotMachineError)
+        assertFalse(model.slotMachineAwarded)
+        assertEquals(listOf(standard, mega), roll.celebrationRewards)
+        assertEquals(2, selections)
+        assertFalse(standard in model.pokemons)
+        assertFalse(mega in model.pokemons)
+        assertTrue(model.rewardBalances.isEmpty())
+        val before = HistoryStore(file).loadSnapshot()
+        assertTrue(before.slotMachinePokemons.isEmpty())
+        assertTrue(blockedWrite.delete())
+        repeat(3) { model.retrySlotMachinePrize() }
+        shadowOf(Looper.getMainLooper()).idle()
+        assertTrue(model.slotMachineAwarded)
+        assertNull(model.slotMachineError)
+        assertSame(roll, model.slotMachineRoll)
+        assertEquals(2, selections)
+        assertEquals(RewardBalance(0, 1), model.rewardBalances[RewardType.TOYS_1])
+        val saved = HistoryStore(file).loadSnapshot()
+        assertEquals(Celebration.entries.toSet(), saved.pokemons)
+        assertEquals(setOf(standard, mega), saved.slotMachinePokemons)
+        assertEquals(before.history, saved.history)
+        assertEquals(before.readingResults, saved.readingResults)
+        repeat(3) { model.retrySlotMachinePrize() }
+        assertEquals(saved, HistoryStore(file).loadSnapshot())
+    }
+
+    @Test fun activityAtExactlyNinetyPercentAllowsFreeRetriesUntilOneFragmentAndNeverAWholeReward() {
+        val random = object : Random() {
+            private val tickets = ArrayDeque(listOf(0, 1, 0, 1, 1, 1))
+            override fun nextBits(bitCount: Int): Int = error("Only reel tickets should be drawn")
+            override fun nextInt(until: Int): Int = tickets.removeFirst().also { assertTrue(it in 0 until until) }
+        }
+        val model = model(rewardRandom = random)
+        start(model, count = 50)
+        finish(model, count = 50, wrong = 5)
+        val result = requireNotNull(model.lastResult)
+        assertEquals("90", result.percentCorrectText)
+        assertNull(result.prizeType)
+        assertNull(result.prize)
+        assertEquals(RewardTier.TIER_2, result.slotReward?.tier)
+        assertTrue(model.rewardBalances.isEmpty())
+        model.spinSlotMachine()
+        assertNull(model.slotMachineRoll)
+        model.dismissCelebration()
+        model.chooseSlotMachineFragmentReward(false)
+        model.chooseSlotMachineTier(RewardTier.TIER_1)
+        assertEquals(RewardTier.TIER_2, model.slotMachineSelectedTier)
+        assertFalse(model.slotMachineFragmentReward)
+        assertTrue(model.slotMachineIsFragmentReward)
+        model.spinSlotMachine()
+        val losing = requireNotNull(model.slotMachineRoll)
+        assertNull(losing.winner)
+        assertTrue(losing.fragmentReward)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(SLOT_MACHINE_DURATION_MS.toLong()))
+        assertFalse(model.slotMachineAwarded)
+        assertTrue(model.rewardBalances.isEmpty())
+        model.spinSlotMachine()
+        val winning = requireNotNull(model.slotMachineRoll)
+        repeat(3) { model.spinSlotMachine() }
+        assertEquals(RewardType.RESTAURANT, winning.winner)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(SLOT_MACHINE_DURATION_MS.toLong()))
+        assertTrue(model.slotMachineAwarded)
+        assertEquals(PrizeAward(RewardType.RESTAURANT, RewardBalance(0, 1)), model.lastResult?.prize)
+        assertNull(winning.celebrationRewards)
+        assertTrue(model.pokemons.isEmpty())
+        assertTrue(HistoryStore(file).loadSnapshot().slotMachinePokemons.isEmpty())
+        repeat(3) {
+            model.spinSlotMachine()
+            model.retrySlotMachinePrize()
+        }
+        assertSame(winning, model.slotMachineRoll)
+        assertEquals(RewardBalance(0, 1), model().rewardBalances[RewardType.RESTAURANT])
+        assertEquals(model.lastResult, HistoryStore(file).load().single())
+        model.done()
+        val restored = model()
+        restored.showRewardForResult(result)
+        restored.claimDisplayedReward()
+        assertFalse(restored.slotMachineActivityReward)
+        assertEquals(RewardBalance(0, 1), restored.rewardBalances[RewardType.RESTAURANT])
+    }
+
+    @Test fun activityWinningSaveRetriesTheSameFragmentWithoutRerollingOrDuplicating() {
+        val model = model()
+        RewardType.entries.forEach { model.chooseRewardEnabled(it, it == RewardType.LOLLIPOP) }
+        start(model)
+        finish(model)
+        model.dismissCelebration()
+        assertTrue(blockedWrite.mkdir())
+        model.spinSlotMachine()
+        val winning = requireNotNull(model.slotMachineRoll)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(SLOT_MACHINE_DURATION_MS.toLong()))
+        assertNotNull(model.slotMachineError)
+        assertFalse(model.slotMachineAwarded)
+        assertNull(model.lastResult?.prize)
+        assertTrue(model.rewardBalances.isEmpty())
+        repeat(3) { model.spinSlotMachine() }
+        assertSame(winning, model.slotMachineRoll)
+        assertTrue(blockedWrite.delete())
+        repeat(3) { model.retrySlotMachinePrize() }
+        shadowOf(Looper.getMainLooper()).idle()
+        assertNull(model.slotMachineError)
+        assertTrue(model.slotMachineAwarded)
+        assertSame(winning, model.slotMachineRoll)
+        assertEquals(RewardBalance(0, 1), model().rewardBalances[RewardType.LOLLIPOP])
+    }
+
     private fun start(model: MathViewModel, count: Int = 26, rewards: Boolean = true, minutes: Int = 0) {
         if (model.screen != Screen.SETUP) model.done()
         model.openRewardsGame()
@@ -262,14 +435,14 @@ class RewardsModelTest {
                 assertEquals(limit.takeIf { atFinish }, model.activeTimeLimitMs)
                 finish(model, count)
                 val result = requireNotNull(model.lastResult)
-                assertEquals(atStart && atFinish, result.prizeType != null)
+                assertEquals(atStart && atFinish, result.slotReward != null)
                 assertNotNull(model.celebration)
                 assertEquals(result, model().history.first { it.id == result.id })
                 model.chooseMathGameRewardsEnabled(game, false)
                 while (model.celebration != null) model.dismissCelebration()
-                if (result.prizeType != null) {
+                if (result.slotReward != null) {
                     model.showRewardForResult(result)
-                    model.claimReward()
+                    model.claimDisplayedReward()
                     shadowOf(Looper.getMainLooper()).idle()
                     assertNotNull(model.history.first { it.id == result.id }.prize)
                 }
@@ -307,7 +480,7 @@ class RewardsModelTest {
             val result = requireNotNull(model.lastResult)
             assertFalse(result.timedOut)
             assertEquals(limit + 1_000, result.durationMs)
-            assertNull(result.prizeType)
+            assertNull(result.slotReward)
             assertNotNull(model.celebration)
             assertEquals(5, model.timeLimitSeconds)
         }
@@ -367,7 +540,7 @@ class RewardsModelTest {
             finish(model, 25)
             val result = requireNotNull(model.lastResult)
             assertEquals(if (game == MathRewardGame.BASIC) RewardTier.TIER_2 else RewardTier.TIER_1,
-                result.prizeType?.tier)
+                result.slotReward?.tier)
             assertEquals(model.rewardThresholds(game), result.rewardThresholds)
             assertEquals(result, model().history.first { it.id == result.id })
         }
@@ -537,7 +710,7 @@ class RewardsModelTest {
                         if (type == RewardType.GOOD_BEHAVIOR_POINT) 100 else 0).commit()
                 finish(model, 1)
                 val result = requireNotNull(model.lastResult)
-                assertEquals(type, result.prizeType)
+                assertEquals(type, result.slotReward?.weights?.keys?.single())
                 assertEquals(RewardThresholds(1, 2, 3), result.rewardThresholds)
                 assertEquals(RewardTier.TIER_3, result.matrixRewardTier)
                 model.chooseTier3RewardChances(100, 0, 0)
@@ -549,7 +722,7 @@ class RewardsModelTest {
                 assertEquals(result, saved)
                 restored.showRewardForResult(saved)
                 val before = restored.rewardBalances[type] ?: RewardBalance()
-                repeat(3) { restored.claimReward() }
+                repeat(3) { restored.claimDisplayedReward() }
                 shadowOf(Looper.getMainLooper()).idle()
                 assertEquals(before.addFragment(), restored.rewardBalances[type])
                 assertEquals(PrizeAward(type, before.addFragment()),
@@ -570,7 +743,7 @@ class RewardsModelTest {
             val count = requireNotNull(model.game).questionCount
             settings.edit().putStringSet("disabled_rewards", setOf("TOYS_2")).commit()
             finish(model, count)
-            assertNull(model.lastResult?.prizeType)
+            assertNull(model.lastResult?.slotReward)
             assertEquals(RewardThresholds(1, 2, 3), model.lastResult?.rewardThresholds)
         }
     }
@@ -586,8 +759,8 @@ class RewardsModelTest {
             answer(model)
             shadowOf(Looper.getMainLooper()).idle()
             val result = requireNotNull(model.lastResult)
-            val type = requireNotNull(result.prizeType)
-            assertEquals(tier, type.tier)
+            val pool = requireNotNull(result.slotReward)
+            assertEquals(tier, pool.tier)
             assertEquals(RewardThresholds(15, 25), result.rewardThresholds)
             assertTrue(requireNotNull(model.celebration).isEligibleFor(count, GameMode.REWARDS))
             model.chooseRewardThresholds(MathRewardGame.BASIC, 200, 300)
@@ -596,9 +769,11 @@ class RewardsModelTest {
             val restored = model()
             assertEquals(result, restored.history.first { it.id == result.id })
             restored.showRewardForResult(result)
-            repeat(3) { restored.claimReward() }
+            repeat(3) { restored.claimDisplayedReward() }
             shadowOf(Looper.getMainLooper()).idle()
             val claimed = restored.history.first { it.id == result.id }
+            val type = requireNotNull(claimed.prize).type
+            assertTrue(type in pool.weights)
             assertEquals(PrizeAward(type, RewardBalance(0, 1)), claimed.prize)
             assertEquals(result.rewardThresholds, claimed.rewardThresholds)
             assertEquals(claimed, model().history.first { it.id == result.id })
@@ -614,13 +789,13 @@ class RewardsModelTest {
         answer(model)
         shadowOf(Looper.getMainLooper()).idle()
         val result = requireNotNull(model.lastResult)
-        assertNull(result.prizeType)
+        assertNull(result.slotReward)
         assertEquals(RewardThresholds(100, 200), result.rewardThresholds)
         assertNotNull(model.celebration)
         model.chooseRewardThresholds(MathRewardGame.BASIC, 1, 2)
         model.dismissCelebration()
         model.showRewardForResult(result)
-        model.claimReward()
+        model.claimDisplayedReward()
         assertTrue(model.rewardBalances.isEmpty())
         assertEquals(result, model().history.single())
     }
@@ -813,7 +988,7 @@ class RewardsModelTest {
                 assertTrue(model.checkTimeLimit())
                 assertEquals(perSecond * seconds, model.lastResult!!.durationMs)
                 assertTrue(model.lastResult!!.timedOut)
-                assertNull(model.lastResult!!.prizeType)
+                assertNull(model.lastResult!!.slotReward)
                 model.done()
             }
         }
@@ -845,13 +1020,13 @@ class RewardsModelTest {
         finish(model)
         assertNotNull(model.celebration)
         assertFalse(model.rewardDialogVisible)
-        assertNotNull(model.rewardResult?.prizeType)
+        assertNotNull(model.rewardResult?.slotReward)
         assertNull(model.history.single().prize)
-        model.claimReward()
+        model.claimDisplayedReward()
         assertTrue(model.rewardBalances.isEmpty())
         model.dismissCelebration()
         assertTrue(model.rewardDialogVisible)
-        repeat(3) { model.claimReward() }
+        repeat(3) { model.claimDisplayedReward() }
         assertEquals(1, model.rewardBalances.values.sumOf { it.totalFragments })
         assertNotNull(model.lastResult?.prize)
         assertEquals(model.lastResult, model.rewardResult)
@@ -893,7 +1068,7 @@ class RewardsModelTest {
             val count = RewardThresholds().minimum(type.tier)
             start(restored, count)
             finish(restored, count)
-            assertNull(restored.lastResult!!.prizeType)
+            assertNull(restored.lastResult!!.slotReward)
             assertNull(restored.rewardResult)
             assertNotNull(restored.celebration)
             restored.done()
@@ -901,7 +1076,7 @@ class RewardsModelTest {
             restored.chooseRewardEnabled(type, true)
             start(restored, count)
             finish(restored, count)
-            assertEquals(type, restored.lastResult!!.prizeType)
+            assertEquals(type, restored.lastResult!!.slotReward?.weights?.keys?.single())
             restored.done()
             restored.chooseRewardEnabled(type, false)
         }
@@ -915,7 +1090,7 @@ class RewardsModelTest {
         model.chooseRewardEnabled(RewardType.RESTAURANT, true)
         model.closeOverlay()
         finish(model, 50)
-        assertEquals(RewardType.RESTAURANT, model.lastResult!!.prizeType)
+        assertEquals(RewardType.RESTAURANT, model.lastResult!!.slotReward?.weights?.keys?.single())
     }
 
     @Test fun disablingRewardsDoesNotRemoveInventoryOrPreventClaimingAndUsingExistingPrizes() {
@@ -925,7 +1100,7 @@ class RewardsModelTest {
             start(model)
             finish(model)
             model.dismissCelebration()
-            model.claimReward()
+            model.claimDisplayedReward()
             model.done()
         }
         start(model)
@@ -940,7 +1115,7 @@ class RewardsModelTest {
         assertEquals(RewardType.entries.toSet(), restored.disabledRewards)
         restored.openHistory()
         restored.showRewardForResult(pending)
-        restored.claimReward()
+        restored.claimDisplayedReward()
         assertEquals(RewardBalance(1, 1), restored.rewardBalances[RewardType.BED_TIME])
         restored.openRewards()
         restored.useReward(RewardType.BED_TIME)
@@ -962,13 +1137,13 @@ class RewardsModelTest {
         restored.showRewardForResult(pending)
         assertEquals(pending, restored.rewardResult)
         assertTrue(restored.rewardDialogVisible)
-        restored.claimReward()
+        restored.claimDisplayedReward()
         assertNull(restored.lastResult)
         assertNotNull(restored.historyDetail?.prize)
         assertEquals(1, restored.rewardBalances.values.sumOf { it.totalFragments })
         val again = model()
         again.showRewardForResult(pending)
-        repeat(3) { again.claimReward() }
+        repeat(3) { again.claimDisplayedReward() }
         assertEquals(1, again.rewardBalances.values.sumOf { it.totalFragments })
         assertNotNull(again.rewardResult?.prize)
     }
@@ -999,18 +1174,18 @@ class RewardsModelTest {
         val model = model()
         listOf(Triple(24, 0, false), Triple(25, 0, true), Triple(25, 2, true), Triple(25, 3, false),
             Triple(26, 2, true), Triple(49, 4, true), Triple(50, 0, true), Triple(50, 4, true),
-            Triple(50, 5, false), Triple(51, 4, true), Triple(99, 0, true), Triple(100, 0, true),
-            Triple(100, 9, true), Triple(100, 10, false)).forEach { (count, wrong, eligible) ->
+            Triple(50, 5, true), Triple(51, 4, true), Triple(99, 0, true), Triple(100, 0, true),
+            Triple(100, 9, true), Triple(100, 10, true)).forEach { (count, wrong, eligible) ->
             start(model, count)
             finish(model, count, wrong)
             assertEquals(count, model.lastResult!!.questionCount)
-            assertEquals(eligible, model.lastResult!!.prizeType != null)
+            assertEquals(eligible, model.lastResult!!.slotReward != null)
             if (eligible) {
-                val type = model.lastResult!!.prizeType!!
-                assertEquals(rewardTierForQuestionCount(count), type.tier)
+                val pool = requireNotNull(model.lastResult!!.slotReward)
+                assertEquals(rewardTierForQuestionCount(count), pool.tier)
                 model.dismissCelebration()
-                model.claimReward()
-                assertEquals(type, model.lastResult!!.prize!!.type)
+                model.claimDisplayedReward()
+                assertTrue(model.lastResult!!.prize!!.type in pool.weights)
                 assertEquals(model.lastResult, HistoryStore(file).load().first())
                 assertEquals(model.rewardBalances, HistoryStore(file).loadSnapshot().rewards)
             }
@@ -1020,15 +1195,13 @@ class RewardsModelTest {
 
     @Test fun bedTimeAndRestaurantCanBeEarnedClaimedAndReloaded() {
         listOf(RewardType.BED_TIME to 25, RewardType.RESTAURANT to 50).forEach { (type, count) ->
-            val seed = (0..100).first {
-                selectPrize(count, count, count, true, true, random = Random(it)) == type
-            }
-            val model = model(rewardRandom = Random(seed))
+            val model = model()
+            RewardType.entries.forEach { model.chooseRewardEnabled(it, it == type) }
             start(model, count)
             finish(model, count)
-            assertEquals(type, model.lastResult!!.prizeType)
+            assertEquals(type, model.lastResult!!.slotReward?.weights?.keys?.single())
             model.dismissCelebration()
-            model.claimReward()
+            model.claimDisplayedReward()
             assertEquals(PrizeAward(type, RewardBalance(0, 1)), model.lastResult!!.prize)
             assertEquals(RewardBalance(0, 1), model().rewardBalances[type])
             model.done()
@@ -1042,18 +1215,18 @@ class RewardsModelTest {
         model.chooseRewardsEnabled(true)
         assertNull(model.activeTimeLimitMs)
         finish(model)
-        assertNull(model.lastResult!!.prizeType)
+        assertNull(model.lastResult!!.slotReward)
         start(model)
         model.chooseRewardsEnabled(false)
         finish(model)
-        assertNull(model.lastResult!!.prizeType)
+        assertNull(model.lastResult!!.slotReward)
         start(model, count = 100)
         repeat(10) { answer(model, correct = false) }
         assertEquals(Screen.PLAYING, model.screen)
         answer(model, correct = false)
         assertEquals(Screen.RESULTS, model.screen)
         assertEquals(11, model.lastResult!!.attempts.size)
-        assertNull(model.lastResult!!.prizeType)
+        assertNull(model.lastResult!!.slotReward)
     }
 
     @Test fun timeoutIsCheckedBeforeParsingAndCapsDurationAtTheExactLimit() {
@@ -1070,7 +1243,7 @@ class RewardsModelTest {
         assertEquals(300_000L, model.lastResult!!.durationMs)
         assertTrue(model.lastResult!!.attempts.isEmpty())
         assertNull(model.celebration)
-        assertNull(model.lastResult!!.prizeType)
+        assertNull(model.lastResult!!.slotReward)
         assertFalse(model.rewardDialogVisible)
         assertFalse(model.checkTimeLimit())
         model.submitAnswer()
@@ -1173,7 +1346,7 @@ class RewardsModelTest {
         assertEquals(Screen.RESULTS, model.screen)
         assertTrue(model.lastResult!!.timedOut)
         assertEquals(300_000L, model.lastResult!!.durationMs)
-        assertNull(model.lastResult!!.prizeType)
+        assertNull(model.lastResult!!.slotReward)
         assertNull(model.celebration)
         model.setForeground(true)
         assertEquals(1, model.history.size)
@@ -1240,17 +1413,18 @@ class RewardsModelTest {
         assertTrue(model.history.isEmpty())
         assertNotNull(model.message)
         model.dismissCelebration()
-        model.claimReward()
+        model.claimDisplayedReward()
         assertNotNull(model.rewardError)
         assertNull(model.rewardResult?.prize)
         assertTrue(model.rewardBalances.isEmpty())
         assertTrue(blockedWrite.delete())
-        model.claimReward()
+        model.retrySlotMachinePrize()
+        shadowOf(Looper.getMainLooper()).idle()
         assertNull(model.rewardError)
         assertNotNull(model.rewardResult?.prize)
         assertEquals(1, model.history.size)
         assertEquals(1, model.rewardBalances.values.sumOf { it.totalFragments })
-        model.claimReward()
+        model.claimDisplayedReward()
         assertEquals(model.history, HistoryStore(file).load())
         assertEquals(model.rewardBalances, HistoryStore(file).loadSnapshot().rewards)
     }
@@ -1262,14 +1436,15 @@ class RewardsModelTest {
         model.dismissCelebration()
         val before = file.readText()
         assertTrue(blockedWrite.mkdir())
-        model.claimReward()
-        assertNotNull(model.rewardError)
-        assertFalse(model.claimingReward)
+        model.claimDisplayedReward()
+        assertNotNull(model.slotMachineError)
+        assertFalse(model.slotMachineBusy)
         assertTrue(model.rewardBalances.isEmpty())
         assertNull(model.lastResult!!.prize)
         assertEquals(before, file.readText())
         assertTrue(blockedWrite.delete())
-        model.claimReward()
+        model.retrySlotMachinePrize()
+        shadowOf(Looper.getMainLooper()).idle()
         assertNotNull(model.lastResult!!.prize)
         assertEquals(1, model.rewardBalances.values.sumOf { it.totalFragments })
     }
@@ -1280,11 +1455,11 @@ class RewardsModelTest {
         start(model)
         finish(model)
         model.dismissCelebration()
-        repeat(4) { model.claimReward() }
-        assertTrue(model.claimingReward)
+        repeat(4) { model.claimDisplayedReward() }
+        assertTrue(model.slotMachineBusy)
         assertTrue(model.history.isEmpty())
         dispatcher.drain()
-        assertFalse(model.claimingReward)
+        assertFalse(model.slotMachineBusy)
         assertNotNull(model.lastResult!!.prize)
         assertEquals(1, model.history.size)
         assertEquals(1, model.rewardBalances.values.sumOf { it.totalFragments })
@@ -1296,7 +1471,7 @@ class RewardsModelTest {
         start(model)
         finish(model)
         model.dismissCelebration()
-        model.claimReward()
+        model.claimDisplayedReward()
         model.done()
         dispatcher.drain()
         assertEquals(Screen.SETUP, model.screen)
@@ -1329,7 +1504,7 @@ class RewardsModelTest {
         start(restored, count = 50)
         finish(restored, count = 50)
         restored.dismissCelebration()
-        restored.claimReward()
+        restored.claimDisplayedReward()
         dispatcher.drain()
         assertEquals(3, restored.history.map { it.id }.toSet().size)
         assertTrue(restored.history.filter { it.id != firstId }.all { it.id > firstId })
@@ -1344,14 +1519,14 @@ class RewardsModelTest {
         start(model)
         finish(model)
         model.dismissCelebration()
-        model.claimReward()
+        model.claimDisplayedReward()
         val deleted = model.lastResult!!
         assertEquals(1, model.rewardBalances.values.sumOf { it.totalFragments })
         model.deleteResult(model.lastResult!!.id)
         assertTrue(model.history.isEmpty())
         assertEquals(0, model.rewardBalances.values.sumOf { it.totalFragments })
         assertNull(model.lastResult!!.prize)
-        assertNull(model.lastResult!!.prizeType)
+        assertNull(model.lastResult!!.slotReward)
         model.showRewardForResult(deleted)
         assertNull(model.rewardResult)
         assertEquals(model.rewardBalances, model().rewardBalances)
@@ -1359,7 +1534,7 @@ class RewardsModelTest {
         start(model)
         finish(model)
         model.dismissCelebration()
-        model.claimReward()
+        model.claimDisplayedReward()
         assertEquals(1, model.rewardBalances.values.sumOf { it.totalFragments })
         model.clearHistory()
         assertEquals(0, model().rewardBalances.values.sumOf { it.totalFragments })
@@ -1388,15 +1563,15 @@ class RewardsModelTest {
                 dispatcher.drain()
                 model.dismissCelebration()
                 val id = model.lastResult!!.id
-                if (claimFirst) model.claimReward()
+                if (claimFirst) model.claimDisplayedReward()
                 if (clear) model.clearHistory() else model.deleteResult(id)
-                if (!claimFirst) model.claimReward()
+                if (!claimFirst) model.claimDisplayedReward()
                 dispatcher.drain()
                 assertTrue(model.history.isEmpty())
                 assertEquals(0, model.rewardBalances.values.sumOf { it.totalFragments })
                 assertEquals(model.rewardBalances, HistoryStore(file).loadSnapshot().rewards)
                 assertNull(model.rewardResult)
-                assertNull(model.lastResult!!.prizeType)
+                assertNull(model.lastResult!!.slotReward)
                 assertFalse(model.claimingReward)
             }
         }
@@ -1513,7 +1688,7 @@ class RewardsModelTest {
         start(model)
         finish(model)
         model.dismissCelebration()
-        model.claimReward()
+        model.claimDisplayedReward()
         val current = requireNotNull(model.lastResult)
         val before = HistoryStore(file).loadSnapshot()
         val type = requireNotNull(current.prize).type

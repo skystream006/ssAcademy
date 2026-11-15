@@ -66,6 +66,32 @@ class MathViewModel(
         private set
     internal var slotMachineAwarded by mutableStateOf(false)
         private set
+    private sealed interface ActivitySlotMachine {
+        val pool: SlotMachineRewardPool
+
+        data class Math(val result: PracticeResult, val pending: PendingResult?, val request: Long) : ActivitySlotMachine {
+            override val pool: SlotMachineRewardPool get() = requireNotNull(result.slotReward)
+        }
+
+        data class Reading(val result: ReadingRewardResult, val pending: PendingReadingResult?, val request: Long) :
+            ActivitySlotMachine {
+            override val pool: SlotMachineRewardPool get() = requireNotNull(result.slotReward)
+        }
+    }
+    private var activitySlotMachine by mutableStateOf<ActivitySlotMachine?>(null)
+    internal val slotMachineActivityReward: Boolean get() = activitySlotMachine != null
+    internal val slotMachinePool: SlotMachineRewardPool?
+        get() = activitySlotMachine?.pool ?: slotMachineTier?.let {
+            slotMachineRewardPool(it, disabledRewards, tier3RewardChances)
+        }
+    internal val slotMachineSelectedTier: RewardTier? get() = activitySlotMachine?.pool?.tier ?: slotMachineTier
+    internal val slotMachineIsFragmentReward: Boolean get() = slotMachineActivityReward || slotMachineFragmentReward
+    private val activitySlotMachineVisible: Boolean
+        get() = when (val activity = activitySlotMachine) {
+            is ActivitySlotMachine.Math -> rewardDialogVisible && activity.request == rewardRequestVersion
+            is ActivitySlotMachine.Reading -> readingRewardDialogVisible && activity.request == readingRewardRequestVersion
+            null -> false
+        }
 
     var screen by mutableStateOf(Screen.SETUP)
         private set
@@ -670,8 +696,8 @@ class MathViewModel(
             isMultiplicationMatrix = state.isMultiplicationMatrix,
             isLogicMath = state.logicSettings != null,
             rewardThresholds = thresholdsAtFinish, matrixRewardTier = matrixTierAtFinish,
-            prizeType = selectPrize(state.questionCount, state.correct, state.attempts.size,
-                rewardsEnabledAtStart, enabledAtFinish && gameMode == GameMode.REWARDS, expired, rewardRandom,
+            slotReward = completionSlotReward(state.questionCount, state.correct, state.attempts.size,
+                rewardsEnabledAtStart, enabledAtFinish && gameMode == GameMode.REWARDS, expired,
                 RewardType.entries.filter { it.name in disabledAtFinish }.toSet(), thresholdsAtFinish,
                 matrixTierAtFinish.takeIf { state.isMultiplicationMatrix }, tier3RewardChances = chancesAtFinish))
         val pending = PendingResult(result)
@@ -685,7 +711,8 @@ class MathViewModel(
             else if (answeredAllQuestions) null
             else "Nice try! You got ${state.correct} right out of ${state.questionCount}"
         screen = Screen.RESULTS
-        rewardResult = result.takeIf { it.prizeType != null }
+        rewardResult = result.takeIf { it.hasUnclaimedReward }
+        rewardResult?.let { resetSlotMachine(ActivitySlotMachine.Math(it, pending, rewardRequestVersion)) }
         DebugLog.event(DebugEvent.GAME_FINISHED)
         viewModelScope.launch {
             try {
@@ -913,11 +940,15 @@ class MathViewModel(
 
     fun showRewardForResult(result: PracticeResult) {
         val current = history.find { it.id == result.id } ?: lastResult?.takeIf { it.id == result.id } ?: return
-        if (current.gameMode != GameMode.REWARDS || current.prizeType == null) return
+        if (current.gameMode != GameMode.REWARDS || (current.prizeType == null && current.slotReward == null)) return
         rewardRequestVersion++
         rewardError = null
         rewardDialogOverlay = overlay
         rewardResult = current
+        resetSlotMachine(current.takeIf { it.slotReward != null && it.prize == null }?.let {
+            ActivitySlotMachine.Math(it, pendingResult?.takeIf { pending -> pending.result.id == it.id },
+                rewardRequestVersion)
+        })
     }
 
     fun dismissReward() {
@@ -925,6 +956,7 @@ class MathViewModel(
         rewardResult = null
         rewardDialogOverlay = null
         rewardError = null
+        if (activitySlotMachine is ActivitySlotMachine.Math) resetSlotMachine()
     }
 
     private fun dismissOverlayReward() {
@@ -947,10 +979,11 @@ class MathViewModel(
         val current = data.sessions.find { it.id == session.id } ?: return
         val finishedAt = current.finishedAt ?: return
         if (current.abandoned || current.attemptIds.isEmpty()) return
+        dismissReward()
         val result = ReadingRewardResult(current.id, current.ownerId, current.game, current.level, finishedAt,
             current.attemptIds.size, data.sessionCorrect(current), data.sessionAnswered(current),
             current.timedOut, current.rewardsEnabledAtStart, current.prizeType,
-            rewardThresholds = current.rewardThresholds)
+            rewardThresholds = current.rewardThresholds, slotReward = current.slotReward)
         val pending = PendingReadingResult(result)
         pendingReadingResult = pending
         openedReadingSessions += current.id
@@ -961,14 +994,16 @@ class MathViewModel(
         readingSelectingCelebration = true
         readingRewardResult = null
         readingRewardError = null
+        if (activitySlotMachine is ActivitySlotMachine.Reading) resetSlotMachine()
         viewModelScope.launch {
             try {
                 storeLock.withLock {
                     val created = persistReadingResult(pending)
                     if (request == readingRewardRequestVersion && overlay == readingRewardOverlay) {
                         readingRewardResult = pending.result.takeIf {
-                            pending.saved && it.prizeType != null && (!automatic || created)
+                            pending.saved && (it.prizeType != null || it.slotReward != null) && (!automatic || created)
                         }
+                        prepareReadingSlotMachine(pending, request)
                         readingCelebration = pending.result.celebration.takeIf {
                             created && !readingCelebrationDismissed
                         }
@@ -981,11 +1016,18 @@ class MathViewModel(
                 openedReadingSessions -= current.id
                 if (request == readingRewardRequestVersion) {
                     readingRewardError = "Unable to save your reading rewards. Free device storage and try again."
-                    readingRewardResult = result.takeIf { it.prizeType != null }
+                    readingRewardResult = result.takeIf { it.hasUnclaimedReward }
+                    prepareReadingSlotMachine(pending, request)
                 }
             } finally {
                 if (request == readingRewardRequestVersion) readingSelectingCelebration = false
             }
+        }
+    }
+
+    private fun prepareReadingSlotMachine(pending: PendingReadingResult, request: Long) {
+        readingRewardResult?.takeIf { it.slotReward != null && it.prize == null }?.let {
+            resetSlotMachine(ActivitySlotMachine.Reading(it, pending, request))
         }
     }
 
@@ -1023,6 +1065,7 @@ class MathViewModel(
         readingRewardResult = null
         readingRewardError = null
         readingSelectingCelebration = false
+        if (activitySlotMachine is ActivitySlotMachine.Reading) resetSlotMachine()
     }
 
     fun dismissReadingSessionReward() {
@@ -1060,25 +1103,16 @@ class MathViewModel(
 
     fun claimReadingReward() {
         val target = readingRewardResult ?: return
-        if (claimingReadingReward || !readingRewardDialogVisible || target.prizeType == null || target.prize != null) return
+        if (claimingReadingReward || !readingRewardDialogVisible || target.slotReward != null ||
+            target.prizeType == null || target.prize != null) return
         val pending = pendingReadingResult?.takeIf { it.result.sessionId == target.sessionId }
         val request = readingRewardRequestVersion
         claimingReadingReward = true
         readingRewardError = null
         viewModelScope.launch {
             try {
-                storeLock.withLock {
-                    if (pending != null && !pending.saved) persistReadingResult(pending)
-                    val snapshot = withContext(ioDispatcher) { store.claimReadingReward(target.sessionId) }
-                    applySnapshot(snapshot)
-                    val claimed = snapshot.readingResults.find { it.sessionId == target.sessionId }
-                    if (claimed?.prize != null) {
-                        if (pending != null) pending.result = claimed
-                        if (request == readingRewardRequestVersion) readingRewardResult = claimed
-                    } else if (request == readingRewardRequestVersion) {
-                        readingRewardError = "This prize is no longer available in reading history."
-                    }
-                }
+                if (!persistReadingPrize(target, pending, request) && request == readingRewardRequestVersion)
+                    readingRewardError = "This prize is no longer available in reading history."
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
@@ -1093,7 +1127,7 @@ class MathViewModel(
 
     fun claimReward() {
         val target = rewardResult ?: return
-        if (claimingReward || !rewardDialogVisible || target.gameMode != GameMode.REWARDS ||
+        if (claimingReward || !rewardDialogVisible || target.gameMode != GameMode.REWARDS || target.slotReward != null ||
             target.prizeType == null || target.prize != null) return
         val pending = pendingResult?.takeIf { it.result === target }
         val request = rewardRequestVersion
@@ -1101,22 +1135,8 @@ class MathViewModel(
         rewardError = null
         viewModelScope.launch {
             try {
-                storeLock.withLock {
-                    if (pending != null && !pending.saved) persistResult(pending)
-                    val id = pending?.result?.id ?: target.id
-                    val snapshot = withContext(ioDispatcher) { store.claimReward(id) }
-                    applySnapshot(snapshot)
-                    val claimed = snapshot.history.find { it.id == id }
-                    if (claimed?.prize != null) {
-                        if ((pending != null && pendingResult === pending && lastResult != null) ||
-                            (pending == null && lastResult?.id == id && pendingResult?.saved != false)) lastResult = claimed
-                        if (historyDetail?.id == id) historyDetail = claimed
-                        if (pendingResult?.saved == true && pendingResult?.result?.id == id) pendingResult?.result = claimed
-                        if (rewardRequestVersion == request) rewardResult = claimed
-                    } else if (rewardRequestVersion == request) {
-                        rewardError = "This prize is no longer available in practice history."
-                    }
-                }
+                if (!persistMathPrize(target, pending, request) && rewardRequestVersion == request)
+                    rewardError = "This prize is no longer available in practice history."
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
@@ -1126,6 +1146,40 @@ class MathViewModel(
                 claimingReward = false
             }
         }
+    }
+
+    private suspend fun persistMathPrize(target: PracticeResult, pending: PendingResult?, request: Long,
+                                        slotWinner: RewardType? = null): Boolean = storeLock.withLock {
+        if (pending != null && !pending.saved) persistResult(pending)
+        val id = pending?.result?.id ?: target.id
+        val snapshot = withContext(ioDispatcher) { store.claimReward(id, slotWinner) }
+        applySnapshot(snapshot)
+        val claimed = snapshot.history.find { it.id == id }
+        if (claimed?.prize == null) return@withLock false
+        if ((pending != null && pendingResult === pending && lastResult != null) ||
+            (pending == null && lastResult?.id == id && pendingResult?.saved != false)) lastResult = claimed
+        if (historyDetail?.id == id) historyDetail = claimed
+        if (pendingResult?.saved == true && pendingResult?.result?.id == id) pendingResult?.result = claimed
+        if (rewardRequestVersion == request) {
+            rewardResult = claimed
+            rewardError = null
+        }
+        slotWinner == null || claimed.prize.type == slotWinner
+    }
+
+    private suspend fun persistReadingPrize(target: ReadingRewardResult, pending: PendingReadingResult?, request: Long,
+                                           slotWinner: RewardType? = null): Boolean = storeLock.withLock {
+        if (pending != null && !pending.saved) persistReadingResult(pending)
+        val snapshot = withContext(ioDispatcher) { store.claimReadingReward(target.sessionId, slotWinner) }
+        applySnapshot(snapshot)
+        val claimed = snapshot.readingResults.find { it.sessionId == target.sessionId }
+        if (claimed?.prize == null) return@withLock false
+        if (pending != null) pending.result = claimed
+        if (request == readingRewardRequestVersion) {
+            readingRewardResult = claimed
+            readingRewardError = null
+        }
+        slotWinner == null || claimed.prize.type == slotWinner
     }
 
     fun useReward(type: RewardType) {
@@ -1150,8 +1204,23 @@ class MathViewModel(
 
     fun addReward(type: RewardType, fragment: Boolean) = adjustReward(type, fragment, add = true)
 
+    private fun resetSlotMachine(activity: ActivitySlotMachine? = null) {
+        activitySlotMachine = activity
+        slotMachineRoll = null
+        slotMachineError = null
+        slotMachineAwarded = false
+    }
+
+    internal fun openAdminSlotMachine() {
+        if (slotMachineBusy) return
+        dismissReward()
+        dismissReadingSessionReward()
+        resetSlotMachine()
+        chooseSlotMachineTier(null)
+    }
+
     internal fun chooseSlotMachineFragmentReward(fragment: Boolean) {
-        if (slotMachineBusy || slotMachineError != null) return
+        if (slotMachineActivityReward || slotMachineBusy || slotMachineError != null) return
         slotMachineFragmentReward = fragment
         settings.edit().putBoolean("slot_machine_fragment_reward", fragment).apply()
         slotMachineRoll = null
@@ -1159,7 +1228,7 @@ class MathViewModel(
     }
 
     internal fun chooseSlotMachineTier(tier: RewardTier?) {
-        if (slotMachineBusy) return
+        if (slotMachineActivityReward || slotMachineBusy) return
         slotMachineTier = tier
         slotMachineRoll = null
         slotMachineError = null
@@ -1167,15 +1236,17 @@ class MathViewModel(
     }
 
     internal fun spinSlotMachine() {
-        val tier = slotMachineTier ?: return
-        if (overlay != Overlay.SETTINGS || slotMachineBusy || removingReward || slotMachineError != null) return
-        if (availableRewardsForTier(tier, disabledRewards, tier3RewardChances).isEmpty()) {
+        val activity = activitySlotMachine
+        if (slotMachineSelectedTier == null) return
+        if ((if (activity != null) !activitySlotMachineVisible || slotMachineAwarded else overlay != Overlay.SETTINGS) ||
+            slotMachineBusy || removingReward || slotMachineError != null) return
+        val pool = slotMachinePool
+        if (pool == null) {
             slotMachineError = "No rewards are available in this tier. Enable rewards in Available Rewards."
             return
         }
-        val roll = SlotMachineRoll(List(3) {
-            requireNotNull(selectRewardFromTier(tier, rewardRandom, disabledRewards, tier3RewardChances))
-        }, rollNumber = (slotMachineRoll?.rollNumber ?: 0) + 1, fragmentReward = slotMachineFragmentReward)
+        val roll = SlotMachineRoll(List(3) { pool.select(rewardRandom) },
+            rollNumber = (slotMachineRoll?.rollNumber ?: 0) + 1, fragmentReward = slotMachineIsFragmentReward)
         slotMachineRoll = roll
         slotMachineAwarded = false
         slotMachineBusy = true
@@ -1184,7 +1255,7 @@ class MathViewModel(
             try {
                 delay(SLOT_MACHINE_DURATION_MS.toLong())
                 slotMachineSpinning = false
-                saveSlotMachineWin(roll)
+                saveSlotMachineWin(roll, activity)
             } finally {
                 slotMachineSpinning = false
                 slotMachineBusy = false
@@ -1197,27 +1268,52 @@ class MathViewModel(
         if (slotMachineBusy || slotMachineAwarded || slotMachineError == null || roll.winner == null) return
         slotMachineBusy = true
         slotMachineError = null
+        val activity = activitySlotMachine
         viewModelScope.launch {
             try {
-                saveSlotMachineWin(roll)
+                saveSlotMachineWin(roll, activity)
             } finally {
                 slotMachineBusy = false
             }
         }
     }
 
-    private suspend fun saveSlotMachineWin(roll: SlotMachineRoll) {
+    private suspend fun saveSlotMachineWin(roll: SlotMachineRoll, activity: ActivitySlotMachine?) {
         val winner = roll.winner ?: return
         try {
-            storeLock.withLock {
-                applySnapshot(withContext(ioDispatcher) { store.addReward(winner, fragment = roll.fragmentReward) })
+            val saved = when (activity) {
+                is ActivitySlotMachine.Math -> persistMathPrize(activity.result, activity.pending, activity.request, winner)
+                is ActivitySlotMachine.Reading ->
+                    persistReadingPrize(activity.result, activity.pending, activity.request, winner)
+                null -> storeLock.withLock {
+                    val bonuses = roll.celebrationRewards ?: withContext(ioDispatcher) {
+                        store.loadSnapshot()
+                    }.let { snapshot ->
+                        buildList {
+                            add(availableCelebrations(Celebration.standardCelebrations, snapshot.pokemons)
+                                .random(celebrationRandom))
+                            if (winner.tier == RewardTier.TIER_3) {
+                                add(availableCelebrations(Celebration.megaPokemons, snapshot.pokemons)
+                                    .random(celebrationRandom))
+                            }
+                        }.also { selected -> roll.celebrationRewards = selected }
+                    }
+                    applySnapshot(withContext(ioDispatcher) {
+                        store.addReward(winner, fragment = roll.fragmentReward, slotMachineBonuses = bonuses)
+                    })
+                    true
+                }
             }
-            slotMachineAwarded = true
+            if (slotMachineRoll === roll) {
+                if (saved) slotMachineAwarded = true
+                else slotMachineError = "This activity reward is no longer available or has already been claimed."
+            }
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
             DebugLog.event(DebugEvent.HISTORY_FAILURE, error = error)
-            slotMachineError = "Unable to save your reward. Check the reward balance limit and device storage, then retry."
+            val failure = "Unable to save your reward. Check the reward balance limit and device storage, then retry."
+            if (slotMachineRoll === roll) slotMachineError = failure else message = failure
         }
     }
 
@@ -1423,12 +1519,14 @@ class MathViewModel(
 
     private fun removeDeletedResultReward(id: Long) {
         if (lastResult?.id == id) {
-            lastResult = lastResult?.copy(prizeType = null, prize = null, pokemonReward = null, megaPokemonReward = null)
+            lastResult = lastResult?.copy(prizeType = null, prize = null, pokemonReward = null, megaPokemonReward = null,
+                slotReward = null)
             queuedCelebrations = emptyList()
             dismissCelebration()
         }
         pendingResult?.takeIf { it.saved && it.result.id == id }?.let {
-            it.result = it.result.copy(prizeType = null, prize = null, pokemonReward = null, megaPokemonReward = null)
+            it.result = it.result.copy(prizeType = null, prize = null, pokemonReward = null, megaPokemonReward = null,
+                slotReward = null)
         }
         if (rewardResult?.id == id) dismissReward()
     }

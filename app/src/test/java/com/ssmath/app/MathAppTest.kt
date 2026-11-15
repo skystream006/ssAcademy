@@ -3,6 +3,7 @@ package com.ssmath.app
 import android.app.Application
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.os.Looper
 import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.activity.ComponentDialog
@@ -33,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ApplicationProvider
 import java.io.File
+import java.time.Duration
 import kotlin.random.Random
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -42,6 +44,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowDialog
@@ -313,6 +316,7 @@ class MathAppTest {
 
     @Test fun emptyCollectionMatrixPresentsMegaThenStandardBeforeTierTwoPrize() {
         val model = model(Dispatchers.Unconfined)
+        RewardType.entries.forEach { model.chooseRewardEnabled(it, it == RewardType.VIDEO_GAME) }
         assertTrue(model.pokemons.isEmpty())
         model.openMultiplicationMatrixGame()
         model.start()
@@ -329,6 +333,7 @@ class MathAppTest {
         assertEquals(CelebrationCategory.MEGA_POKEMONS, mega.category)
         compose.onNodeWithTag("celebration-${mega.name}").assertIsDisplayed()
         compose.onNodeWithTag("gift-box").assertDoesNotExist()
+        compose.onNodeWithTag("slot-machine-dialog").assertDoesNotExist()
         compose.waitUntil(5_000) { model.lastResult?.megaPokemonReward == mega }
         assertEquals(setOf(mega), model.pokemons)
 
@@ -339,19 +344,24 @@ class MathAppTest {
         compose.onNodeWithTag("celebration-${mega.name}").assertDoesNotExist()
         compose.onNodeWithTag("celebration-${standard.name}").assertIsDisplayed()
         compose.onNodeWithTag("gift-box").assertDoesNotExist()
+        compose.onNodeWithTag("slot-machine-dialog").assertDoesNotExist()
         compose.waitUntil(5_000) { model.lastResult?.pokemonReward == standard }
         assertEquals(setOf(mega, standard), model.pokemons)
 
         compose.onNodeWithTag("view-results").assertTextEquals("View results").performClick()
         compose.mainClock.advanceTimeBy(64)
         compose.onNodeWithTag("celebration-${standard.name}").assertDoesNotExist()
-        val prize = requireNotNull(model.lastResult?.prizeType)
-        assertEquals(RewardTier.TIER_2, prize.tier)
-        compose.onNodeWithTag("gift-box").assertIsDisplayed().performClick()
-        compose.mainClock.advanceTimeBy(2_000)
+        assertEquals(RewardTier.TIER_2, model.lastResult?.slotReward?.tier)
+        compose.onNodeWithTag("slot-machine-dialog").assertIsDisplayed()
+        compose.mainClock.autoAdvance = true
+        compose.onNodeWithTag("slot-lever").performScrollTo().performClick()
+        compose.runOnIdle {
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(SLOT_MACHINE_DURATION_MS.toLong()))
+        }
+        compose.mainClock.advanceTimeBy(SLOT_MACHINE_DURATION_MS.toLong() + 64)
         compose.waitUntil(5_000) { model.lastResult?.prize != null }
-        assertEquals(RewardBalance(fragments = 1), model.rewardBalances[prize])
-        compose.onNodeWithTag("view-results").performClick()
+        assertEquals(RewardBalance(fragments = 1), model.rewardBalances[RewardType.VIDEO_GAME])
+        compose.onNodeWithTag("slot-win-dismiss").performClick()
         compose.mainClock.advanceTimeBy(64)
         compose.onNodeWithText("My Pokémons: ${mega.collectionLabel}").assertIsDisplayed()
         compose.onNodeWithText("My Pokémons: ${standard.collectionLabel}").assertIsDisplayed()

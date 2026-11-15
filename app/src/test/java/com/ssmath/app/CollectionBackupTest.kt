@@ -170,6 +170,26 @@ class CollectionBackupTest {
         assertEquals(1, replaced.readingResults.size)
     }
 
+    @Test fun mergesPreserveAdminBonusOwnershipButReplacementAllowsNewHistoryToOwnAnimations() {
+        seedHistory()
+        store.addReward(RewardType.LOLLIPOP, fragment = true, slotMachineBonuses = listOf(Celebration.PIKACHU))
+        val empty = CollectionBackup.from(PracticeSnapshot())
+        val merged = store.importCollections(empty, CollectionImportMode.MERGE)
+        assertEquals(setOf(Celebration.PIKACHU), merged.slotMachinePokemons)
+        store.delete(10)
+        store.deleteReadingResults(setOf("reading"))
+        assertEquals(setOf(Celebration.PIKACHU), store.loadSnapshot().pokemons)
+        val replaced = store.importCollections(empty, CollectionImportMode.REPLACE)
+        assertTrue(replaced.slotMachinePokemons.isEmpty())
+        assertTrue(replaced.pokemons.isEmpty())
+        val result = store.addNewResult(PracticeResult(20, 20, Operation.ADDITION, 10, 100,
+            List(25) { Attempt(Problem(1, 1, Operation.ADDITION), 2) },
+            prizeType = RewardType.LOLLIPOP)).result
+        store.collectPokemon(result.id, Celebration.PIKACHU)
+        store.delete(result.id)
+        assertTrue(store.loadSnapshot().pokemons.isEmpty())
+    }
+
     @Test fun repeatedReplacementDoesNotDoubleRewardsAndExplicitRepeatedMergeAddsThemAgain() {
         val first = store.importCollections(backup, CollectionImportMode.REPLACE)
         assertEquals(first, store.importCollections(backup, CollectionImportMode.REPLACE))

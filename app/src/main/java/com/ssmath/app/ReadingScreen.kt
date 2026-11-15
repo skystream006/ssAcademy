@@ -222,9 +222,9 @@ internal fun ReadingHistoryContent(model: ReadingViewModel, appModel: MathViewMo
                             modifier = Modifier.testTag("reading-delete-session-${session.id}")) {
                             Icon(Icons.Rounded.Delete, contentDescription = "Delete result")
                         }
-                        if (session.prizeType != null && appModel != null) {
+                        if ((session.prizeType != null || session.slotReward != null) && appModel != null) {
                             TextButton(onClick = { appModel.showReadingRewardForSession(data, session) }) {
-                                Text("View gift")
+                                Text(if (session.slotReward != null) "View slot reward" else "View gift")
                             }
                         }
                     }
@@ -867,9 +867,10 @@ private fun ReadingSessionSummary(data: ReadingData, model: ReadingViewModel, se
             Text("The game ended because more than 10% were wrong.")
         if (appModel != null) {
             appModel.readingRewardError?.let { Text(it) }
-            if (appModel.readingRewardError != null || (session.prizeType != null &&
+            if (appModel.readingRewardError != null || ((session.prizeType != null || session.slotReward != null) &&
                 !appModel.readingSelectingCelebration && appModel.readingCelebration == null)) {
-                ReadingButton(if (appModel.readingRewardError != null) "Retry saving rewards" else "View gift",
+                ReadingButton(if (appModel.readingRewardError != null) "Retry saving rewards"
+                    else if (session.slotReward != null) "View slot reward" else "View gift",
                     "reading-session-gift") { appModel.showReadingRewardForSession(data, session) }
             }
         }
