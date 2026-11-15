@@ -1,7 +1,6 @@
 package com.ssmath.app
 
 import android.content.Intent
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -15,11 +14,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -34,7 +31,7 @@ import kotlinx.coroutines.withContext
 
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
-fun DebugLogSettings(onOpenDebug: () -> Unit) {
+fun DebugLogSettings() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val enabled by DebugLog.enabled.collectAsState()
@@ -43,7 +40,6 @@ fun DebugLogSettings(onOpenDebug: () -> Unit) {
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var choosingMode by remember { mutableStateOf(false) }
-    var descriptionTaps by rememberSaveable { mutableIntStateOf(0) }
     LaunchedEffect(context) { withContext(Dispatchers.IO) { DebugLog.initialize(context) } }
 
     fun enableLogging(selected: DebugLogMode) {
@@ -80,13 +76,7 @@ fun DebugLogSettings(onOpenDebug: () -> Unit) {
         }
         Text("Mode: ${if (mode == DebugLogMode.FULL) "Full" else "Reactive"}")
         Text("Off by default. Saves up to 64 KB privately on this device. Only event types, status numbers and exception classes are recorded—not answers, practice results or other personal content.",
-            Modifier.testTag("debug-logging-description").clickable {
-                descriptionTaps++
-                if (descriptionTaps == 7) {
-                    descriptionTaps = 0
-                    onOpenDebug()
-                }
-            })
+            Modifier.testTag("debug-logging-description"))
         Text("Full rotates bounded log files. Reactive keeps the latest 100 complete events.")
         Text("Turning this off stops collection. Saved logs remain until you clear them. Review before sharing.")
         FlowRow {

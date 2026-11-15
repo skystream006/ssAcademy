@@ -11,6 +11,10 @@ import androidx.compose.ui.test.performTextInput
 
 internal fun ComposeContentTestRule.openAdminSettings(expectedDialog: String = "admin-dialog") {
     onNodeWithTag("admin-menu").performScrollTo().performClick()
+    if (onAllNodesWithTag(expectedDialog).fetchSemanticsNodes().isNotEmpty()) {
+        onNodeWithTag(expectedDialog).assertIsDisplayed()
+        return
+    }
     onNodeWithTag("admin-pin").performScrollTo().performTextInput("4826")
     if (onAllNodesWithTag("admin-pin-confirm").fetchSemanticsNodes().isNotEmpty()) {
         onNodeWithTag("admin-pin-confirm").performScrollTo().performTextInput("4826")
@@ -23,11 +27,10 @@ internal fun ComposeContentTestRule.openAdminSettings(expectedDialog: String = "
 }
 
 internal fun ComposeContentTestRule.openDebugSettings() {
-    if (onAllNodesWithTag("debug-logging-description").fetchSemanticsNodes().isEmpty()) {
-        onNodeWithText("Debug logging").performScrollTo().performClick()
+    if (onAllNodesWithTag("admin-dialog").fetchSemanticsNodes().isEmpty()) {
+        openAdminSettings()
     }
-    val description = onNodeWithTag("debug-logging-description").performScrollTo()
-    repeat(7) { description.performClick() }
+    onNodeWithTag("debug-menu").performScrollTo().performClick()
     onNodeWithTag("debug-dialog").assertIsDisplayed()
 }
 

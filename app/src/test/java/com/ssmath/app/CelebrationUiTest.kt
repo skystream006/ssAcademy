@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.unit.dp
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -43,6 +44,28 @@ class CelebrationUiTest {
     @Test fun mewPlaysAndFinishes() = playsAndFinishes(Celebration.MEW)
     @Test fun megaMeganiumPlaysAndFinishes() = playsAndFinishes(Celebration.MEGA_MEGANIUM)
     @Test fun megaCharizardYCanBeSkipped() = skipsAndStaysFinished(Celebration.MEGA_CHARIZARD_Y)
+
+    @Test
+    @Config(qualifiers = "w1000dp-h1200dp")
+    fun widePopupAnimationKeepsArtworkProportions() = assertPopupProportions()
+
+    @Test
+    @Config(qualifiers = "w1000dp-h480dp")
+    fun landscapePopupAnimationKeepsProportionsAndCloseRemainsVisible() = assertPopupProportions()
+
+    private fun assertPopupProportions() {
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            MathTheme { CelebrationDialog(Celebration.PIKACHU, replay = true, onFinished = {}) }
+        }
+        compose.mainClock.advanceTimeBy(64)
+        val bounds = compose.onNodeWithTag("celebration-PIKACHU").getUnclippedBoundsInRoot()
+        val height = bounds.bottom - bounds.top
+        val width = bounds.right - bounds.left
+        assertTrue("Wide animations must grow beyond the former fixed height", height > 220.dp)
+        assertEquals(width.value * 220f / 320f, height.value, 1f)
+        compose.onNodeWithTag("close-celebration").assertIsDisplayed().performClick()
+    }
 
     @Test fun everyCelebrationCanReplayWithItsLabelAndCloseOrFinish() {
         var selected by mutableStateOf<Celebration?>(null)

@@ -94,7 +94,6 @@ fun SettingsScreen(model: MathViewModel) {
 
 @Composable
 private fun SettingsContent(model: MathViewModel) {
-    var showingDebug by rememberSaveable { mutableStateOf(false) }
     var showingAdmin by remember { mutableStateOf(false) }
     var adminUnlocked by remember { mutableStateOf(false) }
     var showingName by rememberSaveable { mutableStateOf(false) }
@@ -119,11 +118,7 @@ private fun SettingsContent(model: MathViewModel) {
     if (!adminPage) {
         SettingsPage(model,
             onAdmin = { adminUnlocked = false; showingAdmin = true },
-            onDebug = { showingDebug = true },
             onName = { showingName = true })
-    }
-    if (showingDebug) {
-        DebugDialog(model, onDismiss = { showingDebug = false })
     }
     if (showingAdmin || adminPage || showingTransfer) {
         if (adminUnlocked || !model.adminPinLockEnabled) {
@@ -164,7 +159,7 @@ private fun SettingsContent(model: MathViewModel) {
 }
 
 @Composable
-private fun SettingsPage(model: MathViewModel, onAdmin: () -> Unit, onDebug: () -> Unit, onName: () -> Unit) {
+private fun SettingsPage(model: MathViewModel, onAdmin: () -> Unit, onName: () -> Unit) {
     ScreenScaffold("Settings", model::closeOverlay) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -244,7 +239,7 @@ private fun SettingsPage(model: MathViewModel, onAdmin: () -> Unit, onDebug: () 
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                 modifier = Modifier.clickable(onClick = onAdmin).testTag("admin-menu"))
             HorizontalDivider()
-            DebugLogSettings(onOpenDebug = onDebug)
+            DebugLogSettings()
             Text("ssAcademy ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.labelSmall,
                 modifier = Modifier.padding(bottom = 20.dp))
         }
@@ -463,8 +458,13 @@ private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit, onTransfer:
     var changingPin by remember { mutableStateOf(false) }
     var showingReadingGames by rememberSaveable { mutableStateOf(false) }
     var showingReadingLevel by rememberSaveable { mutableStateOf(false) }
+    var showingDebug by remember { mutableStateOf(false) }
     val sectionState = rememberSaveableStateHolder()
     val scrollState = rememberScrollState()
+    if (showingDebug) {
+        DebugDialog(model, onDismiss = { showingDebug = false })
+        return
+    }
     if (model.overlay == Overlay.REWARDS_SETUP) {
         RewardsSetupScreen(model)
         return
@@ -521,6 +521,9 @@ private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit, onTransfer:
                     }
                     Button(onClick = onTransfer, modifier = Modifier.fillMaxWidth().testTag("collection-transfer")) {
                         Text("Export / Import Collections", textAlign = TextAlign.Center)
+                    }
+                    Button(onClick = { showingDebug = true }, modifier = Modifier.fillMaxWidth().testTag("debug-menu")) {
+                        Text("Debug Menu", textAlign = TextAlign.Center)
                     }
                     HorizontalDivider()
                     CollapsibleSettingsSection("Available Rewards", defaultExpanded = false) {

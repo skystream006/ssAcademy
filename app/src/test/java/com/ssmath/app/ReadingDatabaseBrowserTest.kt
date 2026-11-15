@@ -86,7 +86,8 @@ class ReadingDatabaseBrowserTest {
         compose.onNodeWithText("Debug Menu").assertIsDisplayed()
         compose.onNodeWithTag("reading-database-open").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Close").performClick()
-        compose.onNodeWithText("Debug Menu").assertDoesNotExist()
+        compose.onNodeWithTag("debug-dialog").assertDoesNotExist()
+        compose.onNodeWithTag("admin-dialog").assertIsDisplayed()
         ReadingDatabase(application).use { assertEquals(1, ReadingCatalog(it).status().counts.values.sum()) }
         application.deleteDatabase("reading.db")
     }

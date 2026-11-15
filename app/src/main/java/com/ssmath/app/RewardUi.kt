@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -222,7 +221,7 @@ private fun RewardGiftDialog(
                     }
                 }
                 Box(
-                    Modifier.fillMaxWidth().height(220.dp).clip(RoundedCornerShape(24.dp))
+                    Modifier.fillMaxWidth().aspectRatio(280f / 220f).clip(RoundedCornerShape(24.dp))
                         .testTag("gift-box").then(interaction),
                     contentAlignment = Alignment.Center
                 ) {
@@ -231,7 +230,7 @@ private fun RewardGiftDialog(
                     }
                     if (prize != null && opening.value >= 0.5f) {
                         RewardImage(prize.type, fragment = true,
-                            modifier = Modifier.size(160.dp).testTag("awarded-fragment"))
+                            modifier = Modifier.fillMaxWidth(160f / 280f).aspectRatio(1f).testTag("awarded-fragment"))
                     }
                 }
                 if (prize != null) {
