@@ -5,6 +5,7 @@ import android.os.Looper
 import androidx.lifecycle.ViewModelStore
 import androidx.test.core.app.ApplicationProvider
 import java.io.File
+import java.time.Duration
 import kotlin.coroutines.CoroutineContext
 import kotlin.random.Random
 import kotlinx.coroutines.CoroutineDispatcher
@@ -42,8 +43,12 @@ class ReadingRewardsTest {
         file.delete()
     }
 
-    private fun model(dispatcher: CoroutineDispatcher = Dispatchers.Unconfined): MathViewModel {
-        val model = MathViewModel(application, ioDispatcher = dispatcher, celebrationRandom = Random(7))
+    private fun model(
+        dispatcher: CoroutineDispatcher = Dispatchers.Unconfined,
+        rewardRandom: Random = Random.Default
+    ): MathViewModel {
+        val model = MathViewModel(application, ioDispatcher = dispatcher, celebrationRandom = Random(7),
+            rewardRandom = rewardRandom)
         models += ViewModelStore().apply { put("model", model) }
         shadowOf(Looper.getMainLooper()).idle()
         return model
@@ -83,6 +88,38 @@ class ReadingRewardsTest {
         if (model.overlay == null) model.openReading()
         model.openReadingSessionReward(data, data.sessions.single())
         shadowOf(Looper.getMainLooper()).idle()
+    }
+
+    @Test fun readingCompletionGuaranteesAMatchingFragmentOnItsTenthSpin() {
+        val random = object : Random() {
+            private var next = 0
+            override fun nextBits(bitCount: Int): Int = error("Only reel tickets should be drawn")
+            override fun nextInt(until: Int): Int = next++.mod(until)
+        }
+        val model = model(rewardRandom = random)
+        val data = finished(count = 50, disabled = emptySet())
+        model.openSubjectHistory(Subject.READING)
+        model.showReadingRewardForSession(data, data.sessions.single())
+        shadowOf(Looper.getMainLooper()).idle()
+        for (spin in 1..10) {
+            model.spinSlotMachine()
+            val roll = requireNotNull(model.slotMachineRoll)
+            assertEquals(spin.toLong(), roll.rollNumber)
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(SLOT_MACHINE_DURATION_MS.toLong()))
+            if (spin < 10) {
+                assertNull(roll.winner)
+                assertTrue(model.rewardBalances.isEmpty())
+            } else {
+                val winner = requireNotNull(roll.winner)
+                assertTrue(roll.fragmentReward)
+                assertTrue(model.slotMachineAwarded)
+                assertEquals(PrizeAward(winner, RewardBalance(0, 1)), model.readingRewardResult?.prize)
+                assertEquals(RewardBalance(0, 1), model().rewardBalances[winner])
+                repeat(3) { model.spinSlotMachine() }
+                assertSame(roll, model.slotMachineRoll)
+                assertTrue(model.history.isEmpty())
+            }
+        }
     }
 
     @Test fun readingReceiptsUseFinishedSessionThresholdsNotCurrentMathSettings() {

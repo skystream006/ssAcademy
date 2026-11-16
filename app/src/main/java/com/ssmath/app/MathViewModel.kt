@@ -66,6 +66,7 @@ class MathViewModel(
         private set
     internal var slotMachineAwarded by mutableStateOf(false)
         private set
+    private var slotMachineSpinCount = 0L
     private sealed interface ActivitySlotMachine {
         val pool: SlotMachineRewardPool
 
@@ -1219,6 +1220,7 @@ class MathViewModel(
 
     private fun resetSlotMachine(activity: ActivitySlotMachine? = null) {
         activitySlotMachine = activity
+        slotMachineSpinCount = 0
         slotMachineRoll = null
         slotMachineError = null
         slotMachineAwarded = false
@@ -1258,8 +1260,15 @@ class MathViewModel(
             slotMachineError = "No rewards are available in this tier. Enable rewards in Available Rewards."
             return
         }
-        val roll = SlotMachineRoll(List(3) { pool.select(rewardRandom) },
-            rollNumber = (slotMachineRoll?.rollNumber ?: 0) + 1, fragmentReward = slotMachineIsFragmentReward)
+        val rollNumber = slotMachineSpinCount + 1
+        val reels = if (rollNumber % 10 == 0L) {
+            val winner = pool.select(rewardRandom)
+            List(3) { winner }
+        } else {
+            List(3) { pool.select(rewardRandom) }
+        }
+        val roll = SlotMachineRoll(reels, rollNumber = rollNumber, fragmentReward = slotMachineIsFragmentReward)
+        slotMachineSpinCount = rollNumber
         slotMachineRoll = roll
         slotMachineAwarded = false
         slotMachineBusy = true
