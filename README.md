@@ -353,9 +353,11 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   no slot reward is earned; the app never falls back to another tier. Tier 1 and Tier 2 use equal reel chances.
   Both the slot screen and **Admin Menu > Available Rewards** show the obtainable fragments,
   each fragment's **per-reel chance**, **win chance per pull**, and **share of wins**, plus the
-  total win and no-match chances. Reels are independent: a reward with reel chance `p` matches
-  all three with chance `p³` per pull. Its share of wins is `p³ / sum(p³)` when pulling until a match;
-  this differs from the configured per-reel percentage for unequal Tier 3 weights.
+  total win and no-match chances for ordinary spins. Every tenth spin in a completion or Admin
+  slot session guarantees a random matching set, selected using the enabled per-reel weights.
+  Other spins use independent reels: a reward with reel chance `p` matches
+  all three with chance `p³` per pull. Its share of ordinary wins is `p³ / sum(p³)`;
+  guaranteed spins instead award it with chance `p`.
   Existing prizes and fragments remain available, including after changing chances.
   Fewer than the configured Tier 1 minimum (except matrix games), incomplete or timed-out games,
   and scores below 90% do not qualify. Exactly 90% qualifies without rounding up lower scores.
@@ -757,6 +759,9 @@ Whole rewards are the default, and the choice is saved on this device. Reel imag
 and labels reflect the selected mode. Every 3 matching fragments in My Rewards
 become 1 whole reward. Pulls are free and use enabled rewards and the saved Tier 3
 chance settings, preserving existing balances and history.
+Every tenth spin guarantees a random matching set using those same reward weights, even if an earlier
+spin won. The count resets when a completion or Admin slot session opens, not when changing the
+Admin tier or whole/fragment mode. Save retries do not count as new spins.
 The selected tier's available rewards and effective reel, per-pull, and share-of-wins odds
 are shown on the slot screen and under **Admin Menu > Available Rewards**.
 Non-matching rolls add nothing. Pulling again and leaving the dialog are disabled

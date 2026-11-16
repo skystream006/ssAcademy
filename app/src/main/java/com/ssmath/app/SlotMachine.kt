@@ -88,6 +88,7 @@ internal fun SlotMachineDialog(model: MathViewModel, onDismiss: () -> Unit) {
                 }
                 Text(if (fragmentReward) "Match three fragments to win one fragment. Each pull is free."
                     else "Match three rewards to win one complete reward. Each pull is free.")
+                Text("Every tenth spin in this session guarantees a random matching set.")
                 if (tier == null) {
                     Text("Uses enabled rewards and your Tier 3 chance settings.")
                     RewardTier.entries.forEach { option ->
@@ -213,8 +214,9 @@ internal fun SlotMachineAvailableRewards(pool: SlotMachineRewardPool?, tier: Rew
         if (pool == null) {
             Text("${tier.label}: no available rewards")
         } else {
-            Text("Each pull uses three independent reels. Share of wins is the chance of receiving that reward " +
-                "when playing until a match.", style = MaterialTheme.typography.bodySmall)
+            Text("Every tenth spin guarantees a match, selected using the per-reel chances. " +
+                "Other spins use three independent reels; the win odds and share of wins below apply only to those spins.",
+                style = MaterialTheme.typography.bodySmall)
             pool.weights.keys.forEach { type ->
                 Row(Modifier.fillMaxWidth().testTag("$tagPrefix-odds-${type.name}"),
                     verticalAlignment = Alignment.CenterVertically,

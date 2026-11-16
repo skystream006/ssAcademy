@@ -157,6 +157,98 @@ class RewardsModelTest {
         assertTrue(model.history.isEmpty())
     }
 
+    @Test fun everyTenthAdminSpinMatchesAcrossModeAndTierChangesWithoutCountingSaveRetries() {
+        val random = object : Random() {
+            private var draws = 0
+            override fun nextBits(bitCount: Int): Int = error("Only reel tickets should be drawn")
+            override fun nextInt(until: Int): Int {
+                val draw = ++draws
+                return if (draw == 28 || draw % 2 == 0 && draw != 56) until - 1 else 0
+            }
+        }
+        val model = model(rewardRandom = random)
+        model.openSettings()
+        model.openAdminSlotMachine()
+        model.chooseTier3RewardChances(20, 80, 0, 0)
+        model.chooseSlotMachineTier(RewardTier.TIER_3)
+        for (spin in 1..20) {
+            if (spin == 10) assertTrue(blockedWrite.mkdir())
+            if (spin == 11) {
+                model.chooseSlotMachineFragmentReward(true)
+                model.chooseSlotMachineTier(RewardTier.TIER_2)
+            }
+            model.spinSlotMachine()
+            val roll = requireNotNull(model.slotMachineRoll)
+            assertEquals(spin.toLong(), roll.rollNumber)
+            model.spinSlotMachine()
+            assertSame(roll, model.slotMachineRoll)
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(SLOT_MACHINE_DURATION_MS.toLong()))
+            if (spin % 10 == 0) {
+                val expected = if (spin == 10) RewardType.TOYS_2 else RewardType.VIDEO_GAME
+                assertEquals(List(3) { expected }, roll.reels)
+                if (spin == 10) {
+                    assertNotNull(model.slotMachineError)
+                    assertTrue(model.rewardBalances.isEmpty())
+                    model.spinSlotMachine()
+                    assertSame(roll, model.slotMachineRoll)
+                    assertTrue(blockedWrite.delete())
+                    repeat(3) { model.retrySlotMachinePrize() }
+                    shadowOf(Looper.getMainLooper()).idle()
+                    assertSame(roll, model.slotMachineRoll)
+                }
+                assertTrue(model.slotMachineAwarded)
+                assertEquals(if (spin == 10) RewardBalance(1, 0) else RewardBalance(0, 1),
+                    model().rewardBalances[expected])
+            } else {
+                assertNull(roll.winner)
+                assertFalse(model.slotMachineAwarded)
+            }
+        }
+        model.openAdminSlotMachine()
+        model.chooseSlotMachineTier(RewardTier.TIER_2)
+        model.spinSlotMachine()
+        assertEquals(1L, model.slotMachineRoll?.rollNumber)
+        assertNull(model.slotMachineRoll?.winner)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(SLOT_MACHINE_DURATION_MS.toLong()))
+    }
+
+    @Test fun completionTenthSpinGuaranteesOneFragmentAndReopeningStartsANewCount() {
+        val random = object : Random() {
+            private var next = 0
+            override fun nextBits(bitCount: Int): Int = error("Only reel tickets should be drawn")
+            override fun nextInt(until: Int): Int = next++.mod(until)
+        }
+        val model = model(rewardRandom = random)
+        start(model, count = 50)
+        finish(model, count = 50)
+        model.dismissCelebration()
+        repeat(2) { session ->
+            for (spin in 1..if (session == 0) 9 else 10) {
+                model.spinSlotMachine()
+                val roll = requireNotNull(model.slotMachineRoll)
+                assertEquals(spin.toLong(), roll.rollNumber)
+                shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(SLOT_MACHINE_DURATION_MS.toLong()))
+                if (spin < 10) {
+                    assertNull(roll.winner)
+                    assertTrue(model.rewardBalances.isEmpty())
+                } else {
+                    val winner = requireNotNull(roll.winner)
+                    assertTrue(roll.fragmentReward)
+                    assertTrue(model.slotMachineAwarded)
+                    assertEquals(RewardBalance(0, 1), model().rewardBalances[winner])
+                    repeat(3) { model.spinSlotMachine() }
+                    assertSame(roll, model.slotMachineRoll)
+                    assertEquals(PrizeAward(winner, RewardBalance(0, 1)), model.lastResult?.prize)
+                }
+            }
+            if (session == 0) {
+                val result = requireNotNull(model.lastResult)
+                model.dismissReward()
+                model.showRewardForResult(result)
+            }
+        }
+    }
+
     @Test fun slotMachineRespectsTierThreeChancesAndRejectsEmptyTiers() {
         val model = model()
         model.chooseSlotMachineTier(RewardTier.TIER_3)
