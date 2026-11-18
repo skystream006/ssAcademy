@@ -65,7 +65,7 @@ A native Kotlin / Jetpack Compose Android app for practicing math and reading. A
    default, is remembered for next time, and does not change a game already in progress.
    It does not change your other games' saved number limits or question counts.
    The same rewards rules apply: finish all questions with **90% or more correct** to open the
-   fragment-only slot machine, with Math Rewards System enabled at start and finish.
+   fragment-only chance game, with Math Rewards System enabled at start and finish.
    **Matrix Reward Tier** under **Math Rewards System > Multiplication Matrix Rewards Game**
    appears only when Math rewards and that game's rewards are enabled. It chooses
    **Tier 1**, **Tier 2** (the default), or **Tier 3**,
@@ -311,13 +311,14 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   Rewards Game question counts are no longer used. Editing defaults during a game
   leaves its active questions unchanged and its timer paused until you leave Settings.
 - **Math Rewards System** – under Math Settings, on by default. In math challenges, earn
-  a slot-machine reward for completing the configured minimum questions with **90% or more correct**.
+  a chance-game reward for completing the configured minimum questions with **90% or more correct**.
   Both the subject and the selected game's rewards must be enabled at start and finish.
   These settings never enable prizes in Practice Game.
-  After the celebration, the slot machine opens in the earned tier. Pull its lever for free
-  until three matching fragments win **one fragment**, then press **Done**. Activity slots never
+  After the celebration, one of the seven chance games is chosen at random and opens in the earned tier.
+  Slot machine offers free pulls until three matching fragments win **one fragment**;
+  the other games reveal **one fragment** on each play. Activity games never
   award a whole reward directly and stop after the first win. **Finish later** keeps the earned
-  slot reward available from the result's history entry. The tier, available fragments, and reel
+  reward available from the result's history entry via **Open chance game**. The tier, available fragments, and reward
   weights are saved when the activity finishes, so later Admin changes do not erase an earned reward.
   By default, **Tier 1** rewards are for sessions of **25–49 questions**: a Lollipop,
   Ice Cream Cone, Gummi Bear, Ramen, or Bed Time Fragment. **Tier 2** rewards are for sessions
@@ -371,7 +372,7 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   and the shared Rewards inventory.
   Complete all selected activities and meet a tier's minimum with **90% or more correct**
   to qualify; both the subject and the selected game's rewards must be on at start and finish.
-  The same fragment-only slot machine opens after the celebration, with pulls until its first win.
+  The same randomized, fragment-only chance games open after the celebration and stop after one win.
   Disabled reward types are excluded from new slot rewards. Existing gifts and earned slot rewards remain claimable.
   Reading checkpoint points have been removed; checkpoints still track activity progress.
 - **Show timer** – off by default. Show or hide the timer while practicing. The timer pauses while
@@ -751,7 +752,21 @@ fragments. Removing a fragment never breaks a whole reward, and unavailable unit
 be removed. Adjustments are saved on this device without changing practice history,
 My Pokémons, or existing gift claims. **Back to Admin Menu** returns to the unlocked Admin Menu.
 
-Use **Admin Menu > Slot machine** to select a reward tier, then **Pull lever** to
+**Admin Menu > Chance games** contains all seven implemented games:
+**Slot machine**, **Spin the wheel**, **Mystery Treasure Chests**, **Plinko Drop**,
+**Scratch-and-Reveal Cards**, **Claw Machine**, and **Balloon Pop**.
+Spin a weighted wheel, choose one of three chests, position and drop a Plinko ball,
+scratch a card (or press its accessible **Reveal card** button), position a claw to
+grab a capsule, or choose a balloon to pop. Each new game animates its reveal and
+awards one reward per play using the enabled tier's normalized reward weights;
+its exact per-play chances are shown. Choices and positions affect the presentation,
+not the prize odds. Selection of the activity game is uniform across all seven games
+and stays fixed while its dialog is open, including save retries and UI restoration.
+Reopening an unclaimed reward can select a new game without adding another claim.
+All games are free, offline, and use the same inventory, save-retry protection,
+and Admin whole/fragment toggle. **Add/Remove Rewards** remains unchanged in Admin Menu.
+
+Use **Admin Menu > Chance games > Slot machine** to select a reward tier, then **Pull lever** to
 spin three vertically rolling slots with repeating ding sounds (using the device's
 media volume; sounds stop when the app is in the background). Toggle **Fragment reward** to choose whether
 three matching symbols add one fragment or one whole reward to My Rewards.
@@ -767,7 +782,7 @@ are shown on the slot screen and under **Admin Menu > Available Rewards**.
 Non-matching rolls add nothing. Pulling again and leaving the dialog are disabled
 while spinning or saving; a failed save offers a retry without rerolling. The reward
 mode cannot change during a spin or while a failed win is awaiting a save retry.
-Each Admin match also awards one **Pokémon or Other animation**. A **Tier 3** match additionally
+Each Admin win in any chance game also awards one **Pokémon or Other animation**. A **Tier 3** win additionally
 awards one **Mega Pokémon**. Each pool chooses uniformly from its uncollected entries first;
 when a pool is complete, it can repeat. Available pool counts and each entry's chance per win
 are shown in the Admin Menu and on the slot screen.
@@ -779,7 +794,7 @@ bonus names. Press **View bonus** or **View bonuses** to play the standard anima
 Tier 3, its Mega animation. **Next celebration** advances to the Mega; **Close** returns to the
 slot machine. These displays do not award anything again.
 This PIN-protected Admin tool retains its whole/fragment choice and repeat wins. Activity-earned
-slots are separate, always fragment-only, locked to the earned tier, and finish after one win;
+chance games are separate, always fragment-only, locked to the earned tier, and finish after one win;
 their gameplay celebrations keep the existing activity rules.
 
 In **Debug Menu**, expand **Reading activities**, then press **View reading activities database** to browse the installed activity library,

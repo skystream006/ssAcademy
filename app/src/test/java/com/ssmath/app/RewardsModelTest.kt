@@ -21,6 +21,14 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.LooperMode
 
+internal fun fixedChanceGame(game: ChanceGame = ChanceGame.SLOT_MACHINE): Random = object : Random() {
+    override fun nextBits(bitCount: Int): Int = error("Only chance game selection is expected")
+    override fun nextInt(until: Int): Int {
+        require(until == ChanceGame.entries.size)
+        return game.ordinal
+    }
+}
+
 internal fun MathViewModel.claimDisplayedReward() {
     if (!slotMachineActivityReward) {
         if (readingRewardDialogVisible) claimReadingReward() else claimReward()
@@ -65,11 +73,12 @@ class RewardsModelTest {
     private fun model(
         dispatcher: CoroutineDispatcher = Dispatchers.Unconfined,
         rewardRandom: Random = Random(3),
-        celebrationRandom: Random = Random.Default
+        celebrationRandom: Random = Random.Default,
+        chanceGameRandom: Random = fixedChanceGame()
     ): MathViewModel {
         val model = MathViewModel(application, ProblemGenerator(Random(7)), clock = { now },
             wallClock = { wallTime }, ioDispatcher = dispatcher, rewardRandom = rewardRandom,
-            celebrationRandom = celebrationRandom)
+            celebrationRandom = celebrationRandom, chanceGameRandom = chanceGameRandom)
         models += ViewModelStore().apply { put("model", model) }
         shadowOf(Looper.getMainLooper()).idle()
         return model
@@ -468,6 +477,79 @@ class RewardsModelTest {
     private fun finish(model: MathViewModel, count: Int = 26, wrong: Int = 0) {
         repeat(count) { answer(model, it < count - wrong) }
         shadowOf(Looper.getMainLooper()).idle()
+    }
+
+    @Test fun tierRewardsRandomizeAcrossAllGamesAndKeepSelectionUntilDismissed() {
+        var selection = 0
+        val random = object : Random() {
+            override fun nextBits(bitCount: Int): Int = error("Only game selection should be drawn")
+            override fun nextInt(until: Int): Int = selection++.mod(until)
+        }
+        val model = model(chanceGameRandom = random)
+        model.openSettings()
+        RewardType.entries.forEach { model.chooseRewardEnabled(it, it == RewardType.LOLLIPOP) }
+        model.closeOverlay()
+        ChanceGame.entries.forEach { game ->
+            start(model, count = 25)
+            finish(model, count = 25)
+            while (model.celebration != null) model.dismissCelebration()
+            assertEquals(game, model.chanceGame)
+            assertEquals(game.ordinal + 1, selection)
+            assertTrue(model.rewardDialogVisible)
+            assertEquals(RewardTier.TIER_1, model.slotMachineSelectedTier)
+            model.chooseSlotMachineTier(RewardTier.TIER_3)
+            model.chooseSlotMachineFragmentReward(false)
+            model.spinSlotMachine()
+            val roll = requireNotNull(model.slotMachineRoll)
+            assertTrue(roll.fragmentReward)
+            assertEquals(game, model.chanceGame)
+            repeat(3) { model.spinSlotMachine() }
+            assertSame(roll, model.slotMachineRoll)
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(SLOT_MACHINE_DURATION_MS.toLong()))
+            assertTrue(model.slotMachineAwarded)
+            assertEquals(game, model.chanceGame)
+            repeat(3) { model.spinSlotMachine(); model.retrySlotMachinePrize() }
+            assertSame(roll, model.slotMachineRoll)
+            assertEquals(game.ordinal + 1, HistoryStore(file).loadSnapshot().rewards.values.sumOf { it.totalFragments })
+            model.dismissReward()
+        }
+    }
+
+    @Test fun newAdminGamesRetryTheSameWeightedPrizeAndBonusesWithoutDuplicateAwards() {
+        ChanceGame.entries.filter { it != ChanceGame.SLOT_MACHINE }.forEach { game ->
+            val lastTicket = object : Random() {
+                override fun nextBits(bitCount: Int): Int = error("Only reward tickets should be drawn")
+                override fun nextInt(until: Int): Int = until - 1
+            }
+            val model = model(rewardRandom = lastTicket)
+            model.openSettings()
+            model.openAdminSlotMachine(game)
+            model.chooseTier3RewardChances(20, 80, 0, 0)
+            model.chooseSlotMachineTier(RewardTier.TIER_3)
+            model.chooseSlotMachineFragmentReward(false)
+            assertTrue(blockedWrite.mkdir())
+            model.spinSlotMachine()
+            val roll = requireNotNull(model.slotMachineRoll)
+            assertEquals(RewardType.TOYS_2, roll.winner)
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(SLOT_MACHINE_DURATION_MS.toLong()))
+            assertNotNull(model.slotMachineError)
+            val bonuses = requireNotNull(roll.celebrationRewards)
+            assertEquals(2, bonuses.size)
+            model.chooseSlotMachineFragmentReward(true)
+            model.spinSlotMachine()
+            assertSame(roll, model.slotMachineRoll)
+            assertTrue(blockedWrite.delete())
+            repeat(3) { model.retrySlotMachinePrize() }
+            shadowOf(Looper.getMainLooper()).idle()
+            assertTrue(model.slotMachineAwarded)
+            assertSame(roll, model.slotMachineRoll)
+            assertEquals(bonuses, roll.celebrationRewards)
+            val saved = HistoryStore(file).loadSnapshot()
+            assertEquals(game.ordinal, saved.rewards.getValue(RewardType.TOYS_2).whole)
+            assertTrue(saved.slotMachinePokemons.containsAll(bonuses))
+            assertTrue(saved.history.isEmpty())
+            assertTrue(saved.readingResults.isEmpty())
+        }
     }
 
     @Test fun perGameRewardsDefaultOnRespectLegacySubjectSwitchesAndPersistIndependently() {

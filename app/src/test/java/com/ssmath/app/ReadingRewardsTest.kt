@@ -45,10 +45,11 @@ class ReadingRewardsTest {
 
     private fun model(
         dispatcher: CoroutineDispatcher = Dispatchers.Unconfined,
-        rewardRandom: Random = Random.Default
+        rewardRandom: Random = Random.Default,
+        chanceGameRandom: Random = fixedChanceGame()
     ): MathViewModel {
         val model = MathViewModel(application, ioDispatcher = dispatcher, celebrationRandom = Random(7),
-            rewardRandom = rewardRandom)
+            rewardRandom = rewardRandom, chanceGameRandom = chanceGameRandom)
         models += ViewModelStore().apply { put("model", model) }
         shadowOf(Looper.getMainLooper()).idle()
         return model
@@ -88,6 +89,28 @@ class ReadingRewardsTest {
         if (model.overlay == null) model.openReading()
         model.openReadingSessionReward(data, data.sessions.single())
         shadowOf(Looper.getMainLooper()).idle()
+    }
+
+    @Test fun eachChanceGameCanClaimAReadingTierRewardOnlyOnce() {
+        ChanceGame.entries.forEach { game ->
+            val model = model(chanceGameRandom = fixedChanceGame(game))
+            val data = finished(id = "chance-${game.name}")
+            open(model, data)
+            while (model.readingCelebration != null) model.dismissReadingCelebration()
+            assertEquals(game, model.chanceGame)
+            assertTrue(model.slotMachineActivityReward)
+            model.spinSlotMachine()
+            val roll = requireNotNull(model.slotMachineRoll)
+            assertTrue(roll.fragmentReward)
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(SLOT_MACHINE_DURATION_MS.toLong()))
+            assertTrue(model.slotMachineAwarded)
+            val snapshot = HistoryStore(file).loadSnapshot()
+            assertEquals(1, snapshot.readingResults.count { it.sessionId == data.sessions.single().id })
+            assertNotNull(snapshot.readingResults.single { it.sessionId == data.sessions.single().id }.prize)
+            repeat(3) { model.spinSlotMachine(); model.retrySlotMachinePrize() }
+            assertSame(roll, model.slotMachineRoll)
+            assertEquals(game.ordinal + 1, HistoryStore(file).loadSnapshot().rewards.values.sumOf { it.totalFragments })
+        }
     }
 
     @Test fun readingCompletionGuaranteesAMatchingFragmentOnItsTenthSpin() {

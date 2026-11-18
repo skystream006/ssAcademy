@@ -513,11 +513,16 @@ private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit, onTransfer:
                     Button(onClick = { showingAdjustments = true }, modifier = Modifier.fillMaxWidth()) {
                         Text("Add/Remove Rewards", textAlign = TextAlign.Center)
                     }
-                    Button(onClick = {
-                        model.openAdminSlotMachine()
-                        showingSlotMachine = true
-                    }, enabled = !model.slotMachineBusy, modifier = Modifier.fillMaxWidth().testTag("slot-machine")) {
-                        Text("Slot machine", textAlign = TextAlign.Center)
+                    CollapsibleSettingsSection("Chance games", defaultExpanded = false) {
+                        ChanceGame.entries.forEach { game ->
+                            Button(onClick = {
+                                model.openAdminSlotMachine(game)
+                                showingSlotMachine = true
+                            }, enabled = !model.slotMachineBusy,
+                                modifier = Modifier.fillMaxWidth().testTag(game.tag)) {
+                                Text(game.label, textAlign = TextAlign.Center)
+                            }
+                        }
                     }
                     Button(onClick = onTransfer, modifier = Modifier.fillMaxWidth().testTag("collection-transfer")) {
                         Text("Export / Import Collections", textAlign = TextAlign.Center)
@@ -784,7 +789,7 @@ private fun GameSettings(
         CollapsibleSettingsSection("Math Rewards System", defaultExpanded = false) {
             SubjectRewardsSetting(model, Subject.MATH,
                 "Earn prize fragments in math challenges by meeting each game's reward requirements " +
-                    "with 90% or more correct, then win one fragment in the slot machine.", title = "Enable math rewards")
+                    "with 90% or more correct, then reveal one fragment in a random chance game.", title = "Enable math rewards")
             Text("Choose rewards for each game. Games and earned rewards remain available when rewards are off.",
                 style = MaterialTheme.typography.bodySmall)
             MathRewardGame.entries.forEach { game ->
@@ -866,7 +871,7 @@ private fun GameSettings(
         CollapsibleSettingsSection("Reading Rewards System", defaultExpanded = false) {
             SubjectRewardsSetting(model, Subject.READING,
                 "Earn prize fragments by meeting each reading game's minimum questions " +
-                    "with 90% or more correct, then win one fragment in the slot machine.", title = "Enable reading rewards")
+                    "with 90% or more correct, then reveal one fragment in a random chance game.", title = "Enable reading rewards")
             Text("Choose rewards for each game. Games and earned rewards remain available when rewards are off.",
                 style = MaterialTheme.typography.bodySmall)
             ReadingGame.entries.forEach { game ->
@@ -1214,7 +1219,7 @@ fun HistoryScreen(model: MathViewModel) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     if (detail.hasUnclaimedReward) {
                         Button(onClick = { model.showRewardForResult(detail) }) {
-                            Text(if (detail.slotReward != null) "Open slot machine" else "Open gift box")
+                            Text(if (detail.slotReward != null) "Open chance game" else "Open gift box")
                         }
                     }
                     OutlinedButton(onClick = model::closeOverlay, modifier = Modifier.widthIn(min = 160.dp)) { Text("Back") }
@@ -1243,7 +1248,7 @@ fun HistoryScreen(model: MathViewModel) {
                                     result.prize?.let { Text("Prize: ${it.type.fragmentLabel}") }
                                     result.pokemonRewards.forEach { Text("My Pokémons: ${it.collectionLabel}") }
                                     if (result.hasUnclaimedReward) Text(if (result.slotReward != null)
-                                        "Fragment waiting — open this result to play the slot machine"
+                                        "Fragment waiting — open this result to play a chance game"
                                         else "Prize waiting — open this result to claim")
                                 }
                             },

@@ -235,7 +235,7 @@ private fun MainContent(model: MathViewModel) {
                     if (result.hasUnclaimedReward && model.celebration == null &&
                         !model.selectingCelebration) {
                         Button(onClick = { model.showRewardForResult(result) }) {
-                            Text(if (result.slotReward != null) "Open slot machine" else "Open gift box")
+                            Text(if (result.slotReward != null) "Open chance game" else "Open gift box")
                         }
                     }
                     Button(onClick = model::done, modifier = Modifier.widthIn(min = 160.dp).testTag("done-button")) { Text("Done") }
@@ -477,7 +477,7 @@ internal fun RewardsQuestionCountChoices(questionCount: Int?, onSelect: (Int) ->
 private fun RewardsCriteria(model: MathViewModel) {
     Column(Modifier.fillMaxWidth().testTag("rewards-criteria"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Obtainable rewards (requires 90% correct)", style = MaterialTheme.typography.titleMedium)
-        Text("Finish all questions with 90% or more correct to pull the slot machine until you win one fragment.")
+        Text("Finish all questions with 90% or more correct to reveal one fragment in a random chance game.")
         Text("• Pokémon: 15 or more questions.")
         if (!model.rewardsEnabled) {
             Text("Prize fragments are unavailable while Math Rewards System is OFF.")
@@ -906,7 +906,7 @@ internal fun ResultsContent(result: PracticeResult, title: String?, showCorrectA
                             style = MaterialTheme.typography.bodySmall)
                     }
                     if (result.hasUnclaimedReward) {
-                        Text(if (result.slotReward != null) "Your fragment is waiting! Open the slot machine."
+                        Text(if (result.slotReward != null) "Your fragment is waiting! Open the chance game."
                             else "Your prize is waiting!", style = MaterialTheme.typography.titleMedium)
                     }
                     Text(formatFinishedAt(result.finishedAt), style = MaterialTheme.typography.bodySmall,

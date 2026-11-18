@@ -44,7 +44,8 @@ class MathViewModel(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val rewardRandom: Random = Random.Default,
     private val celebrationRandom: Random = Random.Default,
-    private val progressIconRandom: Random = Random.Default
+    private val progressIconRandom: Random = Random.Default,
+    private val chanceGameRandom: Random = Random.Default
 ) : AndroidViewModel(application) {
     constructor(application: Application) : this(application, ProblemGenerator())
 
@@ -52,6 +53,8 @@ class MathViewModel(
     private val store = HistoryStore(File(application.filesDir, "practice_history.json"))
     private val storeLock = Mutex()
 
+    internal var chanceGame by mutableStateOf(ChanceGame.SLOT_MACHINE)
+        private set
     internal var slotMachineTier by mutableStateOf<RewardTier?>(null)
         private set
     internal var slotMachineFragmentReward by mutableStateOf(settings.getBoolean("slot_machine_fragment_reward", false))
@@ -1220,17 +1223,19 @@ class MathViewModel(
 
     private fun resetSlotMachine(activity: ActivitySlotMachine? = null) {
         activitySlotMachine = activity
+        chanceGame = if (activity != null) ChanceGame.entries.random(chanceGameRandom) else ChanceGame.SLOT_MACHINE
         slotMachineSpinCount = 0
         slotMachineRoll = null
         slotMachineError = null
         slotMachineAwarded = false
     }
 
-    internal fun openAdminSlotMachine() {
+    internal fun openAdminSlotMachine(game: ChanceGame = ChanceGame.SLOT_MACHINE) {
         if (slotMachineBusy) return
         dismissReward()
         dismissReadingSessionReward()
         resetSlotMachine()
+        chanceGame = game
         chooseSlotMachineTier(null)
     }
 
@@ -1261,7 +1266,7 @@ class MathViewModel(
             return
         }
         val rollNumber = slotMachineSpinCount + 1
-        val reels = if (rollNumber % 10 == 0L) {
+        val reels = if (chanceGame != ChanceGame.SLOT_MACHINE || rollNumber % 10 == 0L) {
             val winner = pool.select(rewardRandom)
             List(3) { winner }
         } else {

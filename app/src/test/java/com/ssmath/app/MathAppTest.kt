@@ -66,7 +66,8 @@ class MathAppTest {
 
     private fun model(ioDispatcher: CoroutineDispatcher = Dispatchers.IO) =
         MathViewModel(application, ProblemGenerator(Random(7)), clock = { now },
-            wallClock = { 1_700_000_000_000 }, ioDispatcher = ioDispatcher)
+            wallClock = { 1_700_000_000_000 }, ioDispatcher = ioDispatcher,
+            chanceGameRandom = fixedChanceGame())
 
     @Test fun logicChallengeSharesRewardChoicesAndOffersEveryOperation() {
         val model = model(Dispatchers.Unconfined)
