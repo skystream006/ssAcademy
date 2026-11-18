@@ -103,7 +103,8 @@ class ReadingRewardsTest {
             val roll = requireNotNull(model.slotMachineRoll)
             assertTrue(roll.fragmentReward)
             shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(game.playDurationMs.toLong()))
-            assertTrue(model.slotMachineAwarded)
+            assertTrue("$game: elapsed=${roll.chanceElapsedMs}, error=${model.slotMachineError}",
+                model.slotMachineAwarded)
             val snapshot = HistoryStore(file).loadSnapshot()
             assertEquals(1, snapshot.readingResults.count { it.sessionId == data.sessions.single().id })
             assertNotNull(snapshot.readingResults.single { it.sessionId == data.sessions.single().id }.prize)

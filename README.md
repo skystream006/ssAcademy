@@ -754,13 +754,22 @@ My Pokémons, or existing gift claims. **Back to Admin Menu** returns to the unl
 
 **Admin Menu > Chance games** contains four games:
 **Slot machine**, **Spin the wheel**, **Plinko Drop**, and **Claw Machine**.
-Spin a weighted wheel, position and drop a Plinko ball, or position a claw to
-grab a capsule. Wheel segments and Plinko buckets show larger reward images;
+Each **Spin the wheel** round makes **5 spins**. **Plinko Drop** drops **10 balls**;
+the bin with the most balls wins. **Claw Machine** picks up **5 balls** and places
+them into its prize bin; the most common reward ball wins.
+Wheel and Claw likewise award the reward received most often, not a separate prize
+for every spin or ball. Ties are decided uniformly among the tied leaders.
+Visible tallies count completed spins, landed balls, and balls placed in the prize bin.
+Wheel segments and Plinko buckets show larger reward images;
 all three games also show larger available-prize and revealed-reward artwork.
-Plinko's ball drops over 4.8 seconds, with controls locked until the drop finishes
-and its prize is saved. Each of these three games animates its reveal and
-awards one reward per play using the enabled tier's normalized reward weights;
-its exact per-play chances are shown. Choices and positions affect the presentation,
+Each Plinko ball drops over 4.8 seconds, with the ten balls released half a second
+apart. Wheel spins and claw pickups run one after another. Controls stay locked
+until the entire round finishes and its single prize is saved.
+Each spin or ball uses the enabled tier's normalized reward weights; these per-spin
+or per-ball chances are shown, not the final round's winning probabilities.
+All outcomes and any tiebreaker are fixed for the round, so UI restoration and
+save retries preserve its animations, tally, and winning reward.
+Choices and positions affect the presentation,
 not the prize odds. Selection of the activity game is uniform across all four games
 and stays fixed while its dialog is open, including save retries and UI restoration.
 Reopening an unclaimed reward can select a new game without adding another claim.

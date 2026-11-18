@@ -1266,25 +1266,42 @@ class MathViewModel(
             return
         }
         val rollNumber = slotMachineSpinCount + 1
-        val reels = if (chanceGame != ChanceGame.SLOT_MACHINE || rollNumber % 10 == 0L) {
+        val chanceDraws = if (chanceGame == ChanceGame.SLOT_MACHINE) emptyList()
+            else List(chanceGame.drawCount) { pool.select(rewardRandom) }
+        val reels = if (chanceDraws.isNotEmpty()) {
+            val winner = mostFrequentReward(chanceDraws, rewardRandom)
+            List(3) { winner }
+        } else if (rollNumber % 10 == 0L) {
             val winner = pool.select(rewardRandom)
             List(3) { winner }
         } else {
             List(3) { pool.select(rewardRandom) }
         }
-        val roll = SlotMachineRoll(reels, rollNumber = rollNumber, fragmentReward = slotMachineIsFragmentReward)
+        val roll = SlotMachineRoll(reels, rollNumber = rollNumber, fragmentReward = slotMachineIsFragmentReward,
+            chanceDraws = chanceDraws)
         slotMachineSpinCount = rollNumber
         slotMachineRoll = roll
         slotMachineAwarded = false
         slotMachineBusy = true
         slotMachineSpinning = true
         val durationMs = chanceGame.playDurationMs
+        val startedAt = SystemClock.uptimeMillis()
         viewModelScope.launch {
+            val animation = if (chanceDraws.isEmpty()) null else launch {
+                while (roll.chanceElapsedMs < durationMs) {
+                    roll.chanceElapsedMs = (SystemClock.uptimeMillis() - startedAt)
+                        .coerceIn(0, durationMs.toLong()).toInt()
+                    delay(32)
+                }
+            }
             try {
                 delay(durationMs.toLong())
+                animation?.cancel()
+                if (chanceDraws.isNotEmpty()) roll.chanceElapsedMs = durationMs
                 slotMachineSpinning = false
                 saveSlotMachineWin(roll, activity)
             } finally {
+                animation?.cancel()
                 slotMachineSpinning = false
                 slotMachineBusy = false
             }
