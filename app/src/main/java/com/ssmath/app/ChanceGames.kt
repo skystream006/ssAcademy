@@ -5,7 +5,6 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -17,7 +16,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
@@ -29,14 +27,18 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
-internal enum class ChanceGame(val label: String, val tag: String, val action: String) {
+internal enum class ChanceGame(
+    val label: String,
+    val tag: String,
+    val action: String,
+    val animationDurationMs: Int = 2_200
+) {
     SLOT_MACHINE("Slot machine", "slot-machine", "Pull lever"),
     SPIN_THE_WHEEL("Spin the wheel", "spin-the-wheel", "Spin wheel"),
-    TREASURE_CHESTS("Mystery Treasure Chests", "treasure-chests", "Open chest"),
-    PLINKO("Plinko Drop", "plinko", "Drop ball"),
-    SCRATCH_CARD("Scratch-and-Reveal Cards", "scratch-card", "Reveal card"),
-    CLAW_MACHINE("Claw Machine", "claw-machine", "Grab capsule"),
-    BALLOON_POP("Balloon Pop", "balloon-pop", "Pop balloon")
+    PLINKO("Plinko Drop", "plinko", "Drop ball", animationDurationMs = 4_800),
+    CLAW_MACHINE("Claw Machine", "claw-machine", "Grab capsule");
+
+    val playDurationMs: Int get() = animationDurationMs + 400
 }
 
 @Composable
@@ -138,7 +140,8 @@ private fun ChanceGameOdds(pool: SlotMachineRewardPool?, fragment: Boolean) {
         if (pool == null) Text("No available rewards")
         pool?.weights?.keys?.forEach { type ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                RewardImage(type, fragment = fragment, modifier = Modifier.size(40.dp))
+                RewardImage(type, fragment = fragment,
+                    modifier = Modifier.size(64.dp).testTag("chance-available-image-${type.name}"))
                 Text("${if (fragment) type.fragmentLabel else type.label}: " +
                     "${slotChancePercent(pool.reelChance(type))}% per play",
                     modifier = Modifier.weight(1f).testTag("chance-odds-${type.name}"))
@@ -156,13 +159,11 @@ private fun ChanceGameBoard(
     enabled: Boolean,
     onPlay: () -> Unit
 ) {
-    val progress = remember(roll) { Animatable(0f) }
+    val progress = remember(game, roll) { Animatable(0f) }
     var position by rememberSaveable(game) { mutableFloatStateOf(0.5f) }
     var selected by rememberSaveable(game) { mutableIntStateOf(if (game == ChanceGame.CLAW_MACHINE) 3 else 1) }
-    val scratches = remember(roll) { mutableStateListOf<Pair<Offset, Offset>>() }
-    var scratched by remember(roll) { mutableFloatStateOf(0f) }
-    LaunchedEffect(roll) {
-        if (roll != null) progress.animateTo(1f, tween(2_200, easing = FastOutSlowInEasing))
+    LaunchedEffect(game, roll) {
+        if (roll != null) progress.animateTo(1f, tween(game.animationDurationMs, easing = FastOutSlowInEasing))
     }
     val colors = listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary,
         MaterialTheme.colorScheme.tertiary)
@@ -178,17 +179,7 @@ private fun ChanceGameBoard(
     val wheelAngle = (1_800f + 360f - midpoint) * p
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Box(Modifier.fillMaxWidth().aspectRatio(1.2f).background(surface)
-            .testTag("chance-board-${game.name}")
-            .pointerInput(game, enabled, roll) {
-                if (game == ChanceGame.SCRATCH_CARD && enabled) {
-                    detectDragGestures { change, amount ->
-                        change.consume()
-                        scratches += (change.position - amount) to change.position
-                        scratched += amount.getDistance()
-                        if (scratched >= size.width * 1.5f) onPlay()
-                    }
-                }
-            }, contentAlignment = Alignment.Center) {
+            .testTag("chance-board-${game.name}"), contentAlignment = Alignment.Center) {
             Canvas(Modifier.fillMaxSize().padding(12.dp).semantics { contentDescription = game.label }) {
                 val w = size.width
                 val h = size.height
@@ -214,16 +205,6 @@ private fun ChanceGameBoard(
                             close()
                         }, ink)
                     }
-                    ChanceGame.TREASURE_CHESTS -> repeat(3) { index ->
-                        val x = w * (index + 0.5f) / 3
-                        val y = h * 0.55f
-                        val bw = w * 0.26f
-                        drawRoundRect(colors[index], Offset(x - bw / 2, y), Size(bw, h * 0.25f))
-                        val lift = if (index == selected) p * h * 0.25f else 0f
-                        drawRoundRect(colors[index], Offset(x - bw / 2, y - h * 0.1f - lift),
-                            Size(bw, h * 0.1f), style = Stroke(5.dp.toPx()))
-                        drawCircle(ink, 4.dp.toPx(), Offset(x, y + h * 0.08f))
-                    }
                     ChanceGame.PLINKO -> {
                         repeat(6) { row ->
                             repeat(7) { col ->
@@ -238,20 +219,6 @@ private fun ChanceGameBoard(
                         val end = (types.indexOf(winner).coerceAtLeast(0) + 0.5f) / types.size
                         val x = position * (1 - p) + end * p + sin(p * PI * 12).toFloat() * 0.035f * sin(p * PI).toFloat()
                         drawCircle(colors[0], 9.dp.toPx(), Offset(w * x, h * (0.04f + p * 0.91f)))
-                    }
-                    ChanceGame.SCRATCH_CARD -> {
-                        if (p < 1f) {
-                            drawRoundRect(colors[1], size = size)
-                            scratches.forEach { (from, to) ->
-                                val inset = Offset(12.dp.toPx(), 12.dp.toPx())
-                                drawLine(surface, from - inset, to - inset, strokeWidth = 24.dp.toPx())
-                            }
-                            repeat(9) { index ->
-                                val y = h * (index + 0.5f) / 9
-                                drawLine(surface, Offset(0f, y), Offset(w * p, y),
-                                    strokeWidth = h / 10)
-                            }
-                        }
                     }
                     ChanceGame.CLAW_MACHINE -> {
                         repeat(7) { index ->
@@ -268,23 +235,6 @@ private fun ChanceGameBoard(
                         if (p >= 0.6f) drawCircle(colors[selected % colors.size], w * 0.055f,
                             Offset(x, y + h * 0.1f))
                     }
-                    ChanceGame.BALLOON_POP -> repeat(3) { index ->
-                        val x = w * (index + 0.5f) / 3
-                        if (index != selected || p < 0.5f) {
-                            val scale = if (index == selected) 1 + p * 0.5f else 1f
-                            drawOval(colors[index], Offset(x - w * 0.11f * scale, h * 0.2f),
-                                Size(w * 0.22f * scale, h * 0.4f * scale))
-                            drawLine(ink, Offset(x, h * 0.6f), Offset(x, h * 0.9f), 2.dp.toPx())
-                        } else {
-                            repeat(12) { piece ->
-                                val angle = piece * PI / 6
-                                val distance = w * (p - 0.5f)
-                                drawCircle(colors[index], 4.dp.toPx(),
-                                    Offset(x + cos(angle).toFloat() * distance,
-                                        h * 0.4f + sin(angle).toFloat() * distance), alpha = 2 * (1 - p))
-                            }
-                        }
-                    }
                     ChanceGame.SLOT_MACHINE -> error("Slot machine uses its reel board")
                 }
             }
@@ -297,7 +247,7 @@ private fun ChanceGameBoard(
                         val radius = minOf(maxWidth, maxHeight) * 0.29f
                         RewardImage(type, fragment = fragment, modifier = Modifier
                             .offset(x = radius * cos(angle).toFloat(), y = radius * sin(angle).toFloat())
-                            .size(32.dp))
+                            .size(56.dp).testTag("chance-wheel-image-${type.name}"))
                         start += sweep
                     }
                 }
@@ -305,43 +255,25 @@ private fun ChanceGameBoard(
             if (game == ChanceGame.PLINKO) {
                 Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                     types.forEach { type ->
-                        RewardImage(type, fragment = fragment, modifier = Modifier.size(32.dp))
+                        RewardImage(type, fragment = fragment,
+                            modifier = Modifier.size(56.dp).testTag("chance-plinko-image-${type.name}"))
                     }
                 }
             }
             if (winner != null && p >= 1f) {
                 RewardImage(winner, fragment = fragment,
-                    modifier = Modifier.size(88.dp).testTag("chance-revealed-reward"))
+                    modifier = Modifier.size(144.dp).testTag("chance-revealed-reward"))
             }
         }
-        when (game) {
-            ChanceGame.TREASURE_CHESTS, ChanceGame.BALLOON_POP -> {
-                Text(if (game == ChanceGame.TREASURE_CHESTS) "Choose a chest" else "Choose a balloon")
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    repeat(3) { index ->
-                        Button(onClick = { selected = index; onPlay() }, enabled = enabled,
-                            modifier = Modifier.weight(1f).testTag("chance-choice-$index")) {
-                            Text("${if (game == ChanceGame.TREASURE_CHESTS) "Chest" else "Pop"} ${index + 1}")
-                        }
-                    }
-                }
-            }
-            ChanceGame.PLINKO, ChanceGame.CLAW_MACHINE -> {
-                Text(if (game == ChanceGame.PLINKO) "Choose a drop position" else "Position the claw")
-                Slider(position, onValueChange = { position = it; selected = (it * 7).toInt().coerceAtMost(6) },
-                    valueRange = 0.08f..0.92f, enabled = enabled,
-                    modifier = Modifier.testTag("chance-position").semantics {
-                        contentDescription = if (game == ChanceGame.PLINKO) "Drop position" else "Claw position"
-                    })
-            }
-            ChanceGame.SCRATCH_CARD -> {
-                Text("Scratch across the card to reveal your reward, or use Reveal card.")
-            }
-            else -> Unit
+        if (game == ChanceGame.PLINKO || game == ChanceGame.CLAW_MACHINE) {
+            Text(if (game == ChanceGame.PLINKO) "Choose a drop position" else "Position the claw")
+            Slider(position, onValueChange = { position = it; selected = (it * 7).toInt().coerceAtMost(6) },
+                valueRange = 0.08f..0.92f, enabled = enabled,
+                modifier = Modifier.testTag("chance-position").semantics {
+                    contentDescription = if (game == ChanceGame.PLINKO) "Drop position" else "Claw position"
+                })
         }
-        if (game != ChanceGame.TREASURE_CHESTS && game != ChanceGame.BALLOON_POP) {
-            Button(onClick = onPlay, enabled = enabled,
-                modifier = Modifier.fillMaxWidth().testTag("chance-play")) { Text(game.action) }
-        }
+        Button(onClick = onPlay, enabled = enabled,
+            modifier = Modifier.fillMaxWidth().testTag("chance-play")) { Text(game.action) }
     }
 }

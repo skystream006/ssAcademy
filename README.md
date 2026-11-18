@@ -314,7 +314,7 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   a chance-game reward for completing the configured minimum questions with **90% or more correct**.
   Both the subject and the selected game's rewards must be enabled at start and finish.
   These settings never enable prizes in Practice Game.
-  After the celebration, one of the seven chance games is chosen at random and opens in the earned tier.
+  After the celebration, one of the four chance games is chosen at random and opens in the earned tier.
   Slot machine offers free pulls until three matching fragments win **one fragment**;
   the other games reveal **one fragment** on each play. Activity games never
   award a whole reward directly and stop after the first win. **Finish later** keeps the earned
@@ -752,15 +752,16 @@ fragments. Removing a fragment never breaks a whole reward, and unavailable unit
 be removed. Adjustments are saved on this device without changing practice history,
 My Pokémons, or existing gift claims. **Back to Admin Menu** returns to the unlocked Admin Menu.
 
-**Admin Menu > Chance games** contains all seven implemented games:
-**Slot machine**, **Spin the wheel**, **Mystery Treasure Chests**, **Plinko Drop**,
-**Scratch-and-Reveal Cards**, **Claw Machine**, and **Balloon Pop**.
-Spin a weighted wheel, choose one of three chests, position and drop a Plinko ball,
-scratch a card (or press its accessible **Reveal card** button), position a claw to
-grab a capsule, or choose a balloon to pop. Each new game animates its reveal and
+**Admin Menu > Chance games** contains four games:
+**Slot machine**, **Spin the wheel**, **Plinko Drop**, and **Claw Machine**.
+Spin a weighted wheel, position and drop a Plinko ball, or position a claw to
+grab a capsule. Wheel segments and Plinko buckets show larger reward images;
+all three games also show larger available-prize and revealed-reward artwork.
+Plinko's ball drops over 4.8 seconds, with controls locked until the drop finishes
+and its prize is saved. Each of these three games animates its reveal and
 awards one reward per play using the enabled tier's normalized reward weights;
 its exact per-play chances are shown. Choices and positions affect the presentation,
-not the prize odds. Selection of the activity game is uniform across all seven games
+not the prize odds. Selection of the activity game is uniform across all four games
 and stays fixed while its dialog is open, including save retries and UI restoration.
 Reopening an unclaimed reward can select a new game without adding another claim.
 All games are free, offline, and use the same inventory, save-retry protection,

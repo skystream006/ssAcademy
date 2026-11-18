@@ -40,7 +40,7 @@ internal fun MathViewModel.claimDisplayedReward() {
         val previous = slotMachineRoll
         spinSlotMachine()
         if (slotMachineRoll === previous) return
-        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(SLOT_MACHINE_DURATION_MS.toLong()))
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(chanceGame.playDurationMs.toLong()))
     }
     fail("The seeded slot machine did not produce a match.")
 }
@@ -505,7 +505,7 @@ class RewardsModelTest {
             assertEquals(game, model.chanceGame)
             repeat(3) { model.spinSlotMachine() }
             assertSame(roll, model.slotMachineRoll)
-            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(SLOT_MACHINE_DURATION_MS.toLong()))
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(game.playDurationMs.toLong()))
             assertTrue(model.slotMachineAwarded)
             assertEquals(game, model.chanceGame)
             repeat(3) { model.spinSlotMachine(); model.retrySlotMachinePrize() }
@@ -531,7 +531,7 @@ class RewardsModelTest {
             model.spinSlotMachine()
             val roll = requireNotNull(model.slotMachineRoll)
             assertEquals(RewardType.TOYS_2, roll.winner)
-            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(SLOT_MACHINE_DURATION_MS.toLong()))
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(game.playDurationMs.toLong()))
             assertNotNull(model.slotMachineError)
             val bonuses = requireNotNull(roll.celebrationRewards)
             assertEquals(2, bonuses.size)

@@ -1278,9 +1278,10 @@ class MathViewModel(
         slotMachineAwarded = false
         slotMachineBusy = true
         slotMachineSpinning = true
+        val durationMs = chanceGame.playDurationMs
         viewModelScope.launch {
             try {
-                delay(SLOT_MACHINE_DURATION_MS.toLong())
+                delay(durationMs.toLong())
                 slotMachineSpinning = false
                 saveSlotMachineWin(roll, activity)
             } finally {

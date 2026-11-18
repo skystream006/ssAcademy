@@ -14,7 +14,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.SemanticsActions
@@ -23,6 +22,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.*
@@ -70,6 +70,9 @@ class AdminMenuTest {
         compose.openAdminSettings()
         ChanceGame.entries.forEach { compose.onNodeWithTag(it.tag).assertDoesNotExist() }
         compose.onNodeWithText("Chance games").performScrollTo().performClick()
+        listOf("treasure-chests", "scratch-card", "balloon-pop").forEach {
+            compose.onNodeWithTag(it).assertDoesNotExist()
+        }
         ChanceGame.entries.forEach { game ->
             compose.onNodeWithTag(game.tag).performScrollTo().performClick()
             compose.onNodeWithTag(if (game == ChanceGame.SLOT_MACHINE) "slot-machine-dialog"
@@ -82,11 +85,25 @@ class AdminMenuTest {
     }
 
     @Test fun wheelPlaysLocksAndRestoresWithoutAwardingAgain() = checkChanceBoard(ChanceGame.SPIN_THE_WHEEL)
-    @Test fun chestsPlayLockAndRestoreWithoutAwardingAgain() = checkChanceBoard(ChanceGame.TREASURE_CHESTS)
     @Test fun plinkoPlaysLocksAndRestoresWithoutAwardingAgain() = checkChanceBoard(ChanceGame.PLINKO)
-    @Test fun scratchCardPlaysLocksAndRestoresWithoutAwardingAgain() = checkChanceBoard(ChanceGame.SCRATCH_CARD)
     @Test fun clawPlaysLocksAndRestoresWithoutAwardingAgain() = checkChanceBoard(ChanceGame.CLAW_MACHINE)
-    @Test fun balloonsPlayLockAndRestoreWithoutAwardingAgain() = checkChanceBoard(ChanceGame.BALLOON_POP)
+
+    @Test
+    @Config(qualifiers = "w320dp-h800dp")
+    fun enlargedPlinkoRewardImagesFitAllFiveRewardsOnANarrowScreen() {
+        val model = MathViewModel(application)
+        model.openSettings()
+        model.openAdminSlotMachine(ChanceGame.PLINKO)
+        model.chooseSlotMachineTier(RewardTier.TIER_1)
+        compose.setContent { MathTheme { SlotMachineDialog(model, onDismiss = {}) } }
+        val board = compose.onNodeWithTag("chance-board-PLINKO").performScrollTo().getUnclippedBoundsInRoot()
+        RewardType.entries.filter { it.tier == RewardTier.TIER_1 }.forEach { type ->
+            val image = compose.onNodeWithTag("chance-plinko-image-${type.name}")
+            image.assertWidthIsAtLeast(56.dp).assertHeightIsAtLeast(56.dp)
+            val bounds = image.getUnclippedBoundsInRoot()
+            assertTrue(bounds.left >= board.left && bounds.right <= board.right)
+        }
+    }
 
     private fun checkChanceBoard(game: ChanceGame) {
         val model = MathViewModel(application, ioDispatcher = Dispatchers.Unconfined)
@@ -98,10 +115,15 @@ class AdminMenuTest {
         val restoration = StateRestorationTester(compose)
         restoration.setContent { MathTheme { SlotMachineDialog(model, onDismiss = {}) } }
         compose.onNodeWithTag("chance-board-${game.name}").performScrollTo().assertIsDisplayed()
+        if (game != ChanceGame.CLAW_MACHINE) {
+            compose.onNodeWithTag("chance-${if (game == ChanceGame.PLINKO) "plinko" else "wheel"}-image-TOYS_1")
+                .assertWidthIsAtLeast(56.dp).assertHeightIsAtLeast(56.dp)
+        }
+        compose.onNodeWithTag("chance-available-image-TOYS_1")
+            .assertWidthIsAtLeast(64.dp).assertHeightIsAtLeast(64.dp)
         compose.onNodeWithTag("chance-odds-TOYS_1").performScrollTo()
             .assertTextEquals("${RewardType.TOYS_1.fragmentLabel}: 100% per play")
-        val choiceGame = game == ChanceGame.TREASURE_CHESTS || game == ChanceGame.BALLOON_POP
-        val action = if (choiceGame) "chance-choice-2" else "chance-play"
+        val action = "chance-play"
         if (game == ChanceGame.PLINKO || game == ChanceGame.CLAW_MACHINE) {
             compose.onNodeWithTag("chance-position").performScrollTo()
                 .performSemanticsAction(SemanticsActions.SetProgress) { it(0.8f) }
@@ -109,14 +131,7 @@ class AdminMenuTest {
         compose.onNodeWithTag(action).performScrollTo()
         compose.mainClock.autoAdvance = false
         compose.mainClock.advanceTimeBy(64)
-        if (game == ChanceGame.SCRATCH_CARD) {
-            compose.onNodeWithTag("chance-board-${game.name}").performScrollTo().performTouchInput {
-                repeat(4) {
-                    swipe(Offset(width * 0.1f, height * 0.5f),
-                        Offset(width * 0.9f, height * 0.5f), 200)
-                }
-            }
-        } else compose.onNodeWithTag(action).performClick()
+        compose.onNodeWithTag(action).performClick()
         compose.mainClock.advanceTimeBy(64)
         compose.runOnIdle { assertTrue(model.slotMachineBusy) }
         compose.mainClock.advanceTimeBy(64)
@@ -124,10 +139,23 @@ class AdminMenuTest {
         compose.onNodeWithTag("chance-fragment-reward").assertIsNotEnabled()
         compose.onNodeWithText("Back to Admin Menu").assertIsNotEnabled()
         restoration.emulateSavedInstanceStateRestore()
-        compose.runOnIdle {
-            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(SLOT_MACHINE_DURATION_MS.toLong()))
+        val elapsed = if (game == ChanceGame.PLINKO) SLOT_MACHINE_DURATION_MS else 0
+        if (elapsed > 0) {
+            compose.runOnIdle {
+                shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(elapsed.toLong()))
+                assertTrue(model.slotMachineBusy)
+                assertFalse(model.slotMachineAwarded)
+                assertTrue(model.rewardBalances.isEmpty())
+            }
+            compose.mainClock.advanceTimeBy(elapsed.toLong())
+            compose.onNodeWithTag("chance-play").assertIsNotEnabled()
+            compose.onNodeWithTag("slot-win-dialog").assertDoesNotExist()
+            compose.onNodeWithTag("chance-revealed-reward").assertDoesNotExist()
         }
-        compose.mainClock.advanceTimeBy(SLOT_MACHINE_DURATION_MS.toLong() + 64)
+        compose.runOnIdle {
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis((game.playDurationMs - elapsed).toLong()))
+        }
+        compose.mainClock.advanceTimeBy((game.playDurationMs - elapsed).toLong() + 64)
         compose.onNodeWithTag("slot-win-dialog").assertIsDisplayed()
         compose.onNodeWithTag("slot-win-reward").assertContentDescriptionEquals(
             rewardImageDescription(RewardType.TOYS_1, fragment = true))
@@ -141,6 +169,7 @@ class AdminMenuTest {
             compose.onNodeWithTag("close-celebration").performClick()
         }
         compose.mainClock.advanceTimeBy(64)
+        compose.onNodeWithTag("chance-revealed-reward").assertWidthIsAtLeast(144.dp).assertHeightIsAtLeast(144.dp)
         restoration.emulateSavedInstanceStateRestore()
         compose.onNodeWithTag("slot-win-dialog").assertDoesNotExist()
         compose.mainClock.autoAdvance = true
