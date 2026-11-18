@@ -43,7 +43,8 @@ internal data class SlotMachineRoll(
     val reels: List<RewardType>,
     val rollNumber: Long = 0,
     val fragmentReward: Boolean = false,
-    val chanceDraws: List<RewardType> = emptyList()
+    val chanceDraws: List<RewardType> = emptyList(),
+    val chancePool: SlotMachineRewardPool? = null
 ) {
     init {
         require(reels.size == 3)
@@ -52,6 +53,10 @@ internal data class SlotMachineRoll(
     // Cache bonuses without replacing the roll or restarting its reels on a save retry.
     internal var celebrationRewards by mutableStateOf<List<Celebration>?>(null)
     internal var chanceElapsedMs by mutableIntStateOf(0)
+    internal var chanceTurns by mutableStateOf<List<ChanceTurn>>(emptyList())
+
+    internal fun chanceRoundComplete(game: ChanceGame): Boolean =
+        chanceTurns.size == game.drawCount && chanceElapsedMs >= game.drawCount * game.playDurationMs
 
     val winner: RewardType? get() = reels.first().takeIf { type -> reels.all { it == type } }
 }
