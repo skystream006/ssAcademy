@@ -41,7 +41,7 @@ internal fun MathViewModel.claimDisplayedReward() {
         val previousTurns = previous?.chanceTurns?.size
         spinSlotMachine()
         if (slotMachineRoll === previous && slotMachineRoll?.chanceTurns?.size == previousTurns) return
-        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(chanceGame.playDurationMs.toLong()))
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(chanceGame.playDurationMs + 16L))
     }
     fail("The seeded slot machine did not produce a match.")
 }
@@ -50,7 +50,7 @@ internal fun MathViewModel.completeChanceRound() {
     repeat(2 * RewardType.entries.size + 1) {
         if (slotMachineAwarded || slotMachineError != null) return
         if (!slotMachineBusy) spinSlotMachine()
-        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(chanceGame.playDurationMs.toLong()))
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(chanceGame.playDurationMs + 16L))
     }
     assertTrue("The round must finish once one reward occurs three times", slotMachineAwarded || slotMachineError != null)
 }
