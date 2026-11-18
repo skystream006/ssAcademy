@@ -53,6 +53,10 @@ For documentation-only changes, verify links/paths/symbols; do not run app tests
 | Same-roll activity save retry | `RewardsModelTest.activityWinningSaveRetriesTheSameFragmentWithoutRerollingOrDuplicating` |
 | Admin standard bonuses | `RewardsModelTest.adminSlotsAwardOneUncollectedStandardAnimationInTheFirstTwoTiersWithoutGameHistory` |
 | Tier 3 Admin bonus retry | `RewardsModelTest.tierThreeAdminWinsAtomicallyAddStandardAndMegaBonusesAndRetryTheSameSelections` |
+| First-to-three rounds without turn limits | `RewardsModelTest.chanceGamesKeepPlayingPastTenTurnsUntilOneRewardReachesThree` |
+| Concurrent Plinko drops and single prize | `RewardsModelTest.plinkoAllowsConcurrentDropsUntilThreeLandAndSavesOnlyOnePrize`, `AdminMenuTest.plinkoDropButtonAndAimingStayEnabledWithMultipleBallsInFlight` |
+| Chance game save retry | `RewardsModelTest.threeMatchRoundFreezesItsWinnerAndAllDrawsAcrossSaveRetries` |
+| Independent ball paths and claw tray settling | `ChanceGamePhysicsTest.concurrentPlinkoDropsRetainIndependentPathsAndLandInTheirSelectedBins`, `ChanceGamePhysicsTest.clawPrizeTraySpreadsTheFirstThreeCapsulesAlongItsFloor` |
 | Persisted Math rules | `RewardsModelTest.ordinaryRewardsUseFinishThresholdsAndKeepTheirRulesThroughReloadAndClaim` |
 | Claim/delete serialization | `RewardsModelTest.deletionAndClearSerializeWithPendingClaimsInEitherOrder` |
 | Navigation-safe asynchronous work | `RewardsModelTest.lateSavesAndClaimsDoNotReopenResultsAfterNavigation` |

@@ -27,7 +27,7 @@ class ChanceGamePhysicsTest {
     @Test fun plinkoUsesGravityAndPegBouncesToReachEveryBinFromEitherEdge() {
         for (bins in 1..5) for (bin in 0 until bins) {
             for (position in listOf(0.08f, 0.29f, 0.5f, 0.71f, 0.92f)) {
-                val drop = requireNotNull(plinkoDrop(position, bin, bins, emptyList(), bin))
+                val drop = requireNotNull(plinkoDrop(position, bin, bins, emptyList(), 0))
                 assertEquals(Offset(position, 0.035f), drop.frames.first())
                 assertEquals(bin, (drop.frames.last().x * bins).toInt())
                 assertTrue(drop.frames.last().y > PLINKO_BIN_TOP)
@@ -52,14 +52,18 @@ class ChanceGamePhysicsTest {
 
     @Test fun tenPlinkoBallsStackInsideShortBinsWithoutOverlapping() {
         val landed = mutableListOf<Offset>()
+        val previous = mutableListOf<ChanceTurn>()
         repeat(10) { turn ->
-            val drop = requireNotNull(plinkoDrop(if (turn % 2 == 0) 0.08f else 0.92f, 2, 5, landed, turn))
+            val position = if (turn % 2 == 0) 0.08f else 0.92f
+            val startedAtMs = turn * ChanceGame.PLINKO.playDurationMs
+            val drop = requireNotNull(plinkoDrop(position, 2, 5, previous, startedAtMs))
             val end = drop.frames.last()
             assertEquals(2, (end.x * 5).toInt())
             landed.forEach {
                 assertTrue((end - it).getDistance() >= PLINKO_BALL_RADIUS * 2 - 0.001f)
             }
             landed += end
+            previous += ChanceTurn(position, startedAtMs, plinko = drop)
         }
         assertTrue("Bins occupy less than a fifth of the playfield",
             (PLINKO_FLOOR - PLINKO_BIN_TOP) / PLINKO_HEIGHT < 0.2f)
@@ -68,12 +72,76 @@ class ChanceGamePhysicsTest {
     @Test fun historicalPoolsWithMoreRewardsStillFitTenBallsInOneBin() {
         val bins = RewardType.entries.size
         val landed = mutableListOf<Offset>()
+        val previous = mutableListOf<ChanceTurn>()
         repeat(10) { turn ->
-            val drop = requireNotNull(plinkoDrop(if (turn % 2 == 0) 0.08f else 0.92f, 0, bins, landed, turn))
+            val position = if (turn % 2 == 0) 0.08f else 0.92f
+            val startedAtMs = turn * ChanceGame.PLINKO.playDurationMs
+            val drop = requireNotNull(plinkoDrop(position, 0, bins, previous, startedAtMs))
             val end = drop.frames.last()
             assertEquals(0, (end.x * bins).toInt())
             landed.forEach { assertTrue((end - it).getDistance() >= plinkoBallRadius(bins) * 2 - 0.001f) }
             landed += end
+            previous += ChanceTurn(position, startedAtMs, plinko = drop)
+        }
+    }
+
+    @Test fun concurrentPlinkoDropsRetainIndependentPathsAndLandInTheirSelectedBins() {
+        val turns = mutableListOf<ChanceTurn>()
+        repeat(6) { index ->
+            val position = 0.08f + index * 0.16f
+            val startedAtMs = index * 120
+            val previousPaths = turns.map { requireNotNull(it.plinko).frames }
+            val drop = requireNotNull(plinkoDrop(position, index % 2, 2, turns, startedAtMs))
+            assertEquals(previousPaths, turns.map { requireNotNull(it.plinko).frames })
+            assertEquals(Offset(position, 0.035f), drop.frames.first())
+            assertEquals(index % 2, (drop.frames.last().x * 2).toInt())
+            assertTrue(drop.landingTimeMs in 1..ChanceGame.PLINKO.animationDurationMs)
+            turns += ChanceTurn(position, startedAtMs, plinko = drop)
+        }
+        assertTrue(turns.all { it.progress(ChanceGame.PLINKO, 720) in 0f..0.2f })
+        turns.forEachIndexed { index, turn ->
+            val end = requireNotNull(turn.plinko).frames.last()
+            turns.take(index).forEach { previous ->
+                assertTrue((end - requireNotNull(previous.plinko).frames.last()).getDistance() >=
+                    PLINKO_BALL_RADIUS * 2 - 0.001f)
+            }
+        }
+    }
+
+    @Test fun plinkoCountsTheFirstThreeLandingsRatherThanTheFirstThreeLaunches() {
+        val a = RewardType.LOLLIPOP
+        val b = RewardType.RAMEN
+        val roll = SlotMachineRoll(emptyList(),
+            chancePool = SlotMachineRewardPool(RewardTier.TIER_1, mapOf(a to 1, b to 1)))
+        roll.chanceDraws = listOf(a, a, a, b, b, b)
+        val slow = PlinkoDrop(List(49) { Offset(0.25f, 0.035f + it * 0.0125f) })
+        val fast = PlinkoDrop(List(49) { Offset(0.75f, minOf(0.635f, 0.035f + it * 0.1f)) })
+        roll.chanceTurns = roll.chanceDraws.mapIndexed { index, type ->
+            ChanceTurn(if (type == a) 0.25f else 0.75f, index * 100, plinko = if (type == a) slow else fast)
+        }
+        roll.chanceElapsedMs = 1_200
+        assertEquals(listOf(b, b, b), roll.completedChanceDraws(ChanceGame.PLINKO))
+        assertEquals(b, firstRewardToThree(roll.completedChanceDraws(ChanceGame.PLINKO)))
+        roll.chanceElapsedMs = 5_200
+        assertEquals(listOf(b, b, b, a, a, a), roll.completedChanceDraws(ChanceGame.PLINKO))
+        assertEquals(b, firstRewardToThree(roll.completedChanceDraws(ChanceGame.PLINKO)))
+    }
+
+    @Test fun clawPrizeTraySpreadsTheFirstThreeCapsulesAlongItsFloor() {
+        var scene = initialClawScene()
+        repeat(3) { index ->
+            scene = clawPickup(scene, if (index % 2 == 0) 0.08f else 0.92f).frames.last()
+        }
+        val collected = scene.balls.filter { it.id in scene.collected }
+        collected.forEach { ball ->
+            assertEquals("Capsules rest on the tray floor, not a single vertical stack",
+                CLAW_FLOOR - CLAW_BALL_RADIUS, ball.center.y, 0.003f)
+        }
+        assertTrue(collected.maxOf { it.center.x } - collected.minOf { it.center.x } > CLAW_BALL_RADIUS * 4)
+        collected.forEachIndexed { index, ball ->
+            collected.take(index).forEach { other ->
+                assertTrue((ball.center - other.center).getDistance() >= CLAW_BALL_RADIUS * 2 - 0.001f)
+            }
         }
     }
 
@@ -115,8 +183,9 @@ class ChanceGamePhysicsTest {
             assertEquals(pickedIds, scene.collected)
             scene.balls.forEach { ball ->
                 assertTrue(ball.center.y <= CLAW_FLOOR - CLAW_BALL_RADIUS + 0.001f)
-                assertTrue(if (ball.id in scene.collected) ball.center.x in 0.81f..0.94f
-                    else ball.center.x in 0.085f..0.67f)
+                assertTrue(if (ball.id in scene.collected)
+                    ball.center.x in (CLAW_BIN_LEFT + CLAW_BALL_RADIUS)..(CLAW_BIN_RIGHT - CLAW_BALL_RADIUS)
+                    else ball.center.x in 0.085f..(CLAW_PILE_RIGHT - CLAW_BALL_RADIUS))
             }
         }
         assertTrue("The remaining pile settles after pickups instead of staying in fixed slots", pileShifted)
