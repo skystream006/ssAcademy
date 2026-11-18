@@ -15,9 +15,9 @@ internal const val PLINKO_PEG_RADIUS = 0.009f
 internal const val CLAW_BALL_RADIUS = 0.044f
 internal const val CLAW_FLOOR = 0.9f
 private const val CLAW_PILE_LEFT = 0.045f
-private const val CLAW_PILE_RIGHT = 0.71f
-private const val CLAW_CHUTE_LEFT = 0.77f
-private const val CLAW_CHUTE_RIGHT = 0.975f
+internal const val CLAW_PILE_RIGHT = 0.62f
+internal const val CLAW_BIN_LEFT = 0.67f
+internal const val CLAW_BIN_RIGHT = 0.975f
 
 internal val plinkoPegs: List<Offset> = buildList {
     repeat(6) { row ->
@@ -41,11 +41,22 @@ internal fun wheelSliceLayout(sweepDegrees: Float): WheelSliceLayout {
 
 internal data class ChanceTurn(
     val position: Float,
+    val startedAtMs: Int,
     val plinko: PlinkoDrop? = null,
     val claw: ClawPickup? = null
-)
+) {
+    fun progress(game: ChanceGame, elapsedMs: Int): Float =
+        ((elapsedMs - startedAtMs).toFloat() / game.animationDurationMs).coerceIn(0f, 1f)
+
+    fun landedAtMs(game: ChanceGame): Int = startedAtMs + (plinko?.landingTimeMs ?: game.animationDurationMs)
+}
 
 internal data class PlinkoDrop(val frames: List<Offset>) {
+    private val landingFrame = (frames.indexOfLast { (it - frames.last()).getDistance() > 0.001f } + 1)
+        .coerceAtMost(frames.lastIndex)
+    val landingTimeMs: Int = (landingFrame * ChanceGame.PLINKO.animationDurationMs + frames.lastIndex - 1) /
+        frames.lastIndex
+
     fun at(progress: Float): Offset = frames[(progress.coerceIn(0f, 1f) * frames.lastIndex).toInt()]
 }
 
@@ -95,15 +106,15 @@ internal fun plinkoDrop(
     position: Float,
     bin: Int,
     binCount: Int,
-    landed: List<Offset>,
-    turn: Int
+    previous: List<ChanceTurn>,
+    startedAtMs: Int
 ): PlinkoDrop? {
     require(position in 0.08f..0.92f && bin in 0 until binCount)
     val radius = plinkoBallRadius(binCount)
     val steps = ChanceGame.PLINKO.animationDurationMs * 120 / 1_000
     // Select a real launch trajectory for the already-weighted reward, never steer a falling ball.
     repeat(801) { attempt ->
-        val direction = if ((attempt + turn) % 2 == 0) 1f else -1f
+        val direction = if ((attempt + previous.size) % 2 == 0) 1f else -1f
         val speed = direction * (0.001f + ((attempt + 1) / 2) * 0.005f)
         val ball = GravityBall(0, Offset(position, 0.035f), radius, Offset(speed, 0f))
         val frames = ArrayList<Offset>(steps / 2 + 1)
@@ -111,7 +122,13 @@ internal fun plinkoDrop(
         repeat(steps) { step ->
             ball.advance(1.15f)
             plinkoPegs.forEach { ball.obstacle(it, PLINKO_PEG_RADIUS, 0.62f) }
-            landed.forEach { ball.obstacle(it, radius, 0.25f) }
+            val elapsedMs = startedAtMs + (step + 1) * 1_000 / 120
+            previous.forEach { turn ->
+                if (elapsedMs >= turn.startedAtMs) {
+                    ball.obstacle(requireNotNull(turn.plinko).at(turn.progress(ChanceGame.PLINKO, elapsedMs)),
+                        radius, 0.25f)
+                }
+            }
             for (divider in 1 until binCount) {
                 ball.obstacle(Offset(divider.toFloat() / binCount,
                     ball.center.y.coerceIn(PLINKO_BIN_TOP, PLINKO_FLOOR)), 0.003f, 0.4f)
@@ -140,7 +157,7 @@ internal data class ClawPickup(val ballId: Int, val frames: List<ClawScene>) {
 }
 
 internal fun clawHome(position: Float): Offset = Offset(
-    0.105f + (position.coerceIn(0.08f, 0.92f) - 0.08f) / 0.84f * 0.54f, 0.13f
+    0.105f + (position.coerceIn(0.08f, 0.92f) - 0.08f) / 0.84f * 0.45f, 0.13f
 )
 
 internal fun clawFingers(claw: Offset, opening: Float): List<List<Offset>> {
@@ -187,8 +204,8 @@ private fun settleClawBalls(
             if (carried != null) ball.obstacle(carried.center, carried.radius, 0.2f)
             if (ball.id != target) fingers.forEach { ball.obstacle(it, 0.006f, 0.2f) }
             val inChute = ball.id in collected
-            ball.contain(if (inChute) CLAW_CHUTE_LEFT else CLAW_PILE_LEFT,
-                if (inChute) CLAW_CHUTE_RIGHT else CLAW_PILE_RIGHT, CLAW_FLOOR, 0.24f)
+            ball.contain(if (inChute) CLAW_BIN_LEFT else CLAW_PILE_LEFT,
+                if (inChute) CLAW_BIN_RIGHT else CLAW_PILE_RIGHT, CLAW_FLOOR, 0.24f)
         }
     }
     free.forEach { it.velocity *= 0.994f }
@@ -196,8 +213,8 @@ private fun settleClawBalls(
 
 internal fun initialClawScene(): ClawScene {
     val balls = buildList {
-        repeat(4) { row ->
-            repeat(if (row % 2 == 0) 7 else 6) { column ->
+        repeat(5) { row ->
+            repeat(if (row % 2 == 0) 6 else 5) { column ->
                 add(GravityBall(size, Offset(0.105f + column * 0.088f + (row % 2) * 0.044f,
                     0.84f - row * 0.095f), CLAW_BALL_RADIUS))
             }
@@ -217,6 +234,11 @@ internal fun clawPickup(previous: ClawScene, position: Float): ClawPickup {
     val selected = exposed.minBy { abs(it.center.x - home.x) }
     val balls = previous.balls.map { GravityBall(it.id, it.center, CLAW_BALL_RADIUS) }
     val picked = balls.first { it.id == selected.id }
+    val releaseX = when (previous.collected.size % 3) {
+        0 -> (CLAW_BIN_LEFT + CLAW_BIN_RIGHT) / 2
+        1 -> CLAW_BIN_LEFT + CLAW_BALL_RADIUS + 0.008f
+        else -> CLAW_BIN_RIGHT - CLAW_BALL_RADIUS - 0.008f
+    }
     val frames = mutableListOf<ClawScene>()
     val steps = ChanceGame.CLAW_MACHINE.animationDurationMs * 120 / 1_000
     var grasp: Offset? = null
@@ -231,9 +253,9 @@ internal fun clawPickup(previous: ClawScene, position: Float): ClawPickup {
         val x = when {
             progress < 0.1f -> motor(home.x, target.x, progress / 0.1f)
             progress < 0.61f -> target.x
-            progress < 0.75f -> motor(target.x, 0.87f, (progress - 0.61f) / 0.14f)
-            progress < 0.84f -> 0.87f
-            else -> motor(0.87f, home.x, (progress - 0.84f) / 0.16f)
+            progress < 0.75f -> motor(target.x, releaseX, (progress - 0.61f) / 0.14f)
+            progress < 0.84f -> releaseX
+            else -> motor(releaseX, home.x, (progress - 0.84f) / 0.16f)
         }
         val bottom = target.y - 0.085f
         val y = when {

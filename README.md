@@ -316,7 +316,7 @@ Saved preferences are preserved; the defaults below apply when no choice has bee
   These settings never enable prizes in Practice Game.
   After the celebration, one of the four chance games is chosen at random and opens in the earned tier.
   Slot machine offers free pulls until three matching fragments win **one fragment**;
-  the other games reveal **one fragment** on each play. Activity games never
+  the other games continue until the same reward appears **3 times**, then award **one fragment**. Activity games never
   award a whole reward directly and stop after the first win. **Finish later** keeps the earned
   reward available from the result's history entry via **Open chance game**. The tier, available fragments, and reward
   weights are saved when the activity finishes, so later Admin changes do not erase an earned reward.
@@ -754,32 +754,37 @@ My Pokémons, or existing gift claims. **Back to Admin Menu** returns to the unl
 
 **Admin Menu > Chance games** contains four games:
 **Slot machine**, **Spin the wheel**, **Plinko Drop**, and **Claw Machine**.
-Each **Spin the wheel** round allows **5 individual spins**, one button press per spin.
-**Plinko Drop** allows **10 individual drops**; move the ball before each drop using
-the slider or by dragging on the board. The bin with the most balls wins.
-**Claw Machine** allows **5 individual pickups**; position the overhead claw above
+**Spin the wheel**, **Plinko Drop**, and **Claw Machine** have no fixed turn limit:
+the first reward collected **3 times** wins the round's single prize. Matches do not
+need to be consecutive, and there is no majority vote or random tiebreaker.
+Spin the wheel once per button press until one reward reaches three.
+In **Plinko Drop**, aim using the slider or by dragging on the board, and keep pressing
+**Drop ball** even while other balls are falling. The first bin with three landed balls
+wins; any balls already in flight finish without changing that winner or awarding extra prizes.
+In **Claw Machine**, position the overhead claw above
 the capsule pile before each pickup. It grabs an exposed capsule, lifts it, and
-releases it into the prize chute. Capsules hide their rewards until delivered;
-the most common reward wins.
-Wheel and Claw likewise award the reward received most often, not a separate prize
-for every spin or ball. Ties are decided uniformly among the tied leaders.
+releases it into a wide, recessed prize tray. Release positions vary across the tray,
+so capsules settle side by side along its floor and build a natural pile.
+Capsules hide their rewards until delivered.
 Visible tallies count completed spins, landed balls, and balls placed in the prize bin.
 Wheel reward icons scale and rotate to fit their individual slices, including weighted slices.
 Plinko uses short, open-top bins with reward images and counts below the board;
 all three games also show larger available-prize and revealed-reward artwork.
 Plinko balls accelerate under gravity, bounce off pegs and walls, and settle against
 earlier balls. Claw capsules collide and settle under gravity instead of remaining
-in a fixed row; released capsules fall and bounce into the chute.
-Each drop or pickup animates over 4.8 seconds. Play and aiming controls unlock after
-each turn; the next turn never starts automatically. Tier and whole/fragment choices
-stay locked for the round, and its single prize is saved only after the final turn.
+in a fixed row; released capsules fall and bounce into the tray.
+Each drop or pickup animates over 4.8 seconds, with a separate timeline for each Plinko ball.
+Wheel and Claw play controls unlock after each turn; Plinko play and aiming stay available
+until a bin reaches three. Every turn still requires a button press.
+Tier and whole/fragment choices stay locked for the round, and its single prize is saved
+after the winning turn and any remaining in-flight balls finish.
 Each spin or ball uses the enabled tier's normalized reward weights; these per-spin
 or per-ball chances are shown, not the final round's winning probabilities.
-All outcomes and any tiebreaker are fixed for the round. Each turn also retains its
+Each turn's weighted outcome is selected once and retained with its
 release position and physical trajectory, so moving the next ball, UI restoration,
 and save retries do not move earlier balls or change the tally and winning reward.
-Choices and positions affect the presentation,
-not the prize odds. Selection of the activity game is uniform across all four games
+Aiming does not change the weighted reward selection for an individual ball.
+Selection of the activity game is uniform across all four games
 and stays fixed while its dialog is open, including save retries and UI restoration.
 Reopening an unclaimed reward can select a new game without adding another claim.
 All games are free, offline, and use the same inventory, save-retry protection,

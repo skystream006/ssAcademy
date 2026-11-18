@@ -88,6 +88,47 @@ class AdminMenuTest {
     @Test fun plinkoPlaysLocksAndRestoresWithoutAwardingAgain() = checkChanceBoard(ChanceGame.PLINKO)
     @Test fun clawPlaysLocksAndRestoresWithoutAwardingAgain() = checkChanceBoard(ChanceGame.CLAW_MACHINE)
 
+    @Test fun plinkoDropButtonAndAimingStayEnabledWithMultipleBallsInFlight() {
+        val model = MathViewModel(application, ioDispatcher = Dispatchers.Unconfined)
+        model.openSettings()
+        model.chooseTier3RewardChances(100, 0, 0, 0)
+        model.openAdminSlotMachine(ChanceGame.PLINKO)
+        model.chooseSlotMachineTier(RewardTier.TIER_3)
+        val restoration = StateRestorationTester(compose)
+        restoration.setContent { MathTheme { SlotMachineDialog(model, onDismiss = {}) } }
+        compose.onNodeWithTag("chance-play").performScrollTo().assertIsEnabled()
+        compose.mainClock.autoAdvance = false
+        compose.mainClock.advanceTimeBy(64)
+        repeat(4) { index ->
+            compose.onNodeWithTag("chance-position").assertIsEnabled()
+                .performSemanticsAction(SemanticsActions.SetProgress) { it(0.1f + index * 0.2f) }
+            compose.onNodeWithTag("chance-play").assertIsEnabled().performClick()
+            compose.mainClock.advanceTimeBy(64)
+            compose.runOnIdle {
+                assertEquals(index + 1, requireNotNull(model.slotMachineRoll).chanceTurns.size)
+                assertTrue(model.slotMachineBusy)
+                shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(120))
+            }
+        }
+        val roll = requireNotNull(model.slotMachineRoll)
+        val turns = roll.chanceTurns
+        compose.onNodeWithTag("chance-count-TOYS_1").assertTextEquals("0")
+        restoration.emulateSavedInstanceStateRestore()
+        compose.onNodeWithTag("chance-play").assertIsEnabled()
+        compose.onNodeWithTag("chance-position").assertIsEnabled()
+        compose.onNodeWithTag("chance-fragment-reward").assertIsNotEnabled()
+        compose.runOnIdle {
+            assertSame(roll, model.slotMachineRoll)
+            assertEquals(turns, roll.chanceTurns)
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(ChanceGame.PLINKO.playDurationMs.toLong()))
+            assertTrue(model.slotMachineAwarded)
+            assertEquals(1, model.rewardBalances.getValue(RewardType.TOYS_1).whole)
+        }
+        compose.mainClock.advanceTimeBy(64)
+        compose.onNodeWithTag("slot-win-dialog").assertIsDisplayed()
+        compose.mainClock.autoAdvance = true
+    }
+
     @Test
     @Config(qualifiers = "w320dp-h800dp")
     fun enlargedPlinkoRewardImagesFitAllFiveRewardsOnANarrowScreen() {
@@ -157,7 +198,8 @@ class AdminMenuTest {
         compose.mainClock.advanceTimeBy(64)
         compose.runOnIdle { assertTrue(model.slotMachineBusy) }
         compose.mainClock.advanceTimeBy(64)
-        compose.onNodeWithTag(action).assertIsNotEnabled()
+        if (game == ChanceGame.PLINKO) compose.onNodeWithTag(action).assertIsEnabled()
+        else compose.onNodeWithTag(action).assertIsNotEnabled()
         compose.onNodeWithTag("chance-fragment-reward").assertIsNotEnabled()
         compose.onNodeWithText("Back to Admin Menu").assertIsNotEnabled()
         val elapsed = game.animationDurationMs + 64
@@ -168,7 +210,8 @@ class AdminMenuTest {
             assertTrue(model.rewardBalances.isEmpty())
         }
         compose.mainClock.advanceTimeBy(elapsed.toLong())
-        compose.onNodeWithTag("chance-play").assertIsNotEnabled()
+        if (game == ChanceGame.PLINKO) compose.onNodeWithTag("chance-play").assertIsEnabled()
+        else compose.onNodeWithTag("chance-play").assertIsNotEnabled()
         compose.onNodeWithTag("slot-win-dialog").assertDoesNotExist()
         compose.onNodeWithTag("chance-revealed-reward").assertDoesNotExist()
         compose.onNodeWithTag("chance-count-TOYS_1").assertTextEquals("1")
@@ -184,7 +227,7 @@ class AdminMenuTest {
         compose.onNodeWithText("Back to Admin Menu").assertIsEnabled()
         compose.onNodeWithTag("chance-count-TOYS_1").assertTextEquals("1")
         val firstTurn = requireNotNull(model.slotMachineRoll).chanceTurns.single()
-        repeat(game.drawCount - 1) { turn ->
+        repeat(2) { turn ->
             if (game == ChanceGame.PLINKO || game == ChanceGame.CLAW_MACHINE) {
                 compose.onNodeWithTag("chance-position").performScrollTo().assertIsEnabled()
                     .performSemanticsAction(SemanticsActions.SetProgress) { it(if (turn % 2 == 0) 0.2f else 0.8f) }
@@ -192,12 +235,13 @@ class AdminMenuTest {
             }
             compose.onNodeWithTag("chance-play").performScrollTo().performClick()
             compose.mainClock.advanceTimeBy(64)
-            compose.onNodeWithTag("chance-play").assertIsNotEnabled()
+            if (game == ChanceGame.PLINKO) compose.onNodeWithTag("chance-play").assertIsEnabled()
+            else compose.onNodeWithTag("chance-play").assertIsNotEnabled()
             compose.runOnIdle {
                 shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(game.playDurationMs.toLong()))
             }
             compose.mainClock.advanceTimeBy(game.playDurationMs.toLong() + 64)
-            if (turn < game.drawCount - 2) {
+            if (turn == 0) {
                 compose.onNodeWithTag("chance-play").assertIsEnabled()
                 compose.onNodeWithTag("slot-win-dialog").assertDoesNotExist()
                 compose.onNodeWithTag("chance-count-TOYS_1").assertTextEquals((turn + 2).toString())
@@ -216,7 +260,7 @@ class AdminMenuTest {
             compose.onNodeWithTag("close-celebration").performClick()
         }
         compose.mainClock.advanceTimeBy(64)
-        compose.onNodeWithTag("chance-count-TOYS_1").assertTextEquals(game.drawCount.toString())
+        compose.onNodeWithTag("chance-count-TOYS_1").assertTextEquals("3")
         compose.onNodeWithTag("chance-revealed-reward").assertWidthIsAtLeast(144.dp).assertHeightIsAtLeast(144.dp)
         restoration.emulateSavedInstanceStateRestore()
         compose.onNodeWithTag("slot-win-dialog").assertDoesNotExist()

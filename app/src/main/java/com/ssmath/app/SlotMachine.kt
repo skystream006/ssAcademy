@@ -43,22 +43,28 @@ internal data class SlotMachineRoll(
     val reels: List<RewardType>,
     val rollNumber: Long = 0,
     val fragmentReward: Boolean = false,
-    val chanceDraws: List<RewardType> = emptyList(),
     val chancePool: SlotMachineRewardPool? = null
 ) {
     init {
-        require(reels.size == 3)
+        require(if (chancePool == null) reels.size == 3 else reels.isEmpty())
     }
 
     // Cache bonuses without replacing the roll or restarting its reels on a save retry.
     internal var celebrationRewards by mutableStateOf<List<Celebration>?>(null)
     internal var chanceElapsedMs by mutableIntStateOf(0)
+    internal var chanceDraws by mutableStateOf<List<RewardType>>(emptyList())
     internal var chanceTurns by mutableStateOf<List<ChanceTurn>>(emptyList())
+    internal var chanceWinner by mutableStateOf<RewardType?>(null)
+
+    internal fun completedChanceDraws(game: ChanceGame): List<RewardType> =
+        chanceTurns.withIndex().filter { chanceElapsedMs >= it.value.landedAtMs(game) }
+            .sortedBy { it.value.landedAtMs(game) }.map { chanceDraws[it.index] }
 
     internal fun chanceRoundComplete(game: ChanceGame): Boolean =
-        chanceTurns.size == game.drawCount && chanceElapsedMs >= game.drawCount * game.playDurationMs
+        chanceWinner != null && chanceTurns.all { chanceElapsedMs >= it.startedAtMs + game.playDurationMs }
 
-    val winner: RewardType? get() = reels.first().takeIf { type -> reels.all { it == type } }
+    val winner: RewardType? get() = if (chancePool != null) chanceWinner
+        else reels.first().takeIf { type -> reels.all { it == type } }
 }
 
 @Composable
