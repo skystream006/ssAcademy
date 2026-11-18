@@ -122,7 +122,7 @@ class AdminMenuTest {
         compose.onNodeWithTag("chance-available-image-TOYS_1")
             .assertWidthIsAtLeast(64.dp).assertHeightIsAtLeast(64.dp)
         compose.onNodeWithTag("chance-odds-TOYS_1").performScrollTo()
-            .assertTextEquals("${RewardType.TOYS_1.fragmentLabel}: 100% per play")
+            .assertTextEquals("${RewardType.TOYS_1.fragmentLabel}: 100% per ${game.outcomeUnit}")
         val action = "chance-play"
         if (game == ChanceGame.PLINKO || game == ChanceGame.CLAW_MACHINE) {
             compose.onNodeWithTag("chance-position").performScrollTo()
@@ -138,20 +138,20 @@ class AdminMenuTest {
         compose.onNodeWithTag(action).assertIsNotEnabled()
         compose.onNodeWithTag("chance-fragment-reward").assertIsNotEnabled()
         compose.onNodeWithText("Back to Admin Menu").assertIsNotEnabled()
-        restoration.emulateSavedInstanceStateRestore()
-        val elapsed = if (game == ChanceGame.PLINKO) SLOT_MACHINE_DURATION_MS else 0
-        if (elapsed > 0) {
-            compose.runOnIdle {
-                shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(elapsed.toLong()))
-                assertTrue(model.slotMachineBusy)
-                assertFalse(model.slotMachineAwarded)
-                assertTrue(model.rewardBalances.isEmpty())
-            }
-            compose.mainClock.advanceTimeBy(elapsed.toLong())
-            compose.onNodeWithTag("chance-play").assertIsNotEnabled()
-            compose.onNodeWithTag("slot-win-dialog").assertDoesNotExist()
-            compose.onNodeWithTag("chance-revealed-reward").assertDoesNotExist()
+        val elapsed = game.animationDurationMs + 64
+        compose.runOnIdle {
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(elapsed.toLong()))
+            assertTrue(model.slotMachineBusy)
+            assertFalse(model.slotMachineAwarded)
+            assertTrue(model.rewardBalances.isEmpty())
         }
+        compose.mainClock.advanceTimeBy(elapsed.toLong())
+        compose.onNodeWithTag("chance-play").assertIsNotEnabled()
+        compose.onNodeWithTag("slot-win-dialog").assertDoesNotExist()
+        compose.onNodeWithTag("chance-revealed-reward").assertDoesNotExist()
+        compose.onNodeWithTag("chance-count-TOYS_1").assertTextEquals("1")
+        restoration.emulateSavedInstanceStateRestore()
+        compose.onNodeWithTag("chance-count-TOYS_1").assertTextEquals("1")
         compose.runOnIdle {
             shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis((game.playDurationMs - elapsed).toLong()))
         }
@@ -169,6 +169,7 @@ class AdminMenuTest {
             compose.onNodeWithTag("close-celebration").performClick()
         }
         compose.mainClock.advanceTimeBy(64)
+        compose.onNodeWithTag("chance-count-TOYS_1").assertTextEquals(game.drawCount.toString())
         compose.onNodeWithTag("chance-revealed-reward").assertWidthIsAtLeast(144.dp).assertHeightIsAtLeast(144.dp)
         restoration.emulateSavedInstanceStateRestore()
         compose.onNodeWithTag("slot-win-dialog").assertDoesNotExist()

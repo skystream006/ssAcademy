@@ -531,6 +531,7 @@ class RewardsModelTest {
             model.spinSlotMachine()
             val roll = requireNotNull(model.slotMachineRoll)
             assertEquals(RewardType.TOYS_2, roll.winner)
+            assertEquals(List(game.drawCount) { RewardType.TOYS_2 }, roll.chanceDraws)
             shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(game.playDurationMs.toLong()))
             assertNotNull(model.slotMachineError)
             val bonuses = requireNotNull(roll.celebrationRewards)
@@ -550,6 +551,89 @@ class RewardsModelTest {
             assertTrue(saved.history.isEmpty())
             assertTrue(saved.readingResults.isEmpty())
         }
+    }
+
+    @Test fun multiRoundGamesAwardOnlyTheMostFrequentDrawAfterTheEntireRound() {
+        val a = RewardType.TOYS_1
+        val b = RewardType.TOYS_2
+        ChanceGame.entries.filter { it != ChanceGame.SLOT_MACHINE }.forEach { game ->
+            val draws = if (game == ChanceGame.PLINKO) listOf(a, a, b, b, b, b, a, b, a, b)
+                else listOf(a, b, b, a, b)
+            var tickets = 0
+            val random = object : Random() {
+                override fun nextBits(bitCount: Int): Int = error("Only per-draw tickets should be selected")
+                override fun nextInt(until: Int): Int {
+                    assertEquals(100, until)
+                    return if (draws[tickets++] == a) 0 else 99
+                }
+            }
+            val model = model(rewardRandom = random)
+            model.openSettings()
+            model.openAdminSlotMachine(game)
+            model.chooseTier3RewardChances(20, 80, 0, 0)
+            model.chooseSlotMachineTier(RewardTier.TIER_3)
+            model.spinSlotMachine()
+            val roll = requireNotNull(model.slotMachineRoll)
+            assertEquals(draws, roll.chanceDraws)
+            assertEquals(b, roll.winner)
+            assertEquals(draws.size, tickets)
+            val before = HistoryStore(file).loadSnapshot()
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(game.playDurationMs.toLong() - 1))
+            assertTrue(model.slotMachineBusy)
+            assertFalse(model.slotMachineAwarded)
+            assertEquals(before, HistoryStore(file).loadSnapshot())
+            repeat(3) { model.spinSlotMachine() }
+            assertSame(roll, model.slotMachineRoll)
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1))
+            assertTrue(model.slotMachineAwarded)
+            assertEquals(game.ordinal, HistoryStore(file).loadSnapshot().rewards.getValue(b).whole)
+            assertFalse(HistoryStore(file).loadSnapshot().rewards.containsKey(a))
+            assertEquals(draws.size, tickets)
+            repeat(3) { model.retrySlotMachinePrize() }
+            assertEquals(draws.size, tickets)
+        }
+    }
+
+    @Test fun tiedRoundFreezesItsTiebreakerAndAllDrawsAcrossSaveRetries() {
+        val draws = listOf(RewardType.TOYS_1, RewardType.TOYS_2, RewardType.TOYS_3,
+            RewardType.TOYS_2, RewardType.TOYS_1)
+        val tickets = listOf(0, 34, 99, 34, 0)
+        var calls = 0
+        val random = object : Random() {
+            override fun nextBits(bitCount: Int): Int = error("Only draw and tie tickets should be selected")
+            override fun nextInt(until: Int): Int {
+                return if (calls < tickets.size) {
+                    assertEquals(100, until)
+                    tickets[calls++]
+                } else {
+                    assertEquals(2, until)
+                    assertEquals(5, calls++)
+                    1
+                }
+            }
+        }
+        val model = model(rewardRandom = random)
+        model.openSettings()
+        model.openAdminSlotMachine(ChanceGame.SPIN_THE_WHEEL)
+        model.chooseTier3RewardChances(33, 33, 34, 0)
+        model.chooseSlotMachineTier(RewardTier.TIER_3)
+        assertTrue(blockedWrite.mkdir())
+        model.spinSlotMachine()
+        val roll = requireNotNull(model.slotMachineRoll)
+        assertEquals(draws, roll.chanceDraws)
+        assertEquals(RewardType.TOYS_2, roll.winner)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(ChanceGame.SPIN_THE_WHEEL.playDurationMs.toLong()))
+        assertNotNull(model.slotMachineError)
+        val bonuses = roll.celebrationRewards
+        assertTrue(blockedWrite.delete())
+        repeat(3) { model.retrySlotMachinePrize() }
+        shadowOf(Looper.getMainLooper()).idle()
+        assertTrue(model.slotMachineAwarded)
+        assertSame(roll, model.slotMachineRoll)
+        assertEquals(draws, roll.chanceDraws)
+        assertEquals(bonuses, roll.celebrationRewards)
+        assertEquals(6, calls)
+        assertEquals(1, HistoryStore(file).loadSnapshot().rewards.getValue(RewardType.TOYS_2).whole)
     }
 
     @Test fun perGameRewardsDefaultOnRespectLegacySubjectSwitchesAndPersistIndependently() {

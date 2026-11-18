@@ -184,6 +184,14 @@ internal fun slotMachineRewardPool(
     return weights.takeIf { it.isNotEmpty() }?.let { SlotMachineRewardPool(tier, it) }
 }
 
+internal fun mostFrequentReward(draws: List<RewardType>, random: Random): RewardType {
+    require(draws.isNotEmpty())
+    val counts = draws.groupingBy { it }.eachCount()
+    val maximum = counts.values.max()
+    val leaders = counts.filterValues { it == maximum }.keys.toList()
+    return leaders.singleOrNull() ?: leaders.random(random)
+}
+
 internal fun qualifiesForReward(questionCount: Int, correct: Int, answered: Int, timedOut: Boolean,
                                 rewardThresholds: RewardThresholds = RewardThresholds(),
                                 matrixRewardTier: RewardTier? = null): Boolean =

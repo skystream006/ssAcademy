@@ -314,6 +314,31 @@ class RewardsTest {
         assertEquals("0.0001", slotChancePercent(tiny.winChance(RewardType.TOYS_1)))
     }
 
+    @Test fun chanceRoundWinnerUsesTheLargestCountWithoutRequiringAnAbsoluteMajority() {
+        val a = RewardType.LOLLIPOP
+        val b = RewardType.RAMEN
+        val c = RewardType.BED_TIME
+        val noTieDraw = object : Random() {
+            override fun nextBits(bitCount: Int): Int = error("A clear leader needs no tiebreaker")
+        }
+        assertEquals(b, mostFrequentReward(listOf(a, b, c, b, RewardType.ICE_CREAM), noTieDraw))
+        assertEquals(c, mostFrequentReward(listOf(a, b, c, c, c, b, a, c, b, c), noTieDraw))
+        assertEquals(a, mostFrequentReward(listOf(a), noTieDraw))
+        assertThrows(IllegalArgumentException::class.java) { mostFrequentReward(emptyList(), noTieDraw) }
+    }
+
+    @Test fun chanceRoundTiesChooseOnlyAmongAllTiedLeaders() {
+        val a = RewardType.LOLLIPOP
+        val b = RewardType.RAMEN
+        val c = RewardType.BED_TIME
+        val draws = listOf(a, b, c, b, a)
+        assertEquals(a, mostFrequentReward(draws, TicketRandom(0, 2)))
+        assertEquals(b, mostFrequentReward(draws, TicketRandom(1, 2)))
+        listOf(a, b, c).forEachIndexed { index, expected ->
+            assertEquals(expected, mostFrequentReward(listOf(a, b, c), TicketRandom(index, 3)))
+        }
+    }
+
     @Test fun completionSlotsKeepCompletionAccuracyEnablementAndEmptyTierGuards() {
         assertNotNull(completionSlotReward(30, 27, 30, true, true))
         assertNull(completionSlotReward(1000, 899, 1000, true, true))
