@@ -56,6 +56,10 @@ internal data class SlotMachineRoll(
 
 @Composable
 internal fun SlotMachineDialog(model: MathViewModel, onDismiss: () -> Unit) {
+    if (model.chanceGame != ChanceGame.SLOT_MACHINE) {
+        ChanceGameDialog(model, onDismiss)
+        return
+    }
     val tier = model.slotMachineSelectedTier
     val pool = model.slotMachinePool
     val roll = model.slotMachineRoll
@@ -187,11 +191,11 @@ internal fun AdminSlotMachineBonuses(collected: Set<Celebration>, tier: RewardTi
     val mega = remember(collected) { availableCelebrations(Celebration.megaPokemons, collected) }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Bonus animations", style = MaterialTheme.typography.titleSmall)
-        Text("Every Admin match also gives a Pokémon or Other animation. " +
+        Text("Every Admin win also gives a Pokémon or Other animation. " +
             "${standard.size} available · ${slotChancePercent(1.0 / standard.size)}% each per win.",
             style = MaterialTheme.typography.bodySmall)
         if (tier == null || tier == RewardTier.TIER_3) {
-            Text("Tier 3 matches also give one Mega Pokémon. " +
+            Text("Tier 3 wins also give one Mega Pokémon. " +
                 "${mega.size} available · ${slotChancePercent(1.0 / mega.size)}% each per win.",
                 style = MaterialTheme.typography.bodySmall)
         }
@@ -269,7 +273,12 @@ private fun SlotMachineRollingSound(roll: SlotMachineRoll?, spinning: Boolean) {
 }
 
 @Composable
-private fun SlotMachineWinDialog(roll: SlotMachineRoll, activityReward: Boolean, onDismiss: () -> Unit) {
+internal fun SlotMachineWinDialog(
+    roll: SlotMachineRoll,
+    activityReward: Boolean,
+    title: String = "Three matching items!",
+    onDismiss: () -> Unit
+) {
     val winner = requireNotNull(roll.winner)
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val pop = remember(roll) { Animatable(0f) }
@@ -286,7 +295,7 @@ private fun SlotMachineWinDialog(roll: SlotMachineRoll, activityReward: Boolean,
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Three matching items!") },
+        title = { Text(title) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally,

@@ -697,7 +697,7 @@ class RewardsSettingsTest {
         compose.openGameSettings()
         compose.onNodeWithText("Math Rewards System").performScrollTo().performClick()
         compose.onNodeWithText("Earn prize fragments in math challenges by meeting each game's reward requirements " +
-            "with 90% or more correct, then win one fragment in the slot machine.")
+            "with 90% or more correct, then reveal one fragment in a random chance game.")
             .performScrollTo().assertIsDisplayed()
         compose.onNodeWithContentDescription("Math Rewards System").performScrollTo().assertIsOn()
         compose.onNodeWithContentDescription("Show correct answers").performScrollTo().assertIsOn()
@@ -1228,7 +1228,8 @@ class RewardsSettingsTest {
     }
 
     @Test fun fragmentSlotFollowsCelebrationAndUnfinishedPullsCanResumeFromHistory() {
-        val model = MathViewModel(application, ioDispatcher = Dispatchers.Main.immediate)
+        val model = MathViewModel(application, ioDispatcher = Dispatchers.Main.immediate,
+            chanceGameRandom = fixedChanceGame())
         assertTrue(model.rewardsEnabled)
         RewardType.entries.forEach { model.chooseRewardEnabled(it, it == RewardType.RESTAURANT) }
         model.openRewardsGame()
@@ -1263,7 +1264,7 @@ class RewardsSettingsTest {
             model.showHistoryDetail(model.history.single())
         }
         compose.mainClock.advanceTimeBy(64)
-        compose.onNodeWithText("Open slot machine").performClick()
+        compose.onNodeWithText("Open chance game").performClick()
         compose.mainClock.advanceTimeBy(64)
         compose.onNodeWithTag("slot-lever").performScrollTo()
         compose.mainClock.autoAdvance = false
@@ -1289,7 +1290,7 @@ class RewardsSettingsTest {
         compose.mainClock.advanceTimeBy(64)
         compose.onNodeWithText("Prize: ${type.fragmentLabel}").assertIsDisplayed()
         compose.onNodeWithText("Total collected: 1 fragments").assertIsDisplayed()
-        compose.onNodeWithText("Open slot machine").assertDoesNotExist()
+        compose.onNodeWithText("Open chance game").assertDoesNotExist()
         compose.onNodeWithTag("slot-machine-dialog").assertDoesNotExist()
     }
 }

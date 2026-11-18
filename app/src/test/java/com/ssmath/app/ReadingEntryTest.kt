@@ -70,7 +70,8 @@ class ReadingEntryTest {
         })[ReadingViewModel::class.java]
 
     private fun show(): MathViewModel {
-        val app = MathViewModel(application, ioDispatcher = Dispatchers.Unconfined)
+        val app = MathViewModel(application, ioDispatcher = Dispatchers.Unconfined,
+            chanceGameRandom = fixedChanceGame())
         compose.setContent { MathAppContent(app) }
         return app
     }
