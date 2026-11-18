@@ -38,11 +38,20 @@ internal fun MathViewModel.claimDisplayedReward() {
     repeat(500) {
         if (slotMachineAwarded || slotMachineBusy || slotMachineError != null) return
         val previous = slotMachineRoll
+        val previousTurns = previous?.chanceTurns?.size
         spinSlotMachine()
-        if (slotMachineRoll === previous) return
+        if (slotMachineRoll === previous && slotMachineRoll?.chanceTurns?.size == previousTurns) return
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(chanceGame.playDurationMs.toLong()))
     }
     fail("The seeded slot machine did not produce a match.")
+}
+
+internal fun MathViewModel.completeChanceRound() {
+    repeat(chanceGame.drawCount) {
+        if (slotMachineAwarded || slotMachineError != null) return
+        if (!slotMachineBusy) spinSlotMachine()
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(chanceGame.playDurationMs.toLong()))
+    }
 }
 
 @RunWith(RobolectricTestRunner::class)
@@ -505,7 +514,7 @@ class RewardsModelTest {
             assertEquals(game, model.chanceGame)
             repeat(3) { model.spinSlotMachine() }
             assertSame(roll, model.slotMachineRoll)
-            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(game.playDurationMs.toLong()))
+            model.completeChanceRound()
             assertTrue(model.slotMachineAwarded)
             assertEquals(game, model.chanceGame)
             repeat(3) { model.spinSlotMachine(); model.retrySlotMachinePrize() }
@@ -532,7 +541,7 @@ class RewardsModelTest {
             val roll = requireNotNull(model.slotMachineRoll)
             assertEquals(RewardType.TOYS_2, roll.winner)
             assertEquals(List(game.drawCount) { RewardType.TOYS_2 }, roll.chanceDraws)
-            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(game.playDurationMs.toLong()))
+            model.completeChanceRound()
             assertNotNull(model.slotMachineError)
             val bonuses = requireNotNull(roll.celebrationRewards)
             assertEquals(2, bonuses.size)
@@ -553,7 +562,7 @@ class RewardsModelTest {
         }
     }
 
-    @Test fun multiRoundGamesAwardOnlyTheMostFrequentDrawAfterTheEntireRound() {
+    @Test fun chanceGamesWaitForEveryIndividualTurnAndAwardOnlyAfterTheLastTurn() {
         val a = RewardType.TOYS_1
         val b = RewardType.TOYS_2
         ChanceGame.entries.filter { it != ChanceGame.SLOT_MACHINE }.forEach { game ->
@@ -578,13 +587,42 @@ class RewardsModelTest {
             assertEquals(b, roll.winner)
             assertEquals(draws.size, tickets)
             val before = HistoryStore(file).loadSnapshot()
-            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(game.playDurationMs.toLong() - 1))
-            assertTrue(model.slotMachineBusy)
-            assertFalse(model.slotMachineAwarded)
-            assertEquals(before, HistoryStore(file).loadSnapshot())
-            repeat(3) { model.spinSlotMachine() }
-            assertSame(roll, model.slotMachineRoll)
-            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1))
+            repeat(game.drawCount) { index ->
+                assertEquals(index + 1, roll.chanceTurns.size)
+                val position = model.chanceGamePosition
+                model.chooseChanceGamePosition(0.9f)
+                assertEquals(position, model.chanceGamePosition)
+                val halfway = game.animationDurationMs / 2L
+                shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(halfway))
+                assertTrue("$game turn $index should still be animating at ${roll.chanceElapsedMs}ms",
+                    model.slotMachineBusy)
+                assertFalse(model.slotMachineAwarded)
+                assertEquals(before, HistoryStore(file).loadSnapshot())
+                repeat(3) { model.spinSlotMachine() }
+                assertSame(roll, model.slotMachineRoll)
+                assertEquals(index + 1, roll.chanceTurns.size)
+                shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(game.playDurationMs - halfway))
+                assertFalse(model.slotMachineBusy)
+                if (index < game.drawCount - 1) {
+                    val turns = roll.chanceTurns
+                    val elapsed = roll.chanceElapsedMs
+                    shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(30))
+                    assertEquals(elapsed, roll.chanceElapsedMs)
+                    assertEquals(turns, roll.chanceTurns)
+                    assertFalse(model.slotMachineAwarded)
+                    assertEquals(before, HistoryStore(file).loadSnapshot())
+                    model.chooseSlotMachineTier(RewardTier.TIER_1)
+                    model.chooseSlotMachineFragmentReward(true)
+                    assertEquals(RewardTier.TIER_3, model.slotMachineTier)
+                    assertFalse(model.slotMachineFragmentReward)
+                    val nextPosition = if (index % 2 == 0) 0.08f else 0.92f
+                    model.chooseChanceGamePosition(nextPosition)
+                    model.spinSlotMachine()
+                    assertSame(roll, model.slotMachineRoll)
+                    assertEquals(turns, roll.chanceTurns.dropLast(1))
+                    assertEquals(nextPosition, roll.chanceTurns.last().position)
+                }
+            }
             assertTrue(model.slotMachineAwarded)
             assertEquals(game.ordinal, HistoryStore(file).loadSnapshot().rewards.getValue(b).whole)
             assertFalse(HistoryStore(file).loadSnapshot().rewards.containsKey(a))
@@ -592,6 +630,24 @@ class RewardsModelTest {
             repeat(3) { model.retrySlotMachinePrize() }
             assertEquals(draws.size, tickets)
         }
+    }
+
+    @Test fun chanceRoundsKeepTheirOriginalRewardPoolBetweenIndividualTurns() {
+        val model = model()
+        model.openSettings()
+        model.openAdminSlotMachine(ChanceGame.PLINKO)
+        model.chooseSlotMachineTier(RewardTier.TIER_1)
+        model.spinSlotMachine()
+        val roll = requireNotNull(model.slotMachineRoll)
+        val pool = requireNotNull(model.slotMachinePool)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(ChanceGame.PLINKO.playDurationMs.toLong()))
+        RewardType.entries.forEach { model.chooseRewardEnabled(it, false) }
+        assertSame(pool, model.slotMachinePool)
+        model.completeChanceRound()
+        assertSame(roll, model.slotMachineRoll)
+        assertTrue(model.slotMachineAwarded)
+        assertEquals(1, HistoryStore(file).loadSnapshot().rewards.getValue(requireNotNull(roll.winner)).whole)
+        assertNull(model.slotMachinePool)
     }
 
     @Test fun tiedRoundFreezesItsTiebreakerAndAllDrawsAcrossSaveRetries() {
@@ -622,7 +678,7 @@ class RewardsModelTest {
         val roll = requireNotNull(model.slotMachineRoll)
         assertEquals(draws, roll.chanceDraws)
         assertEquals(RewardType.TOYS_2, roll.winner)
-        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(ChanceGame.SPIN_THE_WHEEL.playDurationMs.toLong()))
+        model.completeChanceRound()
         assertNotNull(model.slotMachineError)
         val bonuses = roll.celebrationRewards
         assertTrue(blockedWrite.delete())

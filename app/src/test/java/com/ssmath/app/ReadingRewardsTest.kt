@@ -102,7 +102,7 @@ class ReadingRewardsTest {
             model.spinSlotMachine()
             val roll = requireNotNull(model.slotMachineRoll)
             assertTrue(roll.fragmentReward)
-            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(game.playDurationMs.toLong()))
+            model.completeChanceRound()
             assertTrue("$game: elapsed=${roll.chanceElapsedMs}, error=${model.slotMachineError}",
                 model.slotMachineAwarded)
             val snapshot = HistoryStore(file).loadSnapshot()

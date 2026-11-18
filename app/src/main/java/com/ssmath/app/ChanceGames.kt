@@ -3,7 +3,9 @@ package com.ssmath.app
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -11,11 +13,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
@@ -35,16 +41,15 @@ internal enum class ChanceGame(
     val drawCount: Int = 5
 ) {
     SLOT_MACHINE("Slot machine", "slot-machine", "Pull lever", drawCount = 1),
-    SPIN_THE_WHEEL("Spin the wheel", "spin-the-wheel", "Spin 5 times"),
-    PLINKO("Plinko Drop", "plinko", "Drop 10 balls", animationDurationMs = 4_800, drawCount = 10),
-    CLAW_MACHINE("Claw Machine", "claw-machine", "Pick up 5 balls");
+    SPIN_THE_WHEEL("Spin the wheel", "spin-the-wheel", "Spin"),
+    PLINKO("Plinko Drop", "plinko", "Drop ball", animationDurationMs = 4_800, drawCount = 10),
+    CLAW_MACHINE("Claw Machine", "claw-machine", "Pick up ball", animationDurationMs = 4_800);
 
-    val drawIntervalMs: Int get() = if (this == PLINKO) 500 else animationDurationMs + 400
-    val playDurationMs: Int get() = (drawCount - 1) * drawIntervalMs + animationDurationMs + 400
+    val playDurationMs: Int get() = animationDurationMs + 400
     val outcomeUnit: String get() = if (this == SPIN_THE_WHEEL) "spin" else "ball"
 
     fun drawProgress(index: Int, elapsedMs: Int): Float =
-        ((elapsedMs - index * drawIntervalMs).toFloat() / animationDurationMs).coerceIn(0f, 1f)
+        ((elapsedMs - index * playDurationMs).toFloat() / animationDurationMs).coerceIn(0f, 1f)
 }
 
 @Composable
@@ -73,18 +78,29 @@ internal fun ChanceGameDialog(model: MathViewModel, onDismiss: () -> Unit) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Text(if (fragment) "Reward: Fragment" else "Reward: Whole reward", Modifier.weight(1f))
                         Switch(fragment, model::chooseSlotMachineFragmentReward,
-                            enabled = !busy && model.slotMachineError == null,
+                            enabled = !busy && !model.chanceRoundInProgress && model.slotMachineError == null,
                             modifier = Modifier.testTag("chance-fragment-reward").semantics {
                                 contentDescription = "Fragment reward"
                             })
                     }
                 }
-                Text(if (game == ChanceGame.SPIN_THE_WHEEL)
-                    "Spin 5 times. The reward received most often wins one prize."
-                    else if (game == ChanceGame.PLINKO)
-                        "Drop 10 balls. The bin with the most balls wins one prize."
-                    else "Pick up 5 balls and place them in the prize bin. The most common ball wins one prize.")
-                Text("Ties are decided randomly among the tied leaders. Position does not change the chances.")
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(when (game) {
+                        ChanceGame.SPIN_THE_WHEEL ->
+                            "Spin 5 times, one at a time. The most common reward wins one prize."
+                        ChanceGame.PLINKO ->
+                            "Aim before each of 10 drops. The fullest bin wins one prize."
+                        else ->
+                            "Aim above the pile. Pick up 5 capsules, one at a time; the most common reward wins one prize."
+                    })
+                    Text("Ties are decided randomly." + if (game == ChanceGame.SPIN_THE_WHEEL) ""
+                        else " Aiming changes the motion, not the reward chances.",
+                        style = MaterialTheme.typography.bodySmall)
+                    if (game == ChanceGame.CLAW_MACHINE) {
+                        Text("Capsules hide their rewards until they reach the prize bin.",
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                }
                 if (tier == null) {
                     RewardTier.entries.forEach { option ->
                         Button(onClick = { model.chooseSlotMachineTier(option) },
@@ -98,23 +114,27 @@ internal fun ChanceGameDialog(model: MathViewModel, onDismiss: () -> Unit) {
                     val enabled = !busy && !model.removingReward && model.slotMachineError == null &&
                         pool != null && !(activity && model.slotMachineAwarded)
                     if (pool != null) {
-                        ChanceGameBoard(game, pool, roll, fragment, enabled, model::spinSlotMachine)
+                        ChanceGameBoard(game, pool, roll, fragment, enabled, busy, model.slotMachineAwarded,
+                            model.chanceGamePosition, model::chooseChanceGamePosition, model::spinSlotMachine)
                     }
                     Text(when {
                         busy -> "Revealing / saving..."
                         model.slotMachineError != null -> requireNotNull(model.slotMachineError)
+                        model.chanceMotionError != null -> requireNotNull(model.chanceMotionError)
                         model.slotMachineAwarded -> "You won ${
                             requireNotNull(roll?.winner).let { if (fragment) it.fragmentLabel else it.label }
                         }! ${if (fragment) "One fragment" else "One complete reward"} added."
+                        model.chanceRoundInProgress -> "Ready for the next ${game.outcomeUnit}."
                         else -> "Ready to play!"
                     }, Modifier.testTag("chance-status").semantics { liveRegion = LiveRegionMode.Polite })
-                    if (model.slotMachineError != null && roll?.winner != null) {
+                    if (model.slotMachineError != null && roll?.winner != null && roll.chanceRoundComplete(game)) {
                         Button(onClick = model::retrySlotMachinePrize, enabled = !busy,
                             modifier = Modifier.testTag("chance-retry")) { Text("Retry saving reward") }
                     }
                     ChanceGameOdds(pool, fragment, game)
                     if (!activity) {
-                        TextButton(onClick = { model.chooseSlotMachineTier(null) }, enabled = !busy) {
+                        TextButton(onClick = { model.chooseSlotMachineTier(null) },
+                            enabled = !busy && !model.chanceRoundInProgress) {
                             Text("Change tier")
                         }
                     }
@@ -168,18 +188,23 @@ private fun ChanceGameBoard(
     roll: SlotMachineRoll?,
     fragment: Boolean,
     enabled: Boolean,
+    busy: Boolean,
+    awarded: Boolean,
+    position: Float,
+    onPosition: (Float) -> Unit,
     onPlay: () -> Unit
 ) {
-    var position by rememberSaveable(game) { mutableFloatStateOf(0.5f) }
     val colors = listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary,
         MaterialTheme.colorScheme.tertiary, MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.onSurfaceVariant)
     val ink = MaterialTheme.colorScheme.onSurface
     val surface = MaterialTheme.colorScheme.surfaceVariant
     val draws = roll?.chanceDraws.orEmpty()
+    val turns = roll?.chanceTurns.orEmpty()
     val elapsed = roll?.chanceElapsedMs ?: 0
-    val completed = draws.filterIndexed { index, _ -> game.drawProgress(index, elapsed) >= 1f }
-    val activeIndex = (elapsed / game.drawIntervalMs).coerceAtMost(game.drawCount - 1)
-    val p = FastOutSlowInEasing.transform(game.drawProgress(activeIndex, elapsed))
+    val completed = draws.take(turns.size).filterIndexed { index, _ -> game.drawProgress(index, elapsed) >= 1f }
+    val activeIndex = (turns.size - 1).coerceAtLeast(0)
+    val progress = game.drawProgress(activeIndex, elapsed)
+    val p = FastOutSlowInEasing.transform(progress)
     val activeReward = draws.getOrNull(activeIndex)
     val winner = roll?.winner
     val types = pool.weights.keys.toList()
@@ -191,16 +216,30 @@ private fun ChanceGameBoard(
     val previousAngle = if (activeIndex == 0) 0f else landingAngle(draws.getOrNull(activeIndex - 1))
     val wheelAngle = if (roll == null) 0f else previousAngle +
         (1_800f + (landingAngle(activeReward) - previousAngle + 360f) % 360f) * p
-    val finished = draws.isNotEmpty() && completed.size == game.drawCount
+    val initialClaw = remember(game) { if (game == ChanceGame.CLAW_MACHINE) initialClawScene() else null }
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Box(Modifier.fillMaxWidth().aspectRatio(1f).background(surface)
+        Box(Modifier.fillMaxWidth().aspectRatio(if (game == ChanceGame.PLINKO) 1f / PLINKO_HEIGHT else 1f)
+            .background(surface, RoundedCornerShape(12.dp))
+            .pointerInput(game, enabled) {
+                if (enabled && (game == ChanceGame.PLINKO || game == ChanceGame.CLAW_MACHINE)) {
+                    fun aim(x: Float) {
+                        val fraction = x / size.width
+                        onPosition((if (game == ChanceGame.CLAW_MACHINE)
+                            0.08f + (fraction - 0.105f) / 0.54f * 0.84f else fraction).coerceIn(0.08f, 0.92f))
+                    }
+                    detectHorizontalDragGestures(onDragStart = { aim(it.x) }) { change, _ ->
+                        change.consume()
+                        aim(change.position.x)
+                    }
+                }
+            }
             .testTag("chance-board-${game.name}"), contentAlignment = Alignment.Center) {
-            Canvas(Modifier.fillMaxSize().padding(12.dp).semantics { contentDescription = game.label }) {
+            Canvas(Modifier.fillMaxSize().semantics { contentDescription = game.label }) {
                 val w = size.width
                 val h = size.height
                 when (game) {
                     ChanceGame.SPIN_THE_WHEEL -> {
-                        val radius = minOf(w, h) * 0.43f
+                        val radius = minOf(w, h) * 0.46f
                         rotate(wheelAngle) {
                             var start = -90f
                             types.forEachIndexed { index, type ->
@@ -220,33 +259,39 @@ private fun ChanceGameBoard(
                             close()
                         }, ink)
                     }
-                    ChanceGame.PLINKO -> drawPlinkoRound(draws, elapsed, position, types, colors, ink)
-                    ChanceGame.CLAW_MACHINE -> drawClawRound(draws, elapsed, position, types, colors, ink)
+                    ChanceGame.PLINKO -> drawPlinkoRound(draws, turns, elapsed, position, types, colors, ink)
+                    ChanceGame.CLAW_MACHINE -> {
+                        val pickup = turns.lastOrNull()?.claw
+                        val scene = pickup?.at(progress) ?: requireNotNull(initialClaw)
+                        drawClawRound(if (!busy) scene.copy(claw = clawHome(position)) else scene, colors, ink)
+                    }
                     ChanceGame.SLOT_MACHINE -> error("Slot machine uses its reel board")
                 }
             }
             if (game == ChanceGame.SPIN_THE_WHEEL) {
-                BoxWithConstraints(Modifier.matchParentSize().padding(12.dp), contentAlignment = Alignment.Center) {
+                BoxWithConstraints(Modifier.matchParentSize(), contentAlignment = Alignment.Center) {
                     var start = -90f
                     types.forEach { type ->
                         val sweep = pool.reelChance(type).toFloat() * 360f
                         val angle = (start + sweep / 2 + wheelAngle) * PI / 180
-                        val radius = minOf(maxWidth, maxHeight) * 0.29f
-                        RewardImage(type, fragment = fragment, modifier = Modifier
-                            .offset(x = radius * cos(angle).toFloat(), y = radius * sin(angle).toFloat())
-                            .size(56.dp).testTag("chance-wheel-image-${type.name}"))
+                        val rotation = start + sweep / 2 + wheelAngle + 90f
+                        val layout = wheelSliceLayout(sweep)
+                        val radius = minOf(maxWidth, maxHeight) * 0.46f
+                        RewardImage(type, fragment = fragment, showFragmentBadge = false, modifier = Modifier
+                            .offset(x = radius * layout.distance * cos(angle).toFloat(),
+                                y = radius * layout.distance * sin(angle).toFloat())
+                            .size(radius * layout.imageSize)
+                            .graphicsLayer { rotationZ = rotation }
+                            .testTag("chance-wheel-image-${type.name}"))
                         start += sweep
                     }
                 }
             }
             if (game == ChanceGame.CLAW_MACHINE) {
-                Text("Prize bin", Modifier.align(Alignment.TopEnd).padding(12.dp))
+                Text("Prize bin", Modifier.align(Alignment.BottomEnd).padding(end = 8.dp, bottom = 8.dp),
+                    style = MaterialTheme.typography.labelSmall)
             }
-            if (game == ChanceGame.PLINKO) {
-                ChanceGameTally(types, completed, colors, fragment, "plinko",
-                    Modifier.align(Alignment.BottomCenter))
-            }
-            if (winner != null && finished) {
+            if (winner != null && awarded) {
                 RewardImage(winner, fragment = fragment,
                     modifier = Modifier.size(144.dp).testTag("chance-revealed-reward"))
             }
@@ -256,17 +301,28 @@ private fun ChanceGameBoard(
             ChanceGame.PLINKO -> "Balls landed: ${completed.size}/${game.drawCount}"
             else -> "Balls in prize bin: ${completed.size}/${game.drawCount}"
         }, Modifier.testTag("chance-progress").semantics { liveRegion = LiveRegionMode.Polite })
-        if (game != ChanceGame.PLINKO) ChanceGameTally(types, completed, colors, fragment, "tally")
+        ChanceGameTally(types, completed, colors, fragment, if (game == ChanceGame.PLINKO) "plinko" else "tally")
         if (game == ChanceGame.PLINKO || game == ChanceGame.CLAW_MACHINE) {
-            Text(if (game == ChanceGame.PLINKO) "Choose a drop position" else "Position the claw")
-            Slider(position, onValueChange = { position = it },
+            Text(if (game == ChanceGame.PLINKO) "Move the ball before each drop" else "Position the claw above a capsule")
+            Slider(position, onValueChange = onPosition,
                 valueRange = 0.08f..0.92f, enabled = enabled,
                 modifier = Modifier.testTag("chance-position").semantics {
                     contentDescription = if (game == ChanceGame.PLINKO) "Drop position" else "Claw position"
                 })
         }
         Button(onClick = onPlay, enabled = enabled,
-            modifier = Modifier.fillMaxWidth().testTag("chance-play")) { Text(game.action) }
+            modifier = Modifier.fillMaxWidth().testTag("chance-play")) {
+            Text(when {
+                busy -> when (game) {
+                    ChanceGame.SPIN_THE_WHEEL -> "Spinning..."
+                    ChanceGame.PLINKO -> "Ball dropping..."
+                    else -> "Picking up..."
+                }
+                awarded && enabled -> "Start new round"
+                completed.size == game.drawCount -> "Round complete"
+                else -> "${game.action} (${completed.size + 1}/${game.drawCount})"
+            })
+        }
     }
 }
 
@@ -275,7 +331,7 @@ private fun ChanceGameTally(types: List<RewardType>, completed: List<RewardType>
                             fragment: Boolean, tagPrefix: String, modifier: Modifier = Modifier) {
     Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
         types.forEachIndexed { index, type ->
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                 RewardImage(type, fragment = fragment,
                     modifier = Modifier.size(56.dp).testTag("chance-$tagPrefix-image-${type.name}"))
                 Text("${completed.count { it == type }}", color = colors[index % colors.size],
@@ -287,81 +343,82 @@ private fun ChanceGameTally(types: List<RewardType>, completed: List<RewardType>
     }
 }
 
-private fun DrawScope.drawPlinkoRound(draws: List<RewardType>, elapsed: Int, position: Float,
+private fun DrawScope.drawPlinkoRound(draws: List<RewardType>, turns: List<ChanceTurn>, elapsed: Int, position: Float,
                                      types: List<RewardType>, colors: List<Color>, ink: Color) {
     val w = size.width
-    val h = size.height
     val game = ChanceGame.PLINKO
-    repeat(6) { row ->
-        repeat(7) { col ->
-            drawCircle(ink, 3.dp.toPx(),
-                Offset(w * (col + 0.5f + (row % 2) * 0.35f) / 7.5f, h * (0.08f + row * 0.075f)))
-        }
+    val radius = w * plinkoBallRadius(types.size)
+    plinkoPegs.forEach { peg ->
+        drawCircle(ink.copy(alpha = 0.15f), w * PLINKO_PEG_RADIUS * 1.4f, peg * w + Offset(1.dp.toPx(), 2.dp.toPx()))
+        drawCircle(ink, w * PLINKO_PEG_RADIUS, peg * w)
+        drawCircle(Color.White.copy(alpha = 0.7f), w * PLINKO_PEG_RADIUS * 0.35f,
+            peg * w - Offset(w * 0.002f, w * 0.002f))
     }
     types.forEachIndexed { index, _ ->
-        drawRect(colors[index % colors.size].copy(alpha = 0.15f), Offset(w * index / types.size, h * 0.5f),
-            Size(w / types.size - 2.dp.toPx(), h * 0.49f))
-        drawRect(ink, Offset(w * index / types.size, h * 0.5f),
-            Size(w / types.size - 2.dp.toPx(), h * 0.49f), style = Stroke(2.dp.toPx()))
+        val left = w * index / types.size
+        val right = w * (index + 1) / types.size
+        drawRect(colors[index % colors.size].copy(alpha = 0.16f), Offset(left, w * PLINKO_BIN_TOP),
+            Size(right - left, w * (PLINKO_FLOOR - PLINKO_BIN_TOP)))
+        drawPath(Path().apply {
+            moveTo(left, w * PLINKO_BIN_TOP)
+            lineTo(left, w * PLINKO_FLOOR)
+            lineTo(right, w * PLINKO_FLOOR)
+            lineTo(right, w * PLINKO_BIN_TOP)
+        }, ink, style = Stroke(w * 0.006f))
     }
-    draws.forEachIndexed { index, type ->
-        if (elapsed < index * game.drawIntervalMs) return@forEachIndexed
-        val p = FastOutSlowInEasing.transform(game.drawProgress(index, elapsed))
-        val bin = types.indexOf(type)
-        val slot = draws.take(index).count { it == type }
-        val endX = (bin + 0.5f) / types.size + (slot % 3 - 1) * 0.035f
-        val endY = 0.64f - (slot / 3) * 0.04f
-        val x = position * (1 - p) + endX * p +
-            sin(p * PI * 12).toFloat() * 0.035f * sin(p * PI).toFloat()
-        drawCircle(colors[bin % colors.size], 5.dp.toPx(), Offset(w * x, h * (0.04f * (1 - p) + endY * p)))
+    drawLine(ink, Offset(w * 0.01f, 0f), Offset(w * 0.01f, w * PLINKO_FLOOR), w * 0.006f)
+    drawLine(ink, Offset(w * 0.99f, 0f), Offset(w * 0.99f, w * PLINKO_FLOOR), w * 0.006f)
+    turns.forEachIndexed { index, turn ->
+        val point = requireNotNull(turn.plinko).at(game.drawProgress(index, elapsed))
+        drawChanceBall(point * w, radius, colors[types.indexOf(draws[index]) % colors.size])
     }
-    if (draws.isEmpty()) drawCircle(colors.first(), 5.dp.toPx(), Offset(w * position, h * 0.04f))
+    if (turns.size < game.drawCount && (turns.isEmpty() || game.drawProgress(turns.lastIndex, elapsed) >= 1f)) {
+        drawChanceBall(Offset(w * position, w * 0.035f), radius, ink)
+    }
 }
 
-private fun DrawScope.drawClawRound(draws: List<RewardType>, elapsed: Int, position: Float,
-                                   types: List<RewardType>, colors: List<Color>, ink: Color) {
+private fun DrawScope.drawChanceBall(point: Offset, radius: Float, color: Color) {
+    drawCircle(Brush.radialGradient(listOf(Color.White, color, color.copy(alpha = 0.8f)),
+        center = point - Offset(radius * 0.35f, radius * 0.4f), radius = radius * 1.7f), radius, point)
+    drawCircle(Color.Black.copy(alpha = 0.3f), radius, point, style = Stroke(radius * 0.08f))
+}
+
+private fun DrawScope.drawClawRound(scene: ClawScene, colors: List<Color>, ink: Color) {
     val w = size.width
-    val h = size.height
-    val game = ChanceGame.CLAW_MACHINE
-    val index = (elapsed / game.drawIntervalMs).coerceAtMost(game.drawCount - 1)
-    val p = FastOutSlowInEasing.transform(game.drawProgress(index, elapsed))
-    val pickX = w * (0.1f + position * 0.5f)
-    val binX = w * (0.77f + (index % 3) * 0.08f)
-    val binY = h * (0.82f - (index / 3) * 0.09f)
-    drawRect(ink, Offset(w * 0.7f, h * 0.4f), Size(w * 0.29f, h * 0.5f), style = Stroke(3.dp.toPx()))
-    repeat(7) { ball ->
-        drawCircle(colors[ball % types.size % colors.size], 6.dp.toPx(),
-            Offset(w * (0.08f + ball * 0.08f), h * 0.85f))
+    drawRoundRect(Brush.verticalGradient(listOf(colors.first().copy(alpha = 0.12f), Color.White.copy(alpha = 0.08f))),
+        Offset(w * 0.025f, w * 0.025f), Size(w * 0.96f, w * 0.91f),
+        cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.025f))
+    drawRoundRect(ink, Offset(w * 0.025f, w * 0.025f), Size(w * 0.96f, w * 0.91f),
+        cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.025f), style = Stroke(w * 0.012f))
+    drawLine(ink, Offset(w * 0.05f, w * 0.065f), Offset(w * 0.96f, w * 0.065f), w * 0.012f)
+    drawRect(ink.copy(alpha = 0.15f), Offset(w * 0.77f, w * 0.37f), Size(w * 0.205f, w * 0.53f))
+    drawPath(Path().apply {
+        moveTo(w * 0.735f, w * 0.37f)
+        lineTo(w * 0.735f, w * CLAW_FLOOR)
+        lineTo(w * 0.975f, w * CLAW_FLOOR)
+    }, ink, style = Stroke(w * 0.012f))
+    drawLine(ink, Offset(w * 0.045f, w * CLAW_FLOOR), Offset(w * 0.71f, w * CLAW_FLOOR), w * 0.012f)
+    scene.balls.forEach { ball ->
+        val center = ball.center * w
+        val radius = w * CLAW_BALL_RADIUS
+        drawChanceBall(center, radius, colors[ball.id % colors.size])
+        drawArc(Color.White.copy(alpha = 0.65f), 5f, 170f, false,
+            center - Offset(radius, radius * 0.35f), Size(radius * 2, radius * 0.7f),
+            style = Stroke(w * 0.003f))
     }
-    draws.forEachIndexed { drawIndex, type ->
-        if (game.drawProgress(drawIndex, elapsed) >= 1f) {
-            drawCircle(colors[types.indexOf(type) % colors.size], 8.dp.toPx(),
-                Offset(w * (0.77f + (drawIndex % 3) * 0.08f), h * (0.82f - (drawIndex / 3) * 0.09f)))
-        }
+    val x = scene.claw.x * w
+    val y = scene.claw.y * w
+    drawRoundRect(ink, Offset(x - w * 0.035f, w * 0.045f), Size(w * 0.07f, w * 0.04f),
+        cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.01f))
+    drawLine(ink, Offset(x, w * 0.085f), Offset(x, y), w * 0.008f)
+    drawCircle(ink, w * 0.022f, Offset(x, y))
+    clawFingers(scene.claw, scene.opening).forEach { finger ->
+        drawPath(Path().apply {
+            moveTo(finger.first().x * w, finger.first().y * w)
+            finger.drop(1).forEach { point -> lineTo(point.x * w, point.y * w) }
+        }, ink, style = Stroke(w * 0.012f, cap = StrokeCap.Round))
+        drawCircle(colors[1], w * 0.009f, finger[1] * w)
     }
-    val x = when {
-        p < 0.5f -> pickX
-        p < 0.75f -> pickX + (binX - pickX) * (p - 0.5f) / 0.25f
-        p < 0.9f -> binX
-        else -> binX + (pickX - binX) * (p - 0.9f) / 0.1f
-    }
-    val y = h * when {
-        p < 0.3f -> 0.1f + p / 0.3f * 0.5f
-        p < 0.5f -> 0.6f - (p - 0.3f) / 0.2f * 0.5f
-        else -> 0.1f
-    }
-    drawLine(ink, Offset(x, 0f), Offset(x, y), 3.dp.toPx())
-    val opening = if (p < 0.3f || p >= 0.75f) 0.06f else 0.025f
-    drawLine(ink, Offset(x, y), Offset(x - w * opening, y + h * 0.1f), 4.dp.toPx())
-    drawLine(ink, Offset(x, y), Offset(x + w * opening, y + h * 0.1f), 4.dp.toPx())
-    val type = draws.getOrNull(index)
-    if (type != null && game.drawProgress(index, elapsed) < 1f) {
-        val ball = when {
-            p < 0.3f -> Offset(pickX, h * 0.7f)
-            p < 0.75f -> Offset(x, y + h * 0.1f)
-            p < 0.9f -> Offset(binX, h * 0.2f + (binY - h * 0.2f) * (p - 0.75f) / 0.15f)
-            else -> Offset(binX, binY)
-        }
-        drawCircle(colors[types.indexOf(type) % colors.size], 8.dp.toPx(), ball)
-    }
+    drawLine(Color.White.copy(alpha = 0.15f), Offset(w * 0.05f, w * 0.13f),
+        Offset(w * 0.22f, w * 0.48f), w * 0.028f, cap = StrokeCap.Round)
 }

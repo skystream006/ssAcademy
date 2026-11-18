@@ -103,6 +103,28 @@ class AdminMenuTest {
             val bounds = image.getUnclippedBoundsInRoot()
             assertTrue(bounds.left >= board.left && bounds.right <= board.right)
         }
+        assertTrue("The peg board leaves room for compact bins",
+            board.bottom - board.top < (board.right - board.left) * 0.7f)
+    }
+
+    @Test
+    @Config(qualifiers = "w320dp-h800dp")
+    fun wheelIconsGrowToFillTheirSlicesOnANarrowScreen() {
+        val model = MathViewModel(application)
+        model.openSettings()
+        model.openAdminSlotMachine(ChanceGame.SPIN_THE_WHEEL)
+        model.chooseSlotMachineTier(RewardTier.TIER_1)
+        compose.setContent { MathTheme { SlotMachineDialog(model, onDismiss = {}) } }
+        RewardType.entries.filter { it.tier == RewardTier.TIER_1 }.forEach { type ->
+            compose.onNodeWithTag("chance-wheel-image-${type.name}")
+                .assertWidthIsAtLeast(64.dp).assertHeightIsAtLeast(64.dp)
+        }
+        compose.runOnIdle {
+            model.chooseTier3RewardChances(100, 0, 0, 0)
+            model.chooseSlotMachineTier(RewardTier.TIER_3)
+        }
+        compose.onNodeWithTag("chance-wheel-image-TOYS_1")
+            .assertWidthIsAtLeast(160.dp).assertHeightIsAtLeast(160.dp)
     }
 
     private fun checkChanceBoard(game: ChanceGame) {
@@ -156,6 +178,31 @@ class AdminMenuTest {
             shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis((game.playDurationMs - elapsed).toLong()))
         }
         compose.mainClock.advanceTimeBy((game.playDurationMs - elapsed).toLong() + 64)
+        compose.onNodeWithTag("chance-play").assertIsEnabled()
+        compose.onNodeWithTag("chance-fragment-reward").assertIsNotEnabled()
+        compose.onNodeWithText("Change tier").assertIsNotEnabled()
+        compose.onNodeWithText("Back to Admin Menu").assertIsEnabled()
+        compose.onNodeWithTag("chance-count-TOYS_1").assertTextEquals("1")
+        val firstTurn = requireNotNull(model.slotMachineRoll).chanceTurns.single()
+        repeat(game.drawCount - 1) { turn ->
+            if (game == ChanceGame.PLINKO || game == ChanceGame.CLAW_MACHINE) {
+                compose.onNodeWithTag("chance-position").performScrollTo().assertIsEnabled()
+                    .performSemanticsAction(SemanticsActions.SetProgress) { it(if (turn % 2 == 0) 0.2f else 0.8f) }
+                compose.runOnIdle { assertEquals(firstTurn, requireNotNull(model.slotMachineRoll).chanceTurns.first()) }
+            }
+            compose.onNodeWithTag("chance-play").performScrollTo().performClick()
+            compose.mainClock.advanceTimeBy(64)
+            compose.onNodeWithTag("chance-play").assertIsNotEnabled()
+            compose.runOnIdle {
+                shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(game.playDurationMs.toLong()))
+            }
+            compose.mainClock.advanceTimeBy(game.playDurationMs.toLong() + 64)
+            if (turn < game.drawCount - 2) {
+                compose.onNodeWithTag("chance-play").assertIsEnabled()
+                compose.onNodeWithTag("slot-win-dialog").assertDoesNotExist()
+                compose.onNodeWithTag("chance-count-TOYS_1").assertTextEquals((turn + 2).toString())
+            }
+        }
         compose.onNodeWithTag("slot-win-dialog").assertIsDisplayed()
         compose.onNodeWithTag("slot-win-reward").assertContentDescriptionEquals(
             rewardImageDescription(RewardType.TOYS_1, fragment = true))

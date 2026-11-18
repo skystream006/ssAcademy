@@ -4,6 +4,7 @@ import android.app.Application
 import android.net.Uri
 import android.os.SystemClock
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
@@ -55,6 +56,12 @@ class MathViewModel(
 
     internal var chanceGame by mutableStateOf(ChanceGame.SLOT_MACHINE)
         private set
+    internal var chanceGamePosition by mutableFloatStateOf(0.5f)
+        private set
+    internal var chanceMotionError by mutableStateOf<String?>(null)
+        private set
+    internal val chanceRoundInProgress: Boolean
+        get() = chanceGame != ChanceGame.SLOT_MACHINE && slotMachineRoll != null && !slotMachineAwarded
     internal var slotMachineTier by mutableStateOf<RewardTier?>(null)
         private set
     internal var slotMachineFragmentReward by mutableStateOf(settings.getBoolean("slot_machine_fragment_reward", false))
@@ -85,7 +92,8 @@ class MathViewModel(
     private var activitySlotMachine by mutableStateOf<ActivitySlotMachine?>(null)
     internal val slotMachineActivityReward: Boolean get() = activitySlotMachine != null
     internal val slotMachinePool: SlotMachineRewardPool?
-        get() = activitySlotMachine?.pool ?: slotMachineTier?.let {
+        get() = slotMachineRoll?.chancePool?.takeIf { chanceRoundInProgress }
+            ?: activitySlotMachine?.pool ?: slotMachineTier?.let {
             slotMachineRewardPool(it, disabledRewards, tier3RewardChances)
         }
     internal val slotMachineSelectedTier: RewardTier? get() = activitySlotMachine?.pool?.tier ?: slotMachineTier
@@ -1224,6 +1232,8 @@ class MathViewModel(
     private fun resetSlotMachine(activity: ActivitySlotMachine? = null) {
         activitySlotMachine = activity
         chanceGame = if (activity != null) ChanceGame.entries.random(chanceGameRandom) else ChanceGame.SLOT_MACHINE
+        chanceGamePosition = 0.5f
+        chanceMotionError = null
         slotMachineSpinCount = 0
         slotMachineRoll = null
         slotMachineError = null
@@ -1240,7 +1250,7 @@ class MathViewModel(
     }
 
     internal fun chooseSlotMachineFragmentReward(fragment: Boolean) {
-        if (slotMachineActivityReward || slotMachineBusy || slotMachineError != null) return
+        if (slotMachineActivityReward || slotMachineBusy || chanceRoundInProgress || slotMachineError != null) return
         slotMachineFragmentReward = fragment
         settings.edit().putBoolean("slot_machine_fragment_reward", fragment).apply()
         slotMachineRoll = null
@@ -1248,11 +1258,18 @@ class MathViewModel(
     }
 
     internal fun chooseSlotMachineTier(tier: RewardTier?) {
-        if (slotMachineActivityReward || slotMachineBusy) return
+        if (slotMachineActivityReward || slotMachineBusy || chanceRoundInProgress) return
         slotMachineTier = tier
         slotMachineRoll = null
         slotMachineError = null
         slotMachineAwarded = false
+    }
+
+    internal fun chooseChanceGamePosition(position: Float) {
+        if (slotMachineBusy || slotMachineError != null) return
+        require(position.isFinite())
+        chanceGamePosition = position.coerceIn(0.08f, 0.92f)
+        chanceMotionError = null
     }
 
     internal fun spinSlotMachine() {
@@ -1265,41 +1282,70 @@ class MathViewModel(
             slotMachineError = "No rewards are available in this tier. Enable rewards in Available Rewards."
             return
         }
-        val rollNumber = slotMachineSpinCount + 1
-        val chanceDraws = if (chanceGame == ChanceGame.SLOT_MACHINE) emptyList()
-            else List(chanceGame.drawCount) { pool.select(rewardRandom) }
-        val reels = if (chanceDraws.isNotEmpty()) {
-            val winner = mostFrequentReward(chanceDraws, rewardRandom)
-            List(3) { winner }
-        } else if (rollNumber % 10 == 0L) {
-            val winner = pool.select(rewardRandom)
-            List(3) { winner }
-        } else {
-            List(3) { pool.select(rewardRandom) }
+        val game = chanceGame
+        chanceMotionError = null
+        val roll = slotMachineRoll?.takeIf { chanceRoundInProgress } ?: run {
+            val rollNumber = slotMachineSpinCount + 1
+            val chanceDraws = if (game == ChanceGame.SLOT_MACHINE) emptyList()
+                else List(game.drawCount) { pool.select(rewardRandom) }
+            val reels = if (chanceDraws.isNotEmpty()) {
+                val winner = mostFrequentReward(chanceDraws, rewardRandom)
+                List(3) { winner }
+            } else if (rollNumber % 10 == 0L) {
+                val winner = pool.select(rewardRandom)
+                List(3) { winner }
+            } else {
+                List(3) { pool.select(rewardRandom) }
+            }
+            SlotMachineRoll(reels, rollNumber = rollNumber, fragmentReward = slotMachineIsFragmentReward,
+                chanceDraws = chanceDraws, chancePool = pool.takeIf { chanceDraws.isNotEmpty() }).also {
+                slotMachineSpinCount = rollNumber
+                slotMachineRoll = it
+                slotMachineAwarded = false
+            }
         }
-        val roll = SlotMachineRoll(reels, rollNumber = rollNumber, fragmentReward = slotMachineIsFragmentReward,
-            chanceDraws = chanceDraws)
-        slotMachineSpinCount = rollNumber
-        slotMachineRoll = roll
-        slotMachineAwarded = false
+        val completedTurns = roll.chanceTurns.size
+        if (game != ChanceGame.SLOT_MACHINE) {
+            if (completedTurns >= game.drawCount) return
+            val turn = when (game) {
+                ChanceGame.PLINKO -> {
+                    val drop = plinkoDrop(chanceGamePosition,
+                        pool.weights.keys.indexOf(roll.chanceDraws[completedTurns]), pool.weights.size,
+                        roll.chanceTurns.map { requireNotNull(it.plinko).frames.last() }, completedTurns)
+                    if (drop == null) {
+                        chanceMotionError = "Unable to prepare this drop. Move the ball and try again."
+                        return
+                    }
+                    ChanceTurn(chanceGamePosition, plinko = drop)
+                }
+                ChanceGame.CLAW_MACHINE -> ChanceTurn(chanceGamePosition, claw = clawPickup(
+                    roll.chanceTurns.lastOrNull()?.claw?.frames?.last() ?: initialClawScene(), chanceGamePosition))
+                else -> ChanceTurn(chanceGamePosition)
+            }
+            roll.chanceTurns += turn
+        }
         slotMachineBusy = true
         slotMachineSpinning = true
-        val durationMs = chanceGame.playDurationMs
+        val durationMs = game.playDurationMs
+        val elapsedBeforeTurn = completedTurns * durationMs
+        val elapsedAfterTurn = elapsedBeforeTurn + durationMs
         val startedAt = SystemClock.uptimeMillis()
         viewModelScope.launch {
-            val animation = if (chanceDraws.isEmpty()) null else launch {
-                while (roll.chanceElapsedMs < durationMs) {
-                    roll.chanceElapsedMs = (SystemClock.uptimeMillis() - startedAt)
+            val animation = if (roll.chanceDraws.isEmpty()) null else launch {
+                while (roll.chanceElapsedMs < elapsedAfterTurn) {
+                    roll.chanceElapsedMs = elapsedBeforeTurn + (SystemClock.uptimeMillis() - startedAt)
                         .coerceIn(0, durationMs.toLong()).toInt()
-                    delay(32)
+                    delay(16)
                 }
             }
             try {
                 delay(durationMs.toLong())
                 animation?.cancel()
-                if (chanceDraws.isNotEmpty()) roll.chanceElapsedMs = durationMs
+                if (roll.chanceDraws.isNotEmpty()) roll.chanceElapsedMs = elapsedAfterTurn
                 slotMachineSpinning = false
-                saveSlotMachineWin(roll, activity)
+                if (game == ChanceGame.SLOT_MACHINE || roll.chanceTurns.size == game.drawCount) {
+                    saveSlotMachineWin(roll, activity)
+                }
             } finally {
                 animation?.cancel()
                 slotMachineSpinning = false
@@ -1311,6 +1357,7 @@ class MathViewModel(
     internal fun retrySlotMachinePrize() {
         val roll = slotMachineRoll ?: return
         if (slotMachineBusy || slotMachineAwarded || slotMachineError == null || roll.winner == null) return
+        if (chanceGame != ChanceGame.SLOT_MACHINE && !roll.chanceRoundComplete(chanceGame)) return
         slotMachineBusy = true
         slotMachineError = null
         val activity = activitySlotMachine
