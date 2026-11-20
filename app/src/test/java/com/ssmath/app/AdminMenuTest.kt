@@ -15,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
@@ -39,6 +40,7 @@ import org.robolectric.Shadows.shadowOf
 import kotlinx.coroutines.Dispatchers
 import java.io.File
 import java.time.Duration
+import kotlin.math.abs
 import kotlin.random.Random
 
 @RunWith(RobolectricTestRunner::class)
@@ -87,6 +89,67 @@ class AdminMenuTest {
     @Test fun wheelPlaysLocksAndRestoresWithoutAwardingAgain() = checkChanceBoard(ChanceGame.SPIN_THE_WHEEL)
     @Test fun plinkoPlaysLocksAndRestoresWithoutAwardingAgain() = checkChanceBoard(ChanceGame.PLINKO)
     @Test fun clawPlaysLocksAndRestoresWithoutAwardingAgain() = checkChanceBoard(ChanceGame.CLAW_MACHINE)
+
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun clawBallsMatchTheirPrizeColorKeyAcrossAvailabilityAndRestoration() {
+        val model = MathViewModel(application)
+        model.openSettings()
+        model.openAdminSlotMachine(ChanceGame.CLAW_MACHINE)
+        model.chooseSlotMachineTier(RewardTier.TIER_1)
+        val restoration = StateRestorationTester(compose)
+        restoration.setContent { MathTheme { SlotMachineDialog(model, onDismiss = {}) } }
+        val types = requireNotNull(model.slotMachinePool).weights.keys.toList()
+        val scene = initialClawScene()
+        val board = compose.onNodeWithTag("chance-board-CLAW_MACHINE").performScrollTo()
+            .fetchSemanticsNode().boundsInRoot
+        val ballColors = compose.runOnIdle {
+            val view = ShadowDialog.getLatestDialog().findViewById<View>(android.R.id.content)
+            val image = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+            try {
+                view.draw(Canvas(image))
+                types.mapIndexed { index, type ->
+                    val ball = scene.balls.first {
+                        it.id % types.size == index && it.center.x > 0.25f && it.center.y > 0.55f
+                    }
+                    val point = board.topLeft + ball.center * board.width
+                    type to Color(image.getPixel(point.x.toInt(), point.y.toInt()))
+                }.toMap()
+            } finally {
+                image.recycle()
+            }
+        }
+        assertEquals(types.size, ballColors.values.toSet().size)
+        types.forEach { type ->
+            val key = compose.onNodeWithTag("chance-color-${type.name}").performScrollTo()
+                .assertContentDescriptionEquals("Ball color for ${type.label}").fetchSemanticsNode().boundsInRoot
+            val color = compose.runOnIdle {
+                cornerColor(ShadowDialog.getLatestDialog().findViewById(android.R.id.content),
+                    key.center.x.toInt(), key.center.y.toInt())
+            }
+            val ballColor = ballColors.getValue(type)
+            val ballHsv = FloatArray(3)
+            val keyHsv = FloatArray(3)
+            android.graphics.Color.colorToHSV(ballColor.toArgb(), ballHsv)
+            android.graphics.Color.colorToHSV(color.toArgb(), keyHsv)
+            assertTrue(type.label, ballHsv[1] > 0.2f && keyHsv[1] > 0.2f)
+            val hueDifference = abs(ballHsv[0] - keyHsv[0])
+            assertEquals(type.label, 0f, minOf(hueDifference, 360f - hueDifference), 2f)
+            compose.onNodeWithTag("chance-odds-${type.name}").assertTextEquals(type.label)
+        }
+        compose.runOnIdle {
+            types.filter { it != RewardType.GUMMI_BEAR }.forEach { model.chooseRewardEnabled(it, false) }
+            model.chooseSlotMachineFragmentReward(true)
+        }
+        restoration.emulateSavedInstanceStateRestore()
+        types.filter { it != RewardType.GUMMI_BEAR }.forEach {
+            compose.onNodeWithTag("chance-color-${it.name}").assertDoesNotExist()
+        }
+        compose.onNodeWithTag("chance-color-GUMMI_BEAR").performScrollTo()
+            .assertContentDescriptionEquals("Ball color for Gummi Bear")
+        compose.onNodeWithTag("chance-odds-GUMMI_BEAR").assertTextEquals(RewardType.GUMMI_BEAR.fragmentLabel)
+        compose.onNodeWithTag("chance-play").performScrollTo().assertIsEnabled()
+    }
 
     @Test fun plinkoDropButtonAndAimingStayEnabledWithMultipleBallsInFlight() {
         val model = MathViewModel(application, ioDispatcher = Dispatchers.Unconfined)
@@ -185,7 +248,8 @@ class AdminMenuTest {
         compose.onNodeWithTag("chance-available-image-TOYS_1")
             .assertWidthIsAtLeast(64.dp).assertHeightIsAtLeast(64.dp)
         compose.onNodeWithTag("chance-odds-TOYS_1").performScrollTo()
-            .assertTextEquals("${RewardType.TOYS_1.fragmentLabel}: 100% per ${game.outcomeUnit}")
+            .assertTextEquals(if (game == ChanceGame.CLAW_MACHINE) RewardType.TOYS_1.fragmentLabel
+                else "${RewardType.TOYS_1.fragmentLabel}: 100% per ${game.outcomeUnit}")
         val action = "chance-play"
         if (game == ChanceGame.PLINKO || game == ChanceGame.CLAW_MACHINE) {
             compose.onNodeWithTag("chance-position").performScrollTo()

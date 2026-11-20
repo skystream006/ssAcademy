@@ -45,6 +45,9 @@ Search the named symbols in these exact files before widening scope:
   Plinko accepts overlapping drops and aiming until the first three-ball bin wins.
   Count landings in time order; later in-flight balls finish without changing the winner.
   Save one prize only after animations finish, and retry that same roll after save errors.
+  Claw ball IDs cycle through the frozen pool's enabled prizes; rendering and pickup
+  awards share `SlotMachineRewardPool.clawBallReward`. Each prize has a stable color
+  and a visible color key, not a hidden weighted draw. Wheel and Plinko retain weighted draws.
 - Display effective per-reel, per-pull (`p³`), and share-of-wins (`p³ / sum(p³)`)
   chances from the same pool used to draw reels, on both slot and Admin screens.
   The separate PIN-protected Admin slot retains whole/fragment mode and repeat wins.

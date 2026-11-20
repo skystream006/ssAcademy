@@ -1328,7 +1328,9 @@ class MathViewModel(
         }
         if (roll.winner != null) return
         val index = roll.chanceTurns.size
-        if (roll.chanceDraws.size == index) roll.chanceDraws += pool.select(rewardRandom)
+        if (game != ChanceGame.CLAW_MACHINE && roll.chanceDraws.size == index) {
+            roll.chanceDraws += pool.select(rewardRandom)
+        }
         val startedAtMs = roll.chanceElapsedMs
         val turn = when (game) {
             ChanceGame.PLINKO -> {
@@ -1341,8 +1343,12 @@ class MathViewModel(
                 }
                 ChanceTurn(chanceGamePosition, startedAtMs, plinko = drop)
             }
-            ChanceGame.CLAW_MACHINE -> ChanceTurn(chanceGamePosition, startedAtMs, claw = clawPickup(
-                roll.chanceTurns.lastOrNull()?.claw?.frames?.last() ?: initialClawScene(), chanceGamePosition))
+            ChanceGame.CLAW_MACHINE -> {
+                val pickup = clawPickup(
+                    roll.chanceTurns.lastOrNull()?.claw?.frames?.last() ?: initialClawScene(), chanceGamePosition)
+                roll.chanceDraws += pool.clawBallReward(pickup.ballId)
+                ChanceTurn(chanceGamePosition, startedAtMs, claw = pickup)
+            }
             else -> ChanceTurn(chanceGamePosition, startedAtMs)
         }
         roll.chanceTurns += turn
