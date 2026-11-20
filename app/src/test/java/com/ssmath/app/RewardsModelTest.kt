@@ -526,7 +526,7 @@ class RewardsModelTest {
     }
 
     @Test fun newAdminGamesRetryTheSameWeightedPrizeAndBonusesWithoutDuplicateAwards() {
-        ChanceGame.entries.filter { it != ChanceGame.SLOT_MACHINE }.forEach { game ->
+        listOf(ChanceGame.SPIN_THE_WHEEL, ChanceGame.PLINKO).forEach { game ->
             val lastTicket = object : Random() {
                 override fun nextBits(bitCount: Int): Int = error("Only reward tickets should be drawn")
                 override fun nextInt(until: Int): Int = until - 1
@@ -569,7 +569,7 @@ class RewardsModelTest {
         val types = RewardType.entries.filter { it.tier == RewardTier.TIER_1 }
         val draws = types + types + types.last()
         val winner = types.last()
-        ChanceGame.entries.filter { it != ChanceGame.SLOT_MACHINE }.forEach { game ->
+        listOf(ChanceGame.SPIN_THE_WHEEL, ChanceGame.PLINKO).forEach { game ->
             var tickets = 0
             val random = object : Random() {
                 override fun nextBits(bitCount: Int): Int = error("Only per-draw tickets should be selected")
@@ -707,6 +707,88 @@ class RewardsModelTest {
         assertTrue(model.slotMachineAwarded)
         assertEquals(1, HistoryStore(file).loadSnapshot().rewards.getValue(requireNotNull(roll.winner)).whole)
         assertNull(model.slotMachinePool)
+    }
+
+    @Test fun clawColorsDetermineTheGrabbedPrizeAndStayFixedForTheRound() {
+        val random = object : Random() {
+            override fun nextBits(bitCount: Int): Int = error("Claw pickups must not draw random rewards")
+        }
+        val types = listOf(RewardType.LOLLIPOP, RewardType.GUMMI_BEAR, RewardType.RAMEN)
+        val model = model(rewardRandom = random)
+        model.openSettings()
+        RewardType.entries.forEach { model.chooseRewardEnabled(it, it in types) }
+        model.openAdminSlotMachine(ChanceGame.CLAW_MACHINE)
+        model.chooseSlotMachineTier(RewardTier.TIER_1)
+        model.spinSlotMachine()
+        val roll = requireNotNull(model.slotMachineRoll)
+        val pool = requireNotNull(model.slotMachinePool)
+        assertEquals(types, pool.weights.keys.toList())
+        val expected = mutableListOf<RewardType>()
+        repeat(types.size * 2 + 1) { index ->
+            if (model.slotMachineAwarded) return@repeat
+            val pickup = requireNotNull(roll.chanceTurns.last().claw)
+            expected += types[pickup.ballId % types.size]
+            assertEquals(expected, roll.chanceDraws)
+            assertTrue(model.slotMachineBusy)
+            assertFalse(model.slotMachineAwarded)
+            assertTrue(HistoryStore(file).loadSnapshot().rewards.isEmpty())
+            shadowOf(Looper.getMainLooper()).idleFor(
+                Duration.ofMillis(ChanceGame.CLAW_MACHINE.playDurationMs + 16L))
+            if (!model.slotMachineAwarded) {
+                val turns = roll.chanceTurns
+                if (index == 0) types.forEach { model.chooseRewardEnabled(it, false) }
+                assertSame(pool, model.slotMachinePool)
+                model.chooseChanceGamePosition(if (index % 2 == 0) 0.08f else 0.92f)
+                model.spinSlotMachine()
+                assertSame(roll, model.slotMachineRoll)
+                assertEquals(turns, roll.chanceTurns.dropLast(1))
+            }
+        }
+        assertTrue(model.slotMachineAwarded)
+        assertEquals(firstRewardToThree(expected), roll.winner)
+        val winner = requireNotNull(roll.winner)
+        assertEquals(3, expected.count { it == winner })
+        assertEquals(expected.size, roll.chanceTurns.map { requireNotNull(it.claw).ballId }.toSet().size)
+        assertEquals(mapOf(winner to RewardBalance(1)), HistoryStore(file).loadSnapshot().rewards)
+        assertNull(model.slotMachinePool)
+    }
+
+    @Test fun clawSaveRetriesKeepTheSameColorMatchedPrizeAndBonuses() {
+        val random = object : Random() {
+            override fun nextBits(bitCount: Int): Int = error("Claw pickups must not draw random rewards")
+        }
+        val model = model(rewardRandom = random)
+        model.openSettings()
+        model.openAdminSlotMachine(ChanceGame.CLAW_MACHINE)
+        model.chooseTier3RewardChances(20, 80, 0, 0)
+        model.chooseSlotMachineTier(RewardTier.TIER_3)
+        model.chooseSlotMachineFragmentReward(true)
+        assertTrue(blockedWrite.mkdir())
+        model.spinSlotMachine()
+        val roll = requireNotNull(model.slotMachineRoll)
+        model.completeChanceRound()
+        val types = listOf(RewardType.TOYS_1, RewardType.TOYS_2)
+        val draws = roll.chanceTurns.map { types[requireNotNull(it.claw).ballId % types.size] }
+        assertEquals(draws, roll.chanceDraws)
+        assertEquals(firstRewardToThree(draws), roll.winner)
+        assertNotNull(model.slotMachineError)
+        val turns = roll.chanceTurns
+        val bonuses = requireNotNull(roll.celebrationRewards)
+        assertEquals(2, bonuses.size)
+        assertTrue(HistoryStore(file).loadSnapshot().rewards.isEmpty())
+        assertTrue(blockedWrite.delete())
+        repeat(3) { model.retrySlotMachinePrize() }
+        shadowOf(Looper.getMainLooper()).idle()
+        assertTrue(model.slotMachineAwarded)
+        assertSame(roll, model.slotMachineRoll)
+        assertEquals(turns, roll.chanceTurns)
+        assertEquals(draws, roll.chanceDraws)
+        assertEquals(bonuses, roll.celebrationRewards)
+        val saved = HistoryStore(file).loadSnapshot()
+        assertEquals(mapOf(requireNotNull(roll.winner) to RewardBalance(0, 1)), saved.rewards)
+        assertEquals(bonuses.toSet(), saved.slotMachinePokemons)
+        assertTrue(saved.history.isEmpty())
+        assertTrue(saved.readingResults.isEmpty())
     }
 
     @Test fun threeMatchRoundFreezesItsWinnerAndAllDrawsAcrossSaveRetries() {

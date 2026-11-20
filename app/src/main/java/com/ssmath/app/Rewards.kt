@@ -163,6 +163,11 @@ data class SlotMachineRewardPool(val tier: RewardTier, val weights: Map<RewardTy
 
     fun prizeChance(type: RewardType): Double = winChance(type) / winChance
 
+    internal fun clawBallReward(ballId: Int): RewardType {
+        require(ballId >= 0)
+        return weights.keys.elementAt(ballId % weights.size)
+    }
+
     internal fun select(random: Random): RewardType {
         if (tier != RewardTier.TIER_3) weights.keys.singleOrNull()?.let { return it }
         var ticket = random.nextInt(weights.values.sum())

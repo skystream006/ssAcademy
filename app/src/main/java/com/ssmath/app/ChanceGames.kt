@@ -52,8 +52,8 @@ internal enum class ChanceGame(
 internal fun ChanceGameDialog(model: MathViewModel, onDismiss: () -> Unit) {
     val game = model.chanceGame
     val tier = model.slotMachineSelectedTier
-    val pool = model.slotMachinePool
     val roll = model.slotMachineRoll
+    val pool = roll?.chancePool ?: model.slotMachinePool
     val busy = model.slotMachineBusy
     val activity = model.slotMachineActivityReward
     val fragment = model.slotMachineIsFragmentReward
@@ -87,11 +87,11 @@ internal fun ChanceGameDialog(model: MathViewModel, onDismiss: () -> Unit) {
                         ChanceGame.PLINKO ->
                             "Keep dropping balls. The first bin with 3 landed balls wins one prize."
                         else ->
-                            "Keep picking up capsules until you collect 3 of the same reward to win one prize."
+                            "Keep picking up balls until you collect 3 of the same color to win that prize."
                     })
                     Text("There is no turn limit. Matches do not need to be consecutive.",
                         style = MaterialTheme.typography.bodySmall)
-                    if (game != ChanceGame.SPIN_THE_WHEEL) {
+                    if (game == ChanceGame.PLINKO) {
                         Text("Aiming changes the motion, not each ball's reward chances.",
                             style = MaterialTheme.typography.bodySmall)
                     }
@@ -100,7 +100,7 @@ internal fun ChanceGameDialog(model: MathViewModel, onDismiss: () -> Unit) {
                             style = MaterialTheme.typography.bodySmall)
                     }
                     if (game == ChanceGame.CLAW_MACHINE) {
-                        Text("Capsules hide their rewards until they reach the prize bin.",
+                        Text("Each ball color represents one prize, shown in the color key below.",
                             style = MaterialTheme.typography.bodySmall)
                     }
                 }
@@ -169,17 +169,30 @@ internal fun ChanceGameDialog(model: MathViewModel, onDismiss: () -> Unit) {
     }
 }
 
+private fun clawBallColor(type: RewardType): Color =
+    Color.hsv(type.ordinal * 360f / RewardType.entries.size, 0.7f, 0.9f)
+
 @Composable
 private fun ChanceGameOdds(pool: SlotMachineRewardPool?, fragment: Boolean, game: ChanceGame) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Available ${if (fragment) "fragments" else "rewards"}", style = MaterialTheme.typography.titleMedium)
+        Text(if (game == ChanceGame.CLAW_MACHINE) "Ball colors and prizes"
+            else "Available ${if (fragment) "fragments" else "rewards"}",
+            style = MaterialTheme.typography.titleMedium)
         if (pool == null) Text("No available rewards")
         pool?.weights?.keys?.forEach { type ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (game == ChanceGame.CLAW_MACHINE) {
+                    Canvas(Modifier.size(28.dp).testTag("chance-color-${type.name}").semantics {
+                        contentDescription = "Ball color for ${type.label}"
+                    }) {
+                        drawChanceBall(center, size.minDimension * 0.45f, clawBallColor(type))
+                    }
+                }
                 RewardImage(type, fragment = fragment,
                     modifier = Modifier.size(64.dp).testTag("chance-available-image-${type.name}"))
-                Text("${if (fragment) type.fragmentLabel else type.label}: " +
-                    "${slotChancePercent(pool.reelChance(type))}% per ${game.outcomeUnit}",
+                val label = if (fragment) type.fragmentLabel else type.label
+                Text(if (game == ChanceGame.CLAW_MACHINE) label
+                    else "$label: ${slotChancePercent(pool.reelChance(type))}% per ${game.outcomeUnit}",
                     modifier = Modifier.weight(1f).testTag("chance-odds-${type.name}"))
             }
         }
@@ -199,8 +212,10 @@ private fun ChanceGameBoard(
     onPosition: (Float) -> Unit,
     onPlay: () -> Unit
 ) {
-    val colors = listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary,
-        MaterialTheme.colorScheme.tertiary, MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.onSurfaceVariant)
+    val types = pool.weights.keys.toList()
+    val colors = if (game == ChanceGame.CLAW_MACHINE) types.map(::clawBallColor)
+        else listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary,
+            MaterialTheme.colorScheme.tertiary, MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.onSurfaceVariant)
     val ink = MaterialTheme.colorScheme.onSurface
     val surface = MaterialTheme.colorScheme.surfaceVariant
     val draws = roll?.chanceDraws.orEmpty()
@@ -212,7 +227,6 @@ private fun ChanceGameBoard(
     val p = FastOutSlowInEasing.transform(progress)
     val activeReward = draws.getOrNull(activeIndex)
     val winner = roll?.winner
-    val types = pool.weights.keys.toList()
     fun landingAngle(type: RewardType?): Float {
         val index = types.indexOf(type).coerceAtLeast(0)
         val before = types.take(index).sumOf { pool.weights.getValue(it) }
@@ -270,7 +284,7 @@ private fun ChanceGameBoard(
                     ChanceGame.CLAW_MACHINE -> {
                         val pickup = turns.lastOrNull()?.claw
                         val scene = pickup?.at(progress) ?: requireNotNull(initialClaw)
-                        drawClawRound(if (!busy) scene.copy(claw = clawHome(position)) else scene, colors, ink)
+                        drawClawRound(if (!busy) scene.copy(claw = clawHome(position)) else scene, pool, colors, ink)
                     }
                     ChanceGame.SLOT_MACHINE -> error("Slot machine uses its reel board")
                 }
@@ -389,7 +403,7 @@ private fun DrawScope.drawChanceBall(point: Offset, radius: Float, color: Color)
     drawCircle(Color.Black.copy(alpha = 0.3f), radius, point, style = Stroke(radius * 0.08f))
 }
 
-private fun DrawScope.drawClawRound(scene: ClawScene, colors: List<Color>, ink: Color) {
+private fun DrawScope.drawClawRound(scene: ClawScene, pool: SlotMachineRewardPool, colors: List<Color>, ink: Color) {
     val w = size.width
     drawRoundRect(Brush.verticalGradient(listOf(colors.first().copy(alpha = 0.12f), Color.White.copy(alpha = 0.08f))),
         Offset(w * 0.025f, w * 0.025f), Size(w * 0.96f, w * 0.91f),
@@ -422,7 +436,7 @@ private fun DrawScope.drawClawRound(scene: ClawScene, colors: List<Color>, ink: 
     scene.balls.forEach { ball ->
         val center = ball.center * w
         val radius = w * CLAW_BALL_RADIUS
-        drawChanceBall(center, radius, colors[ball.id % colors.size])
+        drawChanceBall(center, radius, clawBallColor(pool.clawBallReward(ball.id)))
         drawArc(Color.White.copy(alpha = 0.65f), 5f, 170f, false,
             center - Offset(radius, radius * 0.35f), Size(radius * 2, radius * 0.7f),
             style = Stroke(w * 0.003f))
@@ -446,7 +460,7 @@ private fun DrawScope.drawClawRound(scene: ClawScene, colors: List<Color>, ink: 
             moveTo(finger.first().x * w, finger.first().y * w)
             finger.drop(1).forEach { point -> lineTo(point.x * w, point.y * w) }
         }, ink, style = Stroke(w * 0.012f, cap = StrokeCap.Round))
-        drawCircle(colors[1], w * 0.009f, finger[1] * w)
+        drawCircle(colors[1 % colors.size], w * 0.009f, finger[1] * w)
     }
     drawLine(Color.White.copy(alpha = 0.15f), Offset(w * 0.05f, w * 0.13f),
         Offset(w * 0.22f, w * 0.48f), w * 0.028f, cap = StrokeCap.Round)

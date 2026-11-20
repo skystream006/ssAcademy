@@ -765,7 +765,10 @@ In **Claw Machine**, position the overhead claw above
 the capsule pile before each pickup. It grabs an exposed capsule, lifts it, and
 releases it into a wide, recessed prize tray. Release positions vary across the tray,
 so capsules settle side by side along its floor and build a natural pile.
-Capsules hide their rewards until delivered.
+Each ball color represents one fixed prize, identified in the **Ball colors and prizes**
+key. Enabled prizes repeat evenly through the pile; disabled prizes and Tier 3 prizes
+with a zero chance are excluded. Aim for a visible color to collect that prize:
+there is no separate random reward hidden inside a capsule.
 Visible tallies count completed spins, landed balls, and balls placed in the prize bin.
 Wheel reward icons scale and rotate to fit their individual slices, including weighted slices.
 Plinko uses short, open-top bins with reward images and counts below the board;
@@ -778,12 +781,14 @@ Wheel and Claw play controls unlock after each turn; Plinko play and aiming stay
 until a bin reaches three. Every turn still requires a button press.
 Tier and whole/fragment choices stay locked for the round, and its single prize is saved
 after the winning turn and any remaining in-flight balls finish.
-Each spin or ball uses the enabled tier's normalized reward weights; these per-spin
-or per-ball chances are shown, not the final round's winning probabilities.
-Each turn's weighted outcome is selected once and retained with its
+Wheel spins and Plinko balls use the enabled tier's normalized reward weights; these
+per-spin or per-ball chances are shown, not the final round's winning probabilities.
+Claw pickups use the captured ball's fixed color-to-prize mapping instead of a weighted draw.
+Each turn's outcome is retained with its
 release position and physical trajectory, so moving the next ball, UI restoration,
 and save retries do not move earlier balls or change the tally and winning reward.
-Aiming does not change the weighted reward selection for an individual ball.
+Aiming does not change a Plinko ball's weighted reward selection; Claw aiming chooses
+which exposed, color-coded capsule to pick up.
 Selection of the activity game is uniform across all four games
 and stays fixed while its dialog is open, including save retries and UI restoration.
 Reopening an unclaimed reward can select a new game without adding another claim.
