@@ -1346,7 +1346,7 @@ class MathViewModel(
             ChanceGame.CLAW_MACHINE -> {
                 val pickup = clawPickup(
                     roll.chanceTurns.lastOrNull()?.claw?.frames?.last() ?: initialClawScene(), chanceGamePosition)
-                roll.chanceDraws += pool.clawBallReward(pickup.ballId)
+                roll.chanceDraws += pickup.ballId?.let(pool::clawBallReward)
                 ChanceTurn(chanceGamePosition, startedAtMs, claw = pickup)
             }
             else -> ChanceTurn(chanceGamePosition, startedAtMs)

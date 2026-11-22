@@ -6,6 +6,12 @@ import kotlin.math.atan2
 import org.junit.Assert.*
 import org.junit.Test
 
+internal fun ClawScene.topBallAim(): Float {
+    val ball = balls.filter { it.id !in collected }.minBy { it.center.y }
+    return (0.08f + (ball.center.x - clawHome(0.08f).x) /
+        (clawHome(0.92f).x - clawHome(0.08f).x) * 0.84f).coerceIn(0.08f, 0.92f)
+}
+
 class ChanceGamePhysicsTest {
     @Test fun wheelArtworkFitsInsideWideAndNarrowWeightedSlices() {
         listOf(3.6f, 18f, 72f, 120f, 180f, 288f, 356.4f, 360f).forEach { sweep ->
@@ -127,12 +133,63 @@ class ChanceGamePhysicsTest {
         assertEquals(b, firstRewardToThree(roll.completedChanceDraws(ChanceGame.PLINKO)))
     }
 
+    @Test fun clawKeepsTheChosenHorizontalPositionUntilTheCapsuleIsLifted() {
+        for (position in listOf(0.08f, 0.2f, 0.5f, 0.8f, 0.92f)) {
+            val home = clawHome(position)
+            val ball = ClawBall(7, Offset(home.x + 0.02f, CLAW_FLOOR - CLAW_BALL_RADIUS))
+            val scene = ClawScene(listOf(ball), emptySet(), home)
+            val pickup = clawPickup(scene, position)
+            assertEquals(7, pickup.ballId)
+            assertEquals(scene, pickup.frames.first())
+            pickup.frames.forEachIndexed { index, frame ->
+                val progress = index.toFloat() / pickup.frames.lastIndex
+                if (progress <= 0.61f) assertEquals(home.x, frame.claw.x, 0f)
+                if (frame.heldBall != null) {
+                    assertEquals("The capsule keeps its grip offset instead of snapping to the cable",
+                        0.02f, frame.balls.single().center.x - frame.claw.x, 0.001f)
+                }
+            }
+            assertTrue(pickup.at(0.3f).claw.y > home.y)
+            assertEquals(home.x, pickup.frames.last().claw.x, 0.000001f)
+            assertEquals(home.y, pickup.frames.last().claw.y, 0.000001f)
+            assertEquals(setOf(7), pickup.frames.last().collected)
+            pickup.frames.zipWithNext().forEach { (before, after) ->
+                assertTrue((before.claw - after.claw).getDistance() < 0.04f)
+                assertTrue((before.balls.single().center - after.balls.single().center).getDistance() < 0.045f)
+            }
+        }
+    }
+
+    @Test fun clawMissesOutOfReachBallsInsteadOfSteeringTowardThem() {
+        val home = clawHome(0.5f)
+        val ball = ClawBall(3, Offset(home.x + 0.15f, CLAW_FLOOR - CLAW_BALL_RADIUS))
+        for (balls in listOf(listOf(ball), emptyList())) {
+            val pickup = clawPickup(ClawScene(balls, emptySet(), home), 0.5f)
+            assertNull(pickup.ballId)
+            assertTrue(pickup.frames.all { it.claw.x == home.x && it.heldBall == null && it.collected.isEmpty() })
+            assertTrue(pickup.at(0.36f).claw.y > home.y)
+            assertEquals(home, pickup.frames.last().claw)
+        }
+    }
+
+    @Test fun clawChoosesTheUpperBallInTheDropPathNotANearbyColor() {
+        val home = clawHome(0.5f)
+        val lower = ClawBall(0, Offset(home.x, CLAW_FLOOR - CLAW_BALL_RADIUS))
+        val upper = ClawBall(1, lower.center - Offset(0f, CLAW_BALL_RADIUS * 2))
+        val pickup = clawPickup(ClawScene(listOf(lower, upper), emptySet(), home), 0.5f)
+        assertEquals(upper.id, pickup.ballId)
+        assertEquals(setOf(upper.id), pickup.frames.last().collected)
+    }
+
     @Test fun clawPrizeTraySpreadsTheFirstThreeCapsulesAlongItsFloor() {
         var scene = initialClawScene()
-        repeat(3) { index ->
-            scene = clawPickup(scene, if (index % 2 == 0) 0.08f else 0.92f).frames.last()
+        repeat(3) {
+            val pickup = clawPickup(scene, scene.topBallAim())
+            assertNotNull(pickup.ballId)
+            scene = pickup.frames.last()
         }
         val collected = scene.balls.filter { it.id in scene.collected }
+        assertEquals(3, collected.size)
         collected.forEach { ball ->
             assertEquals("Capsules rest on the tray floor, not a single vertical stack",
                 CLAW_FLOOR - CLAW_BALL_RADIUS, ball.center.y, 0.003f)
@@ -150,18 +207,21 @@ class ChanceGamePhysicsTest {
         val originalIds = scene.balls.map { it.id }.toSet()
         val pickedIds = mutableSetOf<Int>()
         var pileShifted = false
-        for (position in listOf(0.08f, 0.92f, 0.5f, 0.2f, 0.8f)) {
+        repeat(5) {
+            val position = scene.topBallAim()
             val pickup = clawPickup(scene, position)
+            assertNotNull(pickup.ballId)
             val picked = scene.balls.single { it.id == pickup.ballId }
             assertTrue(pickedIds.add(picked.id))
             assertFalse("The claw cannot grab through a ball above its target", scene.balls.any {
                 it.id != picked.id && it.id !in scene.collected && it.center.y < picked.center.y &&
-                    abs(it.center.x - picked.center.x) < CLAW_BALL_RADIUS * 2f
+                    abs(it.center.x - clawHome(position).x) <= 0.083f - CLAW_BALL_RADIUS
             })
             assertEquals(scene.balls, pickup.frames.first().balls)
             val lifted = pickup.at(0.6f)
             assertEquals(picked.id, lifted.heldBall)
-            assertEquals(lifted.claw.x, lifted.balls.single { it.id == picked.id }.center.x, 0.001f)
+            assertTrue(abs(lifted.claw.x - lifted.balls.single { it.id == picked.id }.center.x) <
+                CLAW_BALL_RADIUS)
             assertEquals(lifted.claw.y + 0.085f, lifted.balls.single { it.id == picked.id }.center.y, 0.001f)
             val falling = pickup.frames.filterIndexed { index, _ ->
                 index.toFloat() / pickup.frames.lastIndex in 0.8f..0.85f

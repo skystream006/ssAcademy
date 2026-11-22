@@ -100,7 +100,7 @@ internal fun ChanceGameDialog(model: MathViewModel, onDismiss: () -> Unit) {
                             style = MaterialTheme.typography.bodySmall)
                     }
                     if (game == ChanceGame.CLAW_MACHINE) {
-                        Text("Each ball color represents one prize, shown in the color key below.",
+                        Text("The claw drops straight down. Empty grabs do not count. Each ball color represents one prize.",
                             style = MaterialTheme.typography.bodySmall)
                     }
                 }
@@ -129,6 +129,8 @@ internal fun ChanceGameDialog(model: MathViewModel, onDismiss: () -> Unit) {
                         model.slotMachineAwarded -> "You won ${
                             requireNotNull(roll?.winner).let { if (fragment) it.fragmentLabel else it.label }
                         }! ${if (fragment) "One fragment" else "One complete reward"} added."
+                        game == ChanceGame.CLAW_MACHINE && roll?.chanceTurns?.lastOrNull()?.claw?.ballId == null &&
+                            roll?.chanceTurns?.isNotEmpty() == true -> "Empty grab. Aim above a ball and try again."
                         model.chanceRoundInProgress -> "Ready for the next ${game.outcomeUnit}."
                         else -> "Ready to play!"
                     }, Modifier.testTag("chance-status").semantics { liveRegion = LiveRegionMode.Polite })
@@ -363,7 +365,7 @@ private fun ChanceGameTally(types: List<RewardType>, completed: List<RewardType>
     }
 }
 
-private fun DrawScope.drawPlinkoRound(draws: List<RewardType>, turns: List<ChanceTurn>, elapsed: Int, position: Float,
+private fun DrawScope.drawPlinkoRound(draws: List<RewardType?>, turns: List<ChanceTurn>, elapsed: Int, position: Float,
                                      types: List<RewardType>, colors: List<Color>, ink: Color, ready: Boolean) {
     val w = size.width
     val game = ChanceGame.PLINKO

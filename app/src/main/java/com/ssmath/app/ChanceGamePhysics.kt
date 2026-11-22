@@ -152,7 +152,7 @@ internal data class ClawScene(
     val heldBall: Int? = null
 )
 
-internal data class ClawPickup(val ballId: Int, val frames: List<ClawScene>) {
+internal data class ClawPickup(val ballId: Int?, val frames: List<ClawScene>) {
     fun at(progress: Float): ClawScene = frames[(progress.coerceIn(0f, 1f) * frames.lastIndex).toInt()]
 }
 
@@ -227,13 +227,10 @@ internal fun initialClawScene(): ClawScene {
 internal fun clawPickup(previous: ClawScene, position: Float): ClawPickup {
     val home = clawHome(position)
     val pile = previous.balls.filter { it.id !in previous.collected }
-    val exposed = pile.filter { ball ->
-        pile.none { other -> other.id != ball.id && other.center.y < ball.center.y &&
-            abs(other.center.x - ball.center.x) < CLAW_BALL_RADIUS * 2f }
-    }
-    val selected = exposed.minBy { abs(it.center.x - home.x) }
+    val gripReach = 0.083f - CLAW_BALL_RADIUS
+    val selected = pile.filter { abs(it.center.x - home.x) <= gripReach }.minByOrNull { it.center.y }
     val balls = previous.balls.map { GravityBall(it.id, it.center, CLAW_BALL_RADIUS) }
-    val picked = balls.first { it.id == selected.id }
+    val picked = balls.firstOrNull { it.id == selected?.id }
     val releaseX = when (previous.collected.size % 3) {
         0 -> (CLAW_BIN_LEFT + CLAW_BIN_RIGHT) / 2
         1 -> CLAW_BIN_LEFT + CLAW_BALL_RADIUS + 0.008f
@@ -248,16 +245,19 @@ internal fun clawPickup(previous: ClawScene, position: Float): ClawPickup {
     }
     for (step in 0..steps) {
         val progress = step.toFloat() / steps
-        if (grasp == null && progress >= 0.43f) grasp = picked.center
-        val target = grasp ?: picked.center
-        val x = when {
-            progress < 0.1f -> motor(home.x, target.x, progress / 0.1f)
-            progress < 0.61f -> target.x
-            progress < 0.75f -> motor(target.x, releaseX, (progress - 0.61f) / 0.14f)
-            progress < 0.84f -> releaseX
-            else -> motor(releaseX, home.x, (progress - 0.84f) / 0.16f)
+        if (step == (steps * 0.36f).toInt() + 1 && picked != null &&
+            abs(picked.center.x - home.x) <= gripReach) {
+            grasp = picked.center
         }
-        val bottom = target.y - 0.085f
+        val gripOffset = grasp?.let { it.x - home.x } ?: 0f
+        val deliveryX = releaseX - gripOffset
+        val x = when {
+            grasp == null || progress < 0.61f -> home.x
+            progress < 0.75f -> motor(home.x, deliveryX, (progress - 0.61f) / 0.14f)
+            progress < 0.84f -> deliveryX
+            else -> motor(deliveryX, home.x, (progress - 0.84f) / 0.16f)
+        }
+        val bottom = (grasp?.y ?: picked?.center?.y ?: (CLAW_FLOOR - CLAW_BALL_RADIUS)) - 0.085f
         val y = when {
             progress < 0.1f -> home.y
             progress < 0.36f -> motor(home.y, bottom, (progress - 0.1f) / 0.26f)
@@ -265,9 +265,9 @@ internal fun clawPickup(previous: ClawScene, position: Float): ClawPickup {
             progress < 0.61f -> motor(bottom, home.y, (progress - 0.43f) / 0.18f)
             else -> home.y
         }
-        val held = progress >= 0.43f && progress < 0.79f
-        val released = progress >= 0.79f
-        val collected = if (released) previous.collected + picked.id else previous.collected
+        val held = grasp != null && progress >= 0.36f && progress < 0.79f
+        val released = grasp != null && progress >= 0.79f
+        val collected = if (released) previous.collected + requireNotNull(picked).id else previous.collected
         val opening = when {
             progress < 0.36f -> 1f
             progress < 0.43f -> 1f - (progress - 0.36f) / 0.07f
@@ -277,14 +277,14 @@ internal fun clawPickup(previous: ClawScene, position: Float): ClawPickup {
         val claw = Offset(x, y)
         if (step > 0) {
             if (held) {
-                picked.center = Offset(x, y + 0.085f)
+                requireNotNull(picked).center = Offset(x + gripOffset, y + 0.085f)
                 picked.velocity = Offset.Zero
             }
-            settleClawBalls(balls, collected, if (held) picked.id else null,
-                clawFingers(claw, opening).flatMap { it.drop(1) }, picked.id)
+            settleClawBalls(balls, collected, picked?.id?.takeIf { held },
+                clawFingers(claw, opening).flatMap { it.drop(1) }, picked?.id)
         }
         if (step % 2 == 0) frames += ClawScene(balls.map { ClawBall(it.id, it.center) },
-            collected, claw, opening, picked.id.takeIf { held })
+            collected, claw, opening, picked?.id?.takeIf { held })
     }
-    return ClawPickup(picked.id, frames)
+    return ClawPickup(picked?.id?.takeIf { grasp != null }, frames)
 }

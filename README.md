@@ -762,7 +762,10 @@ In **Plinko Drop**, aim using the slider or by dragging on the board, and keep p
 **Drop ball** even while other balls are falling. The first bin with three landed balls
 wins; any balls already in flight finish without changing that winner or awarding extra prizes.
 In **Claw Machine**, position the overhead claw above
-the capsule pile before each pickup. It grabs an exposed capsule, lifts it, and
+the capsule pile before each pickup. Dropping locks its horizontal position:
+it descends and lifts vertically without steering toward a different ball.
+Only a capsule inside the open claw can be collected; an empty grab earns nothing
+and lets you aim again. A successful grab lifts the capsule, then moves sideways and
 releases it into a wide, recessed prize tray. Release positions vary across the tray,
 so capsules settle side by side along its floor and build a natural pile.
 Each ball color represents one fixed prize, identified in the **Ball colors and prizes**

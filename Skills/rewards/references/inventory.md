@@ -48,6 +48,8 @@ Search the named symbols in these exact files before widening scope:
   Claw ball IDs cycle through the frozen pool's enabled prizes; rendering and pickup
   awards share `SlotMachineRewardPool.clawBallReward`. Each prize has a stable color
   and a visible color key, not a hidden weighted draw. Wheel and Plinko retain weighted draws.
+  Claw descent and lift keep the player's horizontal aim; only an in-reach ball can
+  be grabbed. Misses retain a turn/path with a null draw and never increment a tally.
 - Display effective per-reel, per-pull (`p³`), and share-of-wins (`p³ / sum(p³)`)
   chances from the same pool used to draw reels, on both slot and Admin screens.
   The separate PIN-protected Admin slot retains whole/fragment mode and repeat wins.

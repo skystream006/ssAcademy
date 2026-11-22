@@ -252,8 +252,9 @@ class AdminMenuTest {
                 else "${RewardType.TOYS_1.fragmentLabel}: 100% per ${game.outcomeUnit}")
         val action = "chance-play"
         if (game == ChanceGame.PLINKO || game == ChanceGame.CLAW_MACHINE) {
+            val position = if (game == ChanceGame.CLAW_MACHINE) initialClawScene().topBallAim() else 0.8f
             compose.onNodeWithTag("chance-position").performScrollTo()
-                .performSemanticsAction(SemanticsActions.SetProgress) { it(0.8f) }
+                .performSemanticsAction(SemanticsActions.SetProgress) { it(position) }
         }
         compose.onNodeWithTag(action).performScrollTo()
         compose.mainClock.autoAdvance = false
@@ -293,8 +294,11 @@ class AdminMenuTest {
         val firstTurn = requireNotNull(model.slotMachineRoll).chanceTurns.single()
         repeat(2) { turn ->
             if (game == ChanceGame.PLINKO || game == ChanceGame.CLAW_MACHINE) {
+                val position = if (game == ChanceGame.CLAW_MACHINE)
+                    requireNotNull(requireNotNull(model.slotMachineRoll).chanceTurns.last().claw).frames.last().topBallAim()
+                    else if (turn % 2 == 0) 0.2f else 0.8f
                 compose.onNodeWithTag("chance-position").performScrollTo().assertIsEnabled()
-                    .performSemanticsAction(SemanticsActions.SetProgress) { it(if (turn % 2 == 0) 0.2f else 0.8f) }
+                    .performSemanticsAction(SemanticsActions.SetProgress) { it(position) }
                 compose.runOnIdle { assertEquals(firstTurn, requireNotNull(model.slotMachineRoll).chanceTurns.first()) }
             }
             compose.onNodeWithTag("chance-play").performScrollTo().performClick()
