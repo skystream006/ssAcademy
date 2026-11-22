@@ -52,13 +52,13 @@ internal data class SlotMachineRoll(
     // Cache bonuses without replacing the roll or restarting its reels on a save retry.
     internal var celebrationRewards by mutableStateOf<List<Celebration>?>(null)
     internal var chanceElapsedMs by mutableIntStateOf(0)
-    internal var chanceDraws by mutableStateOf<List<RewardType>>(emptyList())
+    internal var chanceDraws by mutableStateOf<List<RewardType?>>(emptyList())
     internal var chanceTurns by mutableStateOf<List<ChanceTurn>>(emptyList())
     internal var chanceWinner by mutableStateOf<RewardType?>(null)
 
     internal fun completedChanceDraws(game: ChanceGame): List<RewardType> =
         chanceTurns.withIndex().filter { chanceElapsedMs >= it.value.landedAtMs(game) }
-            .sortedBy { it.value.landedAtMs(game) }.map { chanceDraws[it.index] }
+            .sortedBy { it.value.landedAtMs(game) }.mapNotNull { chanceDraws[it.index] }
 
     internal fun chanceRoundComplete(game: ChanceGame): Boolean =
         chanceWinner != null && chanceTurns.all { chanceElapsedMs >= it.startedAtMs + game.playDurationMs }
