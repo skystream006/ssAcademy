@@ -85,6 +85,14 @@ Search the named symbols in these exact files before widening scope:
 - Legacy history arrays remain readable. A malformed inventory object must fail,
   not silently become an empty replacement snapshot.
 
+## Server sync
+
+Collection sync exchanges only `CollectionBackup` (balances and collected animations).
+Use `MathViewModel.applySnapshot` after a durable save to signal collection changes.
+Network I/O runs outside `storeLock`; downloads recheck the local snapshot under that
+lock before calling `HistoryStore.importCollections`. Keep the approved portal account's
+version/digest checkpoint separate from practice history. Never automatically merge balances.
+
 ## Deletion is accounting, not retention
 
 - Explicit deletion/clear subtracts one fragment per claimed removed result,

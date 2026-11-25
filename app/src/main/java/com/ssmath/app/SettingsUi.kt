@@ -2,10 +2,7 @@
 
 package com.ssmath.app
 
-import android.content.ActivityNotFoundException
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -98,12 +95,6 @@ private fun SettingsContent(model: MathViewModel) {
     var adminUnlocked by remember { mutableStateOf(false) }
     var showingName by rememberSaveable { mutableStateOf(false) }
     var showingTransfer by rememberSaveable { mutableStateOf(false) }
-    val exportCollections = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) {
-        if (it != null) model.exportCollections(it)
-    }
-    val importCollections = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {
-        if (it != null) model.previewCollectionImport(it)
-    }
     val adminPage = model.overlay == Overlay.REWARDS_SETUP || model.overlay == Overlay.READING_PROGRESS
     LaunchedEffect(adminPage) {
         if (adminPage) showingAdmin = true
@@ -112,7 +103,7 @@ private fun SettingsContent(model: MathViewModel) {
         showingAdmin = false
         adminUnlocked = false
         showingTransfer = false
-        model.clearCollectionTransfer()
+        model.collectionSync.cancelPreview()
         if (adminPage) model.closeOverlay()
     }
     if (!adminPage) {
@@ -123,29 +114,10 @@ private fun SettingsContent(model: MathViewModel) {
     if (showingAdmin || adminPage || showingTransfer) {
         if (adminUnlocked || !model.adminPinLockEnabled) {
             if (showingTransfer) {
-                CollectionTransferDialog(model,
-                    onExport = {
-                        try {
-                            exportCollections.launch("ssAcademy-collections.json")
-                        } catch (error: ActivityNotFoundException) {
-                            model.collectionPickerFailed(error)
-                        } catch (error: SecurityException) {
-                            model.collectionPickerFailed(error)
-                        }
-                    },
-                    onImport = {
-                        try {
-                            importCollections.launch(arrayOf("application/json", "text/plain", "application/octet-stream"))
-                        } catch (error: ActivityNotFoundException) {
-                            model.collectionPickerFailed(error)
-                        } catch (error: SecurityException) {
-                            model.collectionPickerFailed(error)
-                        }
-                    },
-                    onDismiss = { model.clearCollectionTransfer(); showingTransfer = false })
+                CollectionTransferDialog(model.collectionSync,
+                    onDismiss = { model.collectionSync.cancelPreview(); showingTransfer = false })
             } else {
                 AdminDialog(model, onDismiss = dismissAdmin, onTransfer = {
-                    model.clearCollectionTransfer()
                     showingTransfer = true
                 })
             }
@@ -525,7 +497,7 @@ private fun AdminDialog(model: MathViewModel, onDismiss: () -> Unit, onTransfer:
                         }
                     }
                     Button(onClick = onTransfer, modifier = Modifier.fillMaxWidth().testTag("collection-transfer")) {
-                        Text("Export / Import Collections", textAlign = TextAlign.Center)
+                        Text("Sync with server", textAlign = TextAlign.Center)
                     }
                     Button(onClick = { showingDebug = true }, modifier = Modifier.fillMaxWidth().testTag("debug-menu")) {
                         Text("Debug Menu", textAlign = TextAlign.Center)
