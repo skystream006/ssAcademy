@@ -20,6 +20,14 @@ internal data class CollectionBackup(
         require(version == VERSION) { "Unsupported collection file version. Update ssAcademy on both devices." }
     }
 
+    val empty get() = rewards.values.all { it.totalFragments == 0 } && pokemons.isEmpty()
+
+    // The portal normalizes order; an absent balance and an explicit zero are equivalent.
+    fun digest(): String = encode(copy(
+        rewards = rewards.filterValues { it.totalFragments != 0 }.toSortedMap(),
+        pokemons = pokemons.sortedBy { it.name }.toSet()
+    )).sha256()
+
     companion object {
         const val FORMAT = "ssAcademy-collections"
         const val VERSION = 1

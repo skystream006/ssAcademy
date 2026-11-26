@@ -196,21 +196,33 @@ Admin Menu contains **Game Settings**, **My Rewards** (add/remove controls), and
 **Available Rewards**; every section starts collapsed. Settings subsections have
 progressively lighter backgrounds in dark mode and darker backgrounds in light mode,
 including nested subject settings.
-Use **Settings > Admin Menu > Export / Import Collections** to transfer collections
-between devices. **Export collections** saves one JSON file containing every whole
-reward, fragment, and collected animation, including Mega Pokémon and Other scenes.
-Copy that file to the other device, open the same menu, and choose **Import collections**.
-After the file is checked, review its totals and explicitly choose **Replace collections**
-to overwrite both destination collections, or **Merge collections** to add reward balances
-and combine animations without duplicates. Nothing changes until you choose; **Cancel import**
-keeps the destination unchanged. Merging the same file again adds its reward balances again.
-Export a destination backup before replacing collections if you might want to restore them.
-History, reading progress, settings, and the Admin PIN are not included or replaced.
-Imported animations are not removed by deleting local game history; after replacement,
-old claimed gifts remain visible in history but no longer subtract from the new inventory
-when their results are deleted. New claims continue to behave normally.
-Invalid, unsupported, oversized files (over 256 KB), and merges exceeding reward balance
-limits are rejected without changing either collection. Use the latest app on both devices.
+**Settings > Admin Menu > Sync with server** connects this installation to an existing
+[ssPortal](https://github.com/skystream006/ssPortal) account. Enter the portal's HTTPS
+origin (no path) and username, then select **Request sync access**. In ssPortal's
+**ssAcademy > Upload tokens** page, an administrator must compare the displayed
+fingerprint and approve the device. Select **Check approval** on the device. With a portal
+that supports [owned-import downloads](https://github.com/skystream006/ssPortal/commit/e0600a17a4f48551e07518aa271d8d37dc0f83e3),
+that approval covers uploads and downloads for the same account; no browser session is needed.
+The private device credential is encrypted with Android Keystore and is not shown or exported.
+
+Saved reward and animation changes upload automatically. Each upload creates a snapshot
+or returns a duplicate's receipt; the device remembers the **Linked import ID**.
+**Sync now** checks that import for edits and reconciles it with this device. If both
+changed, you choose which copy to use. Offline play continues normally; unsent changes
+are detected on retry or after reopening the app.
+
+To transfer to another approved device, select **Upload collections**, copy the linked
+ID into **Import ID** on the other device, then select **Download collections**.
+Leaving the field blank downloads the device's currently linked import. Review the
+preview before replacing or merging. Merge adds balances and combines animations;
+explicitly merging twice adds rewards twice. Device tokens cannot list imports or
+discover another device's latest snapshot. To switch to a newer one, use its receipt ID.
+**Disconnect device** stops sync without deleting local or server data. An administrator
+can revoke access in ssPortal.
+
+History, reading progress, settings, and the Admin PIN never enter the collection payload.
+After replacement, old claimed gifts remain visible but deleting them cannot subtract from
+the replacement inventory. Imported animations survive local history deletion.
 **Math Settings** contains **Math Rewards System**,
 **Show timer**, **Show correct answers**,
 **Vertical equations**, and collapsed **Basic Math Settings**,
@@ -509,7 +521,7 @@ not automatic judgments of imagination or spelling. Personal milestones replace
 class rankings.
 
 Drafts, saved stories, the local name, and progress are automatically saved in
-private app storage on this tablet. There are no reading accounts, uploads, public
+private app storage on this tablet. There are no reading accounts, uploads of reading records, public
 leaderboards, microphone recordings, or cloud-generated activities. Older reader records
 are retained to preserve existing history, not exposed as switchable accounts. Android backups
 and device transfer are disabled; uninstalling the app removes its local data.
