@@ -25,8 +25,9 @@ internal class PortalLink(
     }
     val fingerprint: String? get() = prefs.getString("fingerprint", null)
     val granted get() = prefs.getBoolean("granted", false)
-    val baseVersion: String? get() = prefs.getString("baseVersion", null)
+    val importId: String? get() = prefs.getString("importId", null)
     val baseDigest: String? get() = prefs.getString("baseDigest", null)
+    val verified get() = prefs.getBoolean("verifiedImport", false)
 
     fun enroll(target: PortalAccount) {
         if (account == target) return
@@ -53,8 +54,8 @@ internal class PortalLink(
     }
 
     fun grant(value: Boolean) = prefs.edit().putBoolean("granted", value).persist()
-    fun acknowledge(version: String, digest: String) =
-        prefs.edit().putString("baseVersion", version).putString("baseDigest", digest).persist()
+    fun rememberImport(id: String, digest: String, verified: Boolean) =
+        prefs.edit().putString("importId", id).putString("baseDigest", digest).putBoolean("verifiedImport", verified).persist()
     fun forget() = prefs.edit().clear().persist()
 
     private fun PortalAccount.binding() = "$origin\n$username".toByteArray(Charsets.UTF_8)

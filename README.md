@@ -200,16 +200,23 @@ including nested subject settings.
 [ssPortal](https://github.com/skystream006/ssPortal) account. Enter the portal's HTTPS
 origin (no path) and username, then select **Request sync access**. In ssPortal's
 **ssAcademy > Upload tokens** page, an administrator must compare the displayed
-fingerprint and explicitly grant collection sync. Select **Check approval** on the device.
-An upload-only approval is not enough. Both the portal and the app must support device sync.
+fingerprint and approve the device. Select **Check approval** on the device. With a portal
+that supports [owned-import downloads](https://github.com/skystream006/ssPortal/commit/e0600a17a4f48551e07518aa271d8d37dc0f83e3),
+that approval covers uploads and downloads for the same account; no browser session is needed.
 The private device credential is encrypted with Android Keystore and is not shown or exported.
 
-**Sync now** reconciles whole rewards, fragments, and all collected animations. Once
-approved, saved collection changes sync automatically. Offline play continues normally;
-unsent changes are detected on retry or after reopening the app. If both copies changed,
-neither is silently overwritten. **Upload collections** lets you keep the device copy;
-**Download collections** previews the server copy before you replace or merge. Merge
-adds balances and combines animations; explicitly merging twice adds the rewards twice.
+Saved reward and animation changes upload automatically. Each upload creates a snapshot
+or returns a duplicate's receipt; the device remembers the **Linked import ID**.
+**Sync now** checks that import for edits and reconciles it with this device. If both
+changed, you choose which copy to use. Offline play continues normally; unsent changes
+are detected on retry or after reopening the app.
+
+To transfer to another approved device, select **Upload collections**, copy the linked
+ID into **Import ID** on the other device, then select **Download collections**.
+Leaving the field blank downloads the device's currently linked import. Review the
+preview before replacing or merging. Merge adds balances and combines animations;
+explicitly merging twice adds rewards twice. Device tokens cannot list imports or
+discover another device's latest snapshot. To switch to a newer one, use its receipt ID.
 **Disconnect device** stops sync without deleting local or server data. An administrator
 can revoke access in ssPortal.
 

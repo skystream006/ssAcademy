@@ -90,8 +90,9 @@ Search the named symbols in these exact files before widening scope:
 Collection sync exchanges only `CollectionBackup` (balances and collected animations).
 Use `MathViewModel.applySnapshot` after a durable save to signal collection changes.
 Network I/O runs outside `storeLock`; downloads recheck the local snapshot under that
-lock before calling `HistoryStore.importCollections`. Keep the approved portal account's
-version/digest checkpoint separate from practice history. Never automatically merge balances.
+lock before calling `HistoryStore.importCollections`. Store the account's upload receipt ID
+and comparison digest separately from practice history. Read owned imports by ID, not by
+listing; a duplicate receipt may return admin-edited values. Never automatically merge balances.
 
 ## Deletion is accounting, not retention
 

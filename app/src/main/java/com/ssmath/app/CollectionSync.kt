@@ -34,6 +34,8 @@ internal class CollectionSync(
         private set
     var approved by mutableStateOf(link.granted)
         private set
+    var importId by mutableStateOf(link.importId)
+        private set
     var busy by mutableStateOf(false)
         private set
     var message by mutableStateOf<String?>(null)
@@ -63,11 +65,8 @@ internal class CollectionSync(
             api.approval(target, link.token(target), register).also { link.grant(it.canSync) }
         }
         approved = device.canSync
-        message = when {
-            approved -> "Approved for upload and download."
-            device.status == "approved" -> "Approved for upload only. Ask a portal administrator to grant collection sync."
-            else -> "Device ${device.status}. Ask a portal administrator to approve collection sync, then check again."
-        }
+        message = if (approved) "Approved for upload and download."
+            else "Device ${device.status}. Ask a portal administrator to approve this device, then check again."
         if (approved) changed()
     }
 
@@ -102,61 +101,58 @@ internal class CollectionSync(
         if (!approved) return@run
         pending = false
         preview = null
-        val remote = fetch()
         val local = readLocal()
+        val id = link.importId
+        if (id == null) {
+            if (!local.empty) push(local)
+            else message = "No linked import yet. Enter an owned import ID to restore, or upload this device's collection."
+            return@run
+        }
+        val remote = fetch(id)
         val digest = local.digest()
-        val remoteDigest = remote.data?.digest()
+        val remoteDigest = remote.data.digest()
         when {
             remoteDigest == digest -> acknowledge(remote, digest)
-            remote.data == null && link.baseVersion == null -> push(remote, local)
-            remote.data != null && (link.baseDigest == digest || (link.baseDigest == null && local.empty)) -> {
+            link.verified && link.baseDigest == digest -> {
                 importLocal(local, remote.data, CollectionImportMode.REPLACE)
-                acknowledge(remote, requireNotNull(remoteDigest))
+                acknowledge(remote, remoteDigest)
             }
-            link.baseVersion == remote.version || (remoteDigest != null && remoteDigest == link.baseDigest) ->
-                push(remote, local)
+            remoteDigest == link.baseDigest -> push(local)
             else -> {
                 preview = CollectionPreview(remote, local, allowUpload = true)
-                message = "The device and server differ. Choose which collection to keep; nothing was overwritten."
+                message = "Both this device and its linked import changed. Review the two copies; nothing was overwritten."
             }
         }
     }
 
     fun upload() = run {
-        val remote = fetch()
-        val local = readLocal()
-        when {
-            remote.data == null -> push(remote, local)
-            remote.data.digest() == local.digest() -> acknowledge(remote, local.digest())
-            else -> {
-                preview = CollectionPreview(remote, local, allowUpload = true)
-                message = "Confirm to make this device's collection current on the server."
-            }
-        }
+        if (approved) push(readLocal())
     }
 
-    fun download() = run {
-        val remote = fetch()
-        if (remote.data == null) message = "There is no collection on the server yet."
-        else {
-            preview = CollectionPreview(remote, readLocal(), allowUpload = false)
-            message = "Review the server collection before changing this device."
+    fun download(input: String = "") = run {
+        if (!approved) return@run
+        val id = normalizedImportId(input.ifBlank { importId.orEmpty() })
+        if (id == null) {
+            message = "Enter the import ID (UUID) from an upload receipt or the other device."
+            return@run
         }
+        preview = CollectionPreview(fetch(id), readLocal(), allowUpload = false)
+        message = "Review the downloaded collection before changing this device."
     }
 
     fun confirmUpload() {
         val choice = preview?.takeIf { it.allowUpload } ?: return
         run {
-            if (readLocal() != choice.local) throw CollectionChanged()
-            push(choice.server, choice.local)
+            if (readLocal() != choice.local || fetch(choice.server.id).revision != choice.server.revision) throw CollectionChanged()
+            push(choice.local)
         }
     }
 
     fun confirmDownload(mode: CollectionImportMode) {
         val choice = preview ?: return
-        val data = choice.server.data ?: return
+        val data = choice.server.data
         run {
-            if (fetch().version != choice.server.version) throw CollectionChanged()
+            if (fetch(choice.server.id).revision != choice.server.revision) throw CollectionChanged()
             importLocal(choice.local, data, mode)
             // Never repeat an additive merge if writing the checkpoint or uploading fails.
             preview = null
@@ -174,26 +170,28 @@ internal class CollectionSync(
         schedule()
     }
 
-    private suspend fun fetch(): ServerCollection = withContext(io) {
+    private suspend fun fetch(id: String): ServerCollection = withContext(io) {
         val target = requireNotNull(account)
-        api.download(target, link.token(target))
+        api.download(target, link.token(target), id)
     }
 
-    private suspend fun push(remote: ServerCollection, local: CollectionBackup) {
-        val result = withContext(io) {
-            val target = requireNotNull(account)
-            api.upload(target, link.token(target), remote.version, local)
-        }
+    private suspend fun push(local: CollectionBackup) {
         val digest = local.digest()
-        if (result.data?.digest() != digest) {
+        val id = withContext(io) {
+            val target = requireNotNull(account)
+            api.upload(target, link.token(target), local).also { link.rememberImport(it, digest, verified = false) }
+        }
+        // A duplicate receipt may point at an administratively corrected snapshot.
+        val result = fetch(id)
+        if (result.data.digest() != digest) {
             preview = CollectionPreview(result, readLocal(), allowUpload = false)
             message = "The portal retained an administrator's edits. Review the server values before applying them."
         } else acknowledge(result, digest)
     }
 
     private suspend fun acknowledge(remote: ServerCollection, digest: String) {
-        if (remote.version != link.baseVersion || digest != link.baseDigest)
-            withContext(io) { link.acknowledge(remote.version, digest) }
+        if (!link.verified || remote.id != link.importId || digest != link.baseDigest)
+            withContext(io) { link.rememberImport(remote.id, digest, verified = true) }
         preview = null
         retryDelay = 0L
         message = "Collections are in sync."
@@ -206,6 +204,9 @@ internal class CollectionSync(
         scope.launch {
             try {
                 action()
+            } catch (error: ImportNotFound) {
+                preview = null
+                message = "Import not found for this account. Check the import ID or upload a new snapshot."
             } catch (error: PortalHttpError) {
                 DebugLog.event(DebugEvent.COLLECTION_SYNC_FAILURE, status = error.status)
                 message = when (error.status) {
@@ -221,7 +222,7 @@ internal class CollectionSync(
                     }
                     409 -> {
                         preview = null
-                        "Portal conflict. Check the registration or sync again to review the latest collection."
+                        "Portal registration conflict. Check the portal address and username."
                     }
                     429 -> "Portal rate limit reached. Wait before retrying."
                     else -> "Portal request failed (HTTP ${error.status}). Check the server and try again."
@@ -243,6 +244,7 @@ internal class CollectionSync(
             } finally {
                 account = link.account
                 fingerprint = link.fingerprint
+                importId = link.importId
                 busy = false
                 schedule()
             }

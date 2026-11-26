@@ -6,10 +6,13 @@ import androidx.lifecycle.ViewModelStore
 import androidx.test.core.app.ApplicationProvider
 import java.io.File
 import java.time.Duration
+import java.util.UUID
 import javax.crypto.KeyGenerator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -34,9 +37,15 @@ internal class TestPortal(application: Application) {
     private val key = KeyGenerator.getInstance("AES").generateKey()
     val link = PortalLink(prefs) { key }
     var token: String? = null
-    var granted = false
     var status = "pending"
-    var remote = ServerCollection("v0", null)
+    val records = mutableMapOf<String, ServerCollection>()
+    private val originals = mutableMapOf<Pair<String, CollectionBackup>, String>()
+    fun insert(data: CollectionBackup, source: String = "Other tablet"): String = originals.getOrPut(source to data) {
+        UUID.randomUUID().toString().also { records[it] = ServerCollection(it, 1, data) }
+    }
+    fun edit(id: String, data: CollectionBackup) {
+        records[id] = records.getValue(id).let { it.copy(revision = it.revision + 1, data = data) }
+    }
     val uploads = mutableListOf<CollectionBackup>()
     var reads = 0
     var readError: Int? = null
@@ -47,48 +56,67 @@ internal class TestPortal(application: Application) {
         assertEquals("https", req.url.scheme)
         assertEquals("portal.example", req.url.host)
         assertNull(req.url.query)
+        assertNull(req.header("Cookie"))
+        assertNull(req.header("Origin"))
         var code = 200
         val body = req.body?.let { Buffer().apply { it.writeTo(this) }.readUtf8() }
         val input = body?.let { Json.decodeFromString(JsonObject.serializer(), it) }
-        val result = when (req.url.encodedPath) {
-            "/ssacademy/api/devices/register", "/ssacademy/api/devices/status" -> {
+        val path = req.url.encodedPath
+        val result = when {
+            path in setOf("/ssacademy/api/devices/register", "/ssacademy/api/devices/status") -> {
                 assertNull(req.header("Authorization"))
+                assertEquals("POST", req.method)
                 assertEquals("Learner", input!!.getValue("username").jsonPrimitive.content)
                 val secret = input.getValue("fingerprintToken").jsonPrimitive.content
                 assertTrue(secret.matches(Regex("[a-zA-Z0-9_-]{43}")))
                 if (token == null) token = secret else assertEquals(token, secret)
-                if (req.url.encodedPath.endsWith("register")) {
-                    assertEquals("true", input.getValue("requestSync").toString())
-                    code = 202
-                } else assertEquals(setOf("username", "fingerprintToken"), input.keys)
+                assertEquals(setOf("username", "fingerprintToken"), input.keys)
+                if (path.endsWith("register")) code = 202
                 buildJsonObject {
                     put("device", buildJsonObject {
-                        put("status", status); put("fingerprint", secret.sha256().take(16)); put("syncApproved", granted)
+                        put("status", status); put("fingerprint", secret.sha256().take(16)); put("expiresAt", 1790000000000L)
                     })
                 }.toString()
             }
-            "/ssacademy/api/sync" -> {
+            path.startsWith("/ssacademy/api/imports/") -> {
                 assertEquals("Bearer $token", req.header("Authorization"))
                 assertEquals("GET", req.method)
+                val record = records[path.substringAfterLast('/')]
                 reads++
-                code = readError ?: 200
-                readBody ?: Json.encodeToString(ServerCollection.serializer(), remote)
+                code = readError ?: if (record == null) 404 else 200
+                readBody ?: if (record == null) "{}" else buildJsonObject {
+                    put("import", buildJsonObject {
+                        put("id", record.id); put("revision", record.revision)
+                        put("format", record.data.format); put("version", record.data.version)
+                        put("ownerId", "owner"); put("edits", buildJsonArray {})
+                        put("rewards", buildJsonArray {
+                            record.data.rewards.forEach { (type, balance) -> add(buildJsonObject {
+                                put("id", type.name); put("label", type.name)
+                                put("whole", balance.whole); put("fragments", balance.fragments)
+                            }) }
+                        })
+                        put("animations", buildJsonArray { record.data.pokemons.forEach { add(JsonPrimitive(it.name)) } })
+                    })
+                }.toString()
             }
-            "/ssacademy/api/imports" -> {
+            path == "/ssacademy/api/imports" -> {
                 assertEquals("Bearer $token", req.header("Authorization"))
                 assertEquals("POST", req.method)
-                assertEquals(setOf("source", "data", "baseVersion"), input!!.keys)
+                assertEquals(setOf("source", "data"), input!!.keys)
                 beforeUpload?.invoke()
-                if (input.getValue("baseVersion").jsonPrimitive.content != remote.version) {
-                    code = 409
-                    "{}"
-                } else {
-                    val collection = Json.decodeFromJsonElement(CollectionBackup.serializer(), input.getValue("data"))
-                    uploads += collection
-                    remote = ServerCollection("upload${uploads.size}", collection)
-                    code = 201
-                    buildJsonObject { put("sync", Json.encodeToJsonElement(ServerCollection.serializer(), remote)) }.toString()
-                }
+                val collection = Json.decodeFromJsonElement(CollectionBackup.serializer(), input.getValue("data"))
+                val source = input.getValue("source").jsonPrimitive.content
+                val duplicate = (source to collection) in originals
+                val id = insert(collection, source)
+                uploads += collection
+                code = if (duplicate) 200 else 201
+                buildJsonObject {
+                    put("duplicate", duplicate)
+                    put("import", buildJsonObject {
+                        put("id", id); put("source", source); put("format", collection.format)
+                        put("version", collection.version); put("importedAt", 1790000000000L)
+                    })
+                }.toString()
             }
             else -> error("Unexpected portal route")
         }
@@ -97,7 +125,7 @@ internal class TestPortal(application: Application) {
     }.build())
 
     init { prefs.edit().clear().commit() }
-    fun approve() { status = "approved"; granted = true }
+    fun approve() { status = "approved" }
 }
 
 @RunWith(RobolectricTestRunner::class)
@@ -122,7 +150,10 @@ class CollectionTransferModelTest {
     }
     private fun request() { sync.request("https://portal.example", "Learner"); looper.idle() }
     private fun tick() { looper.idleFor(Duration.ofSeconds(3)) }
-    private fun connect() { portal.approve(); request(); tick() }
+    private fun connect() {
+        portal.approve(); request(); tick()
+        if (sync.importId == null) { sync.upload(); looper.idle() }
+    }
 
     @Before fun setup() {
         file.delete()
@@ -131,7 +162,7 @@ class CollectionTransferModelTest {
     }
     @After fun cleanup() { models.clear(); file.delete() }
 
-    @Test fun enrollmentIsOriginBoundRetriesTheSameSecretAndNeedsAnExplicitSyncGrant() {
+    @Test fun enrollmentRetriesTheSameSecretAndNormalApprovalAllowsUploadAndOwnedDownload() {
         sync.request("http://portal.example", "Learner"); looper.idle()
         assertNull(sync.account)
         request()
@@ -140,17 +171,25 @@ class CollectionTransferModelTest {
         assertFalse(application.getSharedPreferences("test_portal", 0).all.values.any { "$it".contains(secret) })
         start()
         request()
-        portal.status = "approved"
         sync.check(); looper.idle(); tick()
         assertFalse(sync.approved)
         assertEquals(0, portal.reads)
         portal.approve()
         sync.check(); looper.idle(); tick()
         assertTrue(sync.approved)
+        assertTrue(portal.uploads.isEmpty())
+        sync.upload(); looper.idle()
         assertEquals(1, portal.uploads.size)
+        val id = requireNotNull(sync.importId)
+        assertEquals(portal.records.getValue(id).data, portal.uploads.single())
+        start()
+        assertEquals(id, sync.importId)
+        sync.download(); looper.idle()
+        assertEquals(id, sync.preview?.server?.id)
+        sync.cancelPreview()
         sync.disconnect(); looper.idle()
         assertNull(sync.account)
-        assertNull(portal.link.baseVersion)
+        assertNull(portal.link.importId)
     }
 
     @Test fun savedRewardChangesCoalesceAndReloadsAndFailedSavesDoNotUpload() {
@@ -161,6 +200,7 @@ class CollectionTransferModelTest {
         val saved = CollectionBackup.from(HistoryStore(file).loadSnapshot())
         assertEquals(RewardBalance(1, 1), saved.rewards[RewardType.LOLLIPOP])
         assertEquals(listOf(CollectionBackup.from(PracticeSnapshot()), saved), portal.uploads)
+        val reads = portal.reads
         model.openRewards(); looper.idle()
         model.openSettings()
         val blocked = File(file.parentFile, "${file.name}.tmp")
@@ -168,19 +208,20 @@ class CollectionTransferModelTest {
         try {
             model.addReward(RewardType.TOYS_1, false); looper.idle(); tick()
             assertNotNull(model.rewardRemovalError)
-            assertEquals(2, portal.reads)
+            assertEquals(reads, portal.reads)
         } finally { blocked.delete() }
     }
 
     @Test fun remoteChangesDownloadWithoutEchoAndConcurrentEditsNeedExplicitResolution() {
         connect()
-        portal.remote = ServerCollection("admin-edit", prize)
+        val id = requireNotNull(sync.importId)
+        portal.edit(id, prize)
         sync.sync(); looper.idle(); tick()
         assertEquals(prize, CollectionBackup.from(HistoryStore(file).loadSnapshot()))
         assertEquals(1, portal.uploads.size)
         model.addReward(RewardType.LOLLIPOP, true); looper.idle()
         val edited = prize.copy(pokemons = setOf(Celebration.PARTY))
-        portal.remote = ServerCollection("second-edit", edited)
+        portal.edit(id, edited)
         tick()
         assertEquals(edited, sync.preview?.server?.data)
         assertEquals(setOf(Celebration.PIKACHU), model.pokemons)
@@ -191,23 +232,39 @@ class CollectionTransferModelTest {
         assertEquals(RewardBalance(2), model.rewardBalances[RewardType.TOYS_3])
         assertEquals(setOf(Celebration.PIKACHU, Celebration.PARTY), model.pokemons)
         assertEquals(CollectionBackup.from(HistoryStore(file).loadSnapshot()), portal.uploads.last())
+        assertNotEquals(id, sync.importId)
+        assertEquals(edited, portal.records.getValue(id).data)
     }
 
-    @Test fun stalePreviewAndRacingServerWriteCannotOverwriteEitherSide() {
-        portal.remote = ServerCollection("existing", prize)
-        model.addReward(RewardType.LOLLIPOP, false); looper.idle()
+    @Test fun downloadingByIdOnlyLinksAfterConfirmationAndRechecksLocalDataAndRemoteRevision() {
         connect()
+        val before = requireNotNull(sync.importId)
+        val other = portal.insert(prize)
+        sync.download("../imports"); looper.idle()
+        assertNull(sync.preview)
+        sync.download(UUID.randomUUID().toString()); looper.idle()
+        assertTrue(sync.approved)
+        assertEquals(before, sync.importId)
+        assertTrue(sync.message.orEmpty().contains("not found"))
+        sync.download(other); looper.idle()
+        assertEquals(other, sync.preview?.server?.id)
+        sync.cancelPreview()
+        assertEquals(before, sync.importId)
+        sync.download(other); looper.idle()
         assertNotNull(sync.preview)
         model.addReward(RewardType.LOLLIPOP, true); looper.idle()
         sync.confirmDownload(CollectionImportMode.REPLACE); looper.idle()
         assertNull(sync.preview)
-        assertEquals(RewardBalance(1, 1), model.rewardBalances[RewardType.LOLLIPOP])
-        sync.upload(); looper.idle()
-        portal.beforeUpload = { portal.remote = ServerCollection("newer", prize.copy(pokemons = emptySet())) }
-        sync.confirmUpload(); looper.idle()
-        assertTrue(sync.message.orEmpty().contains("conflict"))
-        assertTrue(portal.uploads.isEmpty())
-        assertNull(portal.link.baseVersion)
+        assertEquals(RewardBalance(0, 1), model.rewardBalances[RewardType.LOLLIPOP])
+        sync.download(other); looper.idle()
+        portal.edit(other, prize.copy(pokemons = emptySet()))
+        sync.confirmDownload(CollectionImportMode.REPLACE); looper.idle()
+        assertNull(sync.preview)
+        assertEquals(before, sync.importId)
+        sync.download(other); looper.idle()
+        sync.confirmDownload(CollectionImportMode.REPLACE); looper.idle()
+        assertEquals(other, sync.importId)
+        assertEquals(portal.records.getValue(other).data, CollectionBackup.from(HistoryStore(file).loadSnapshot()))
     }
 
     @Test fun mutationDuringUploadSendsLatestDurableCopyInTheFollowingSync() {
@@ -220,25 +277,46 @@ class CollectionTransferModelTest {
         assertEquals(3, portal.uploads.size)
         assertNull(portal.uploads[1].rewards[RewardType.TOYS_1])
         assertEquals(RewardBalance(0, 1), portal.uploads[2].rewards[RewardType.TOYS_1])
-        assertEquals(CollectionBackup.from(HistoryStore(file).loadSnapshot()), portal.remote.data)
+        assertEquals(CollectionBackup.from(HistoryStore(file).loadSnapshot()), portal.records.getValue(sync.importId!!).data)
+    }
+
+    @Test fun duplicateReceiptSurvivesFailedReadAndCorrectedServerValuesNeverReplaceLocalWithoutReview() {
+        model.addReward(RewardType.LOLLIPOP, true); looper.idle()
+        connect()
+        val original = requireNotNull(sync.importId)
+        portal.edit(original, prize)
+        model.addReward(RewardType.LOLLIPOP, false); looper.idle()
+        sync.upload(); looper.idle()
+        assertNotEquals(original, sync.importId)
+        model.removeReward(RewardType.LOLLIPOP, false); looper.idle()
+        portal.readError = 503
+        sync.upload(); looper.idle()
+        assertEquals(original, sync.importId)
+        assertFalse(portal.link.verified)
+        portal.readError = null
+        start(); tick()
+        assertEquals(prize, sync.preview?.server?.data)
+        assertEquals(RewardBalance(0, 1), model.rewardBalances[RewardType.LOLLIPOP])
     }
 
     @Test fun invalidDownloadsAndFailedLocalWritesCannotAcknowledgeOrChangeTheCollection() {
         connect()
         model.addReward(RewardType.LOLLIPOP, false); looper.idle(); tick()
         val before = file.readText()
-        val base = portal.link.baseVersion
-        for (bad in listOf("""{"version":"new"}""",
-            """{"version":"new","data":{}}""", "x".repeat(CollectionBackup.MAX_BYTES + 4097))) {
+        val base = requireNotNull(portal.link.importId)
+        val shape = """{"id":"$base","revision":2,"format":"ssAcademy-collections","version":1,"rewards":[],"animations":[]}"""
+        for (bad in listOf("""{"import":{}}""", """{"import":${shape.replace(base, UUID.randomUUID().toString())}}""",
+            """{"import":${shape.replace("\"rewards\":[]", "\"rewards\":[{\"id\":\"TOYS_3\",\"whole\":1,\"fragments\":3}]")}}""",
+            "x".repeat(1024 * 1024 + 1))) {
             portal.readBody = bad
             sync.download(); looper.idle()
             assertNull(sync.preview)
             assertNotNull(sync.message)
             assertEquals(before, file.readText())
-            assertEquals(base, portal.link.baseVersion)
+            assertEquals(base, portal.link.importId)
         }
         portal.readBody = null
-        portal.remote = ServerCollection("remote", prize)
+        portal.edit(base, prize)
         sync.download(); looper.idle()
         val blocked = File(file.parentFile, "${file.name}.tmp")
         assertTrue(blocked.mkdir())
@@ -246,7 +324,7 @@ class CollectionTransferModelTest {
             sync.confirmDownload(CollectionImportMode.REPLACE); looper.idle()
             assertNotNull(sync.preview)
             assertEquals(before, file.readText())
-            assertEquals(base, portal.link.baseVersion)
+            assertEquals(base, portal.link.importId)
         } finally { blocked.delete() }
         sync.confirmDownload(CollectionImportMode.REPLACE); looper.idle()
         assertEquals(prize, CollectionBackup.from(HistoryStore(file).loadSnapshot()))

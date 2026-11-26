@@ -4,10 +4,7 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import okhttp3.Call
@@ -35,20 +32,28 @@ internal data class PortalAccount(val origin: String, val username: String) {
 }
 
 @Serializable
-internal data class PortalApproval(val status: String, val fingerprint: String, val syncApproved: Boolean = false) {
+internal data class PortalApproval(val status: String, val fingerprint: String) {
     init {
         require(status in setOf("pending", "approved", "expired", "revoked") &&
             fingerprint.matches(Regex("[0-9a-f]{16}")))
     }
-    val canSync get() = status == "approved" && syncApproved
+    val canSync get() = status == "approved"
 }
 
-@Serializable
-internal data class ServerCollection(val version: String, val data: CollectionBackup?) {
-    init { require(version.isNotBlank() && version.length <= 160) }
-}
+internal data class ServerCollection(val id: String, val revision: Long, val data: CollectionBackup)
+
+private val importIdPattern = Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+internal fun normalizedImportId(value: String) = value.trim().lowercase().takeIf(importIdPattern::matches)
+
+@Serializable private data class ImportReceipt(val id: String)
+@Serializable private data class RewardRow(val id: RewardType, val whole: Int, val fragments: Int)
+@Serializable private data class ImportDetail(
+    val id: String, val revision: Long, val format: String, val version: Int,
+    val rewards: List<RewardRow>, val animations: List<Celebration>
+)
 
 internal class PortalHttpError(val status: Int) : IOException("Portal returned HTTP $status.")
+internal class ImportNotFound : IOException()
 
 internal class PortalApi(callFactory: Call.Factory? = null) {
     private val calls by lazy { callFactory ?: OkHttpClient.Builder()
@@ -61,7 +66,6 @@ internal class PortalApi(callFactory: Call.Factory? = null) {
             body = buildJsonObject {
                 put("username", account.username)
                 put("fingerprintToken", token)
-                if (register) put("requestSync", true)
             })
         val device = json.decodeFromJsonElement(PortalApproval.serializer(),
             result["device"] ?: throw IOException("Missing device approval."))
@@ -69,28 +73,30 @@ internal class PortalApi(callFactory: Call.Factory? = null) {
         return device
     }
 
-    fun download(account: PortalAccount, token: String): ServerCollection =
-        decodeCollection(request(account, "sync", token))
+    fun download(account: PortalAccount, token: String, id: String): ServerCollection {
+        val expected = requireNotNull(normalizedImportId(id))
+        val result = try {
+            request(account, "imports/$expected", token)
+        } catch (error: PortalHttpError) {
+            if (error.status == 404) throw ImportNotFound() else throw error
+        }
+        val detail = json.decodeFromJsonElement(ImportDetail.serializer(), result.importRecord())
+        require(detail.id == expected && detail.revision >= 1)
+        require(detail.animations.size <= 2048 && detail.rewards.distinctBy { it.id }.size == detail.rewards.size)
+        val backup = CollectionBackup(detail.format, detail.version,
+            detail.rewards.associate { it.id to RewardBalance(it.whole, it.fragments) }, detail.animations.toSet())
+        return ServerCollection(expected, detail.revision, backup)
+    }
 
-    fun upload(account: PortalAccount, token: String, base: String, local: CollectionBackup): ServerCollection {
+    fun upload(account: PortalAccount, token: String, local: CollectionBackup): String {
         val result = request(account, "imports", token, buildJsonObject {
             put("source", "ssAcademy Android ${token.sha256().take(16)}")
             put("data", json.encodeToJsonElement(CollectionBackup.serializer(), local))
-            put("baseVersion", base)
         })
-        return decodeCollection(result["sync"]).also {
-            if (it.data == null) throw IOException("Missing collection in upload receipt.")
-        }
+        return requireNotNull(normalizedImportId(json.decodeFromJsonElement(ImportReceipt.serializer(), result.importRecord()).id))
     }
 
-    private fun decodeCollection(element: JsonElement?): ServerCollection {
-        val record = element as? JsonObject ?: throw IOException("Missing server collection.")
-        val version = (record["version"] as? JsonPrimitive)?.takeIf { it.isString }?.content
-            ?: throw IOException("Missing server version.")
-        val data = record["data"] ?: throw IOException("Missing server data.")
-        return ServerCollection(version, if (data == JsonNull) null else
-            data.toString().byteInputStream().use(CollectionBackup::read))
-    }
+    private fun JsonObject.importRecord() = requireNotNull(this["import"] as? JsonObject) { "Missing import record." }
 
     private fun request(account: PortalAccount, path: String, token: String? = null, body: JsonObject? = null): JsonObject {
         val request = Request.Builder().url("${account.origin}/ssacademy/api/$path")
@@ -100,8 +106,8 @@ internal class PortalApi(callFactory: Call.Factory? = null) {
         calls.newCall(request.build()).execute().use { response ->
             if (!response.isSuccessful) throw PortalHttpError(response.code)
             val source = response.body?.source() ?: throw IOException("Missing portal response.")
-            // Allow space for the upload receipt around the bounded collection object.
-            if (source.request((CollectionBackup.MAX_BYTES + 4097).toLong())) throw IOException("Portal response too large.")
+            // Detail responses include revision audit metadata in addition to the bounded collection.
+            require(!source.request(1024L * 1024 + 1)) { "Portal response too large." }
             return Json.decodeFromString(JsonObject.serializer(), source.readByteArray().decodeToString(throwOnInvalidSequence = true))
         }
     }
