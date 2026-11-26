@@ -78,7 +78,7 @@ internal fun AdminPinDialog(onUnlocked: () -> Unit, onDismiss: () -> Unit) {
                     } else {
                         busy = true
                         val submitted = pin
-                        scope.launch {
+                        scope.launch(Dispatchers.Main.immediate) {
                             try {
                                 val result = withContext(Dispatchers.IO) {
                                     if (creating) {
@@ -182,7 +182,7 @@ internal fun ChangeAdminPinDialog(onChanged: () -> Unit, onDismiss: () -> Unit) 
                     } else {
                         busy = true
                         error = null
-                        scope.launch {
+                        scope.launch(Dispatchers.Main.immediate) {
                             try {
                                 val result = withContext(Dispatchers.IO) {
                                     store.change(submittedCurrent, submittedNew)
