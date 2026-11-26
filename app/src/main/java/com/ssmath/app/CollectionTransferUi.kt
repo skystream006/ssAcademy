@@ -42,8 +42,9 @@ internal fun CollectionTransferDialog(
         title = { Text("Sync with server") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Sync whole rewards, fragments, and collected animations with ssPortal using your saved game name. " +
-                    "History, reading progress, settings, and the Admin PIN stay on this device.")
+                Text("Sync whole rewards, fragments, collected animations, and game and appearance settings " +
+                    "with ssPortal using your saved game name. History, reading progress, local names, " +
+                    "and the Admin PIN and lock stay on this device.")
                 if (readingModel.storageError != null) {
                     Text(requireNotNull(readingModel.storageError))
                     TextButton(onClick = readingModel::retry, enabled = !readingModel.saving) { Text("Retry storage") }
@@ -57,7 +58,8 @@ internal fun CollectionTransferDialog(
                     OutlinedTextField(address, { address = it }, label = { Text("Portal HTTPS address") },
                         singleLine = true, enabled = !busy, modifier = Modifier.fillMaxWidth().testTag("portal-address"))
                     Text("Your game name is sent for device registration and approval checks. " +
-                        "Request access only from a portal you trust. Once approved, reward changes sync automatically.")
+                        "Request access only from a portal you trust. Once approved, reward, collection, " +
+                        "and settings changes sync automatically.")
                     Button(onClick = { sync.request(address, requireNotNull(student)) },
                         enabled = !busy && address.isNotBlank() && nameReady) {
                         Text("Request sync access")
@@ -78,6 +80,13 @@ internal fun CollectionTransferDialog(
                             "${data.pokemons.size} animations.", Modifier.testTag("collection-import-preview"))
                         Text("Replace overwrites this device. Merge adds the server balances to this device " +
                             "and uploads the result. Merging again adds the rewards again.")
+                        Text(when {
+                            data.settings == null -> "This import has no settings. Local settings will be kept."
+                            data.settings.isEmpty() -> "Replace restores default game and appearance settings. " +
+                                "Merge keeps local settings."
+                            else -> "Synced settings: ${data.settings.size} saved overrides. " +
+                                "Replace restores these settings; Merge keeps local settings."
+                        }, Modifier.testTag("collection-settings-preview"))
                         Button(onClick = { sync.confirmDownload(CollectionImportMode.REPLACE) }, enabled = !busy) {
                             Text("Replace device collections")
                         }
@@ -88,7 +97,8 @@ internal fun CollectionTransferDialog(
                             Text("Upload device snapshot instead")
                         }
                     } else if (sync.approved) {
-                        Text("Reward changes upload snapshots automatically. To restore on another approved device " +
+                        Text("Reward, collection, and settings changes upload snapshots automatically. " +
+                            "To restore on another approved device " +
                             "linked to the same portal account, copy the linked import ID. Devices cannot list or find newer imports.")
                         TextButton(onClick = sync::check, enabled = !busy) { Text("Check approval") }
                         Button(onClick = sync::sync, enabled = !busy) { Text("Sync now") }

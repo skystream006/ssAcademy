@@ -56,7 +56,7 @@ internal fun normalizedImportId(value: String) = value.trim().lowercase().takeIf
 @Serializable private data class RewardRow(val id: RewardType, val whole: Int, val fragments: Int)
 @Serializable private data class ImportDetail(
     val id: String, val revision: Long, val format: String, val version: Int,
-    val rewards: List<RewardRow>, val animations: List<Celebration>
+    val rewards: List<RewardRow>, val animations: List<Celebration>, val settings: JsonObject? = null
 )
 
 internal class PortalHttpError(val status: Int) : IOException("Portal returned HTTP $status.")
@@ -66,7 +66,7 @@ internal class PortalApi(callFactory: Call.Factory? = null) {
     private val calls by lazy { callFactory ?: OkHttpClient.Builder()
         .followRedirects(false).followSslRedirects(false).retryOnConnectionFailure(false)
         .callTimeout(25, TimeUnit.SECONDS).build() }
-    private val json = Json { encodeDefaults = true; ignoreUnknownKeys = true }
+    private val json = Json { encodeDefaults = true; explicitNulls = false; ignoreUnknownKeys = true }
 
     fun approval(account: PortalAccount, fingerprintToken: String, register: Boolean): PortalApproval {
         val result = request(account, if (register) "devices/register" else "devices/status",
@@ -91,7 +91,8 @@ internal class PortalApi(callFactory: Call.Factory? = null) {
         require(detail.id == expected && detail.revision >= 1)
         require(detail.animations.size <= 2048 && detail.rewards.distinctBy { it.id }.size == detail.rewards.size)
         val backup = CollectionBackup(detail.format, detail.version,
-            detail.rewards.associate { it.id to RewardBalance(it.whole, it.fragments) }, detail.animations.toSet())
+            detail.rewards.associate { it.id to RewardBalance(it.whole, it.fragments) }, detail.animations.toSet(),
+            detail.settings?.let(PortalSettings::validate))
         return ServerCollection(expected, detail.revision, backup)
     }
 
