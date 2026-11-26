@@ -61,12 +61,20 @@ internal class CollectionSync(
     fun check() = run { checkApproval(requireNotNull(account), register = false) }
 
     private suspend fun checkApproval(target: PortalAccount, register: Boolean) {
-        val device = withContext(io) {
-            api.approval(target, link.token(target), register).also { link.grant(it.canSync) }
+        val approval = withContext(io) {
+            val token = link.fingerprintToken(target)
+            val response = api.approval(target, token, register)
+            val result = if (register && response.device.canSync) api.approval(target, token, register = false) else response
+            link.acceptApproval(target, result)
+            result
         }
-        approved = device.canSync
-        message = if (approved) "Approved for upload and download."
-            else "Device ${device.status}. Ask a portal administrator to approve this device, then check again."
+        approved = link.granted
+        message = when {
+            approved -> "Approved for upload and download."
+            approval.device.canSync -> "Device approved, but its sync credential is missing. " +
+                "Ask a portal administrator to generate a bearer token, then check approval again."
+            else -> "Device ${approval.device.status}. Ask a portal administrator to approve this device, then check again."
+        }
         if (approved) changed()
     }
 
@@ -172,14 +180,15 @@ internal class CollectionSync(
 
     private suspend fun fetch(id: String): ServerCollection = withContext(io) {
         val target = requireNotNull(account)
-        api.download(target, link.token(target), id)
+        api.download(target, link.bearerToken(target), id)
     }
 
     private suspend fun push(local: CollectionBackup) {
         val digest = local.digest()
         val id = withContext(io) {
             val target = requireNotNull(account)
-            api.upload(target, link.token(target), local).also { link.rememberImport(it, digest, verified = false) }
+            api.upload(target, link.bearerToken(target), local, requireNotNull(link.fingerprint))
+                .also { link.rememberImport(it, digest, verified = false) }
         }
         // A duplicate receipt may point at an administratively corrected snapshot.
         val result = fetch(id)
@@ -207,17 +216,16 @@ internal class CollectionSync(
             } catch (error: ImportNotFound) {
                 preview = null
                 message = "Import not found for this account. Check the import ID or upload a new snapshot."
+            } catch (error: PortalCredentialSaveError) {
+                DebugLog.event(DebugEvent.COLLECTION_SYNC_FAILURE, error = error)
+                stopAccess()
+                message = "Unable to save the portal's one-time sync credential. Check device storage, " +
+                    "ask a portal administrator to generate a bearer token, then check approval again."
             } catch (error: PortalHttpError) {
                 DebugLog.event(DebugEvent.COLLECTION_SYNC_FAILURE, status = error.status)
                 message = when (error.status) {
                     401, 403, 404 -> {
-                        approved = false
-                        preview = null
-                        try {
-                            withContext(io) { link.grant(false) }
-                        } catch (failure: IOException) {
-                            DebugLog.event(DebugEvent.COLLECTION_SYNC_FAILURE, error = failure)
-                        }
+                        stopAccess()
                         "Portal access unavailable (${error.status}). Check the server address, sync support, and device approval."
                     }
                     409 -> {
@@ -248,6 +256,16 @@ internal class CollectionSync(
                 busy = false
                 schedule()
             }
+        }
+    }
+
+    private suspend fun stopAccess() {
+        approved = false
+        preview = null
+        try {
+            withContext(io) { link.grant(false) }
+        } catch (failure: IOException) {
+            DebugLog.event(DebugEvent.COLLECTION_SYNC_FAILURE, error = failure)
         }
     }
 

@@ -202,11 +202,20 @@ origin (no path), then select **Request sync access**. The `student` parameter i
 automatically taken from the saved name used for all games (**Settings > Change Name**);
 there is no separate portal username field. This name is sent for device registration
 and approval checks, not added to the collection backup. In ssPortal's
-**ssAcademy > Upload tokens** page, an administrator must compare the displayed
-fingerprint and approve the device. Select **Check approval** on the device. With a portal
-that supports [owned-import downloads](https://github.com/skystream006/ssPortal/commit/e0600a17a4f48551e07518aa271d8d37dc0f83e3),
-that approval covers uploads and downloads for the same account; no browser session is needed.
-The private device credential is encrypted with Android Keystore and is not shown or exported.
+**ssAcademy > Sync Tokens** page, an administrator must compare the displayed
+fingerprint and approve the device. Select **Check approval** on the device to receive
+the portal's one-time `bearerToken`. The app securely saves it before enabling uploads
+and owned-import downloads; no browser session or portal account is required.
+The private registration identifier (`fingerprintToken`) remains separate from the
+bearer credential. Both are encrypted with Android Keystore and are never shown or exported.
+
+Previously approved connections need an administrator to select **Generate bearer token**,
+then **Check approval** on the device; the old registration identifier no longer authenticates
+syncs. Keep the existing connection to preserve its owned imports. Later approval checks
+retain the saved bearer when the response omits it, and **Check approval** also retrieves
+a rotated token without changing the device fingerprint or upload identity. If its one-time
+delivery is lost or cannot be saved, fix device storage and ask the administrator to generate
+another bearer token before checking again.
 
 Saved reward and animation changes upload automatically. Each upload creates a snapshot
 or returns a duplicate's receipt; the device remembers the **Linked import ID**.
@@ -214,14 +223,17 @@ or returns a duplicate's receipt; the device remembers the **Linked import ID**.
 changed, you choose which copy to use. Offline play continues normally; unsent changes
 are detected on retry or after reopening the app.
 
-To transfer to another approved device, select **Upload collections**, copy the linked
-ID into **Import ID** on the other device, then select **Download collections**.
+To transfer to another approved device with the same portal-account ownership, select
+**Upload collections**, copy the linked ID into **Import ID** on the other device,
+then select **Download collections**.
 Leaving the field blank downloads the device's currently linked import. Review the
 preview before replacing or merging. Merge adds balances and combines animations;
 explicitly merging twice adds rewards twice. Device tokens cannot list imports or
 discover another device's latest snapshot. To switch to a newer one, use its receipt ID.
 **Disconnect device** stops sync without deleting local or server data. An administrator
 can revoke access in ssPortal.
+Registrations without a linked portal account own separate imports even when their student
+names match; copying an ID does not grant another registration access.
 If an older connection uses a different username, or you change your game name,
 disconnect and request access again with the saved student name. The new connection
 requires administrator approval; an existing device credential is never reassigned.

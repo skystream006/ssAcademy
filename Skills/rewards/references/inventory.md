@@ -93,6 +93,12 @@ Device registration and status send `student` from the activity-scoped
 a separate portal username input. Legacy link preferences retain their encrypted
 credential binding. A different saved name requires disconnecting and requesting
 fresh approval, not reassigning an existing credential.
+Keep the stable private `fingerprintToken` for enrollment/status separate from the
+server's one-time top-level `bearerToken`. Encrypt and durably save the bearer before
+enabling sync; later status responses that omit it must retain the saved credential.
+Legacy approval flags without a bearer cannot enable sync. Request fresh administrator
+token generation after lost delivery or a failed credential save. Bearer rotation must
+not change the installation fingerprint, upload source label, or owned import receipt.
 Use `MathViewModel.applySnapshot` after a durable save to signal collection changes.
 Network I/O runs outside `storeLock`; downloads recheck the local snapshot under that
 lock before calling `HistoryStore.importCollections`. Store the account's upload receipt ID

@@ -1,6 +1,7 @@
 package com.ssmath.app
 
 import android.app.Application
+import android.content.SharedPreferences
 import android.os.Looper
 import androidx.lifecycle.ViewModelStore
 import androidx.test.core.app.ApplicationProvider
@@ -35,8 +36,28 @@ import org.robolectric.annotation.LooperMode
 internal class TestPortal(application: Application) {
     private val prefs = application.getSharedPreferences("test_portal", 0)
     private val key = KeyGenerator.getInstance("AES").generateKey()
-    val link = PortalLink(prefs) { key }
+    var failSave = false
+    val link = PortalLink(object : SharedPreferences by prefs {
+        override fun edit(): SharedPreferences.Editor {
+            val editor = prefs.edit()
+            return object : SharedPreferences.Editor by editor {
+                override fun putString(key: String?, value: String?) = apply { editor.putString(key, value) }
+                override fun putBoolean(key: String?, value: Boolean) = apply { editor.putBoolean(key, value) }
+                override fun remove(key: String?) = apply { editor.remove(key) }
+                override fun clear() = apply { editor.clear() }
+                override fun commit() = if (failSave) false else editor.commit()
+            }
+        }
+    }) { key }
     var token: String? = null
+    var bearerToken: String? = null
+        private set
+    var pendingBearerToken: String? = null
+        private set
+    var approvalBody: String? = null
+    var beforeStatus: (() -> Unit)? = null
+    var statusChecks = 0
+    var syncRequests = 0
     var student = "Learner"
     var status = "pending"
     val records = mutableMapOf<String, ServerCollection>()
@@ -63,6 +84,7 @@ internal class TestPortal(application: Application) {
         val body = req.body?.let { Buffer().apply { it.writeTo(this) }.readUtf8() }
         val input = body?.let { Json.decodeFromString(JsonObject.serializer(), it) }
         val path = req.url.encodedPath
+        if (path.startsWith("/ssacademy/api/imports")) syncRequests++
         val result = when {
             path in setOf("/ssacademy/api/devices/register", "/ssacademy/api/devices/status") -> {
                 assertNull(req.header("Authorization"))
@@ -73,14 +95,27 @@ internal class TestPortal(application: Application) {
                 if (token == null) token = secret else assertEquals(token, secret)
                 assertEquals(setOf("student", "fingerprintToken"), input.keys)
                 if (path.endsWith("register")) code = 202
-                buildJsonObject {
+                else {
+                    statusChecks++
+                    beforeStatus?.invoke()
+                }
+                approvalBody ?: buildJsonObject {
                     put("device", buildJsonObject {
                         put("status", status); put("fingerprint", secret.sha256().take(16)); put("expiresAt", 1790000000000L)
                     })
+                    if (path.endsWith("status") && status == "approved") pendingBearerToken?.let {
+                        put("bearerToken", it)
+                        pendingBearerToken = null
+                    }
                 }.toString()
             }
+            path.startsWith("/ssacademy/api/imports") &&
+                (bearerToken == null || req.header("Authorization") != "Bearer $bearerToken") -> {
+                code = 401
+                "{}"
+            }
             path.startsWith("/ssacademy/api/imports/") -> {
-                assertEquals("Bearer $token", req.header("Authorization"))
+                assertEquals("Bearer $bearerToken", req.header("Authorization"))
                 assertEquals("GET", req.method)
                 val record = records[path.substringAfterLast('/')]
                 reads++
@@ -101,7 +136,7 @@ internal class TestPortal(application: Application) {
                 }.toString()
             }
             path == "/ssacademy/api/imports" -> {
-                assertEquals("Bearer $token", req.header("Authorization"))
+                assertEquals("Bearer $bearerToken", req.header("Authorization"))
                 assertEquals("POST", req.method)
                 assertEquals(setOf("source", "data"), input!!.keys)
                 beforeUpload?.invoke()
@@ -126,7 +161,11 @@ internal class TestPortal(application: Application) {
     }.build())
 
     init { prefs.edit().clear().commit() }
-    fun approve() { status = "approved" }
+    fun approve() {
+        status = "approved"
+        bearerToken = UUID.randomUUID().toString().sha256()
+        pendingBearerToken = bearerToken
+    }
 }
 
 @RunWith(RobolectricTestRunner::class)
@@ -185,7 +224,7 @@ class CollectionTransferModelTest {
         assertTrue(prefs.edit().putString("username", "Learner").remove("student").commit())
         start()
         assertEquals("Learner", sync.account?.student)
-        assertEquals(secret, portal.link.token(requireNotNull(sync.account)))
+        assertEquals(secret, portal.link.fingerprintToken(requireNotNull(sync.account)))
         assertEquals(id, sync.importId)
         sync.check(); looper.idle()
         assertTrue(sync.approved)
@@ -193,7 +232,7 @@ class CollectionTransferModelTest {
         assertEquals(id, sync.preview?.server?.id)
     }
 
-    @Test fun enrollmentRetriesTheSameSecretAndNormalApprovalAllowsUploadAndOwnedDownload() {
+    @Test fun enrollmentRetriesTheSameIdentifierAndProvisionedBearerAllowsUploadAndOwnedDownload() {
         sync.request("http://portal.example", "Learner"); looper.idle()
         assertNull(sync.account)
         request()
@@ -206,8 +245,17 @@ class CollectionTransferModelTest {
         assertFalse(sync.approved)
         assertEquals(0, portal.reads)
         portal.approve()
+        val checks = portal.statusChecks
+        portal.beforeStatus = { sync.check() }
         sync.check(); looper.idle(); tick()
+        portal.beforeStatus = null
+        assertEquals(checks + 1, portal.statusChecks)
         assertTrue(sync.approved)
+        val bearer = requireNotNull(portal.bearerToken)
+        assertNotEquals(secret, bearer)
+        assertEquals(bearer, portal.link.bearerToken(requireNotNull(sync.account)))
+        assertNull(portal.pendingBearerToken)
+        assertFalse(application.getSharedPreferences("test_portal", 0).all.values.any { "$it".contains(bearer) })
         assertTrue(portal.uploads.isEmpty())
         sync.upload(); looper.idle()
         assertEquals(1, portal.uploads.size)
@@ -215,12 +263,103 @@ class CollectionTransferModelTest {
         assertEquals(portal.records.getValue(id).data, portal.uploads.single())
         start()
         assertEquals(id, sync.importId)
+        sync.check(); looper.idle()
+        assertTrue(sync.approved)
+        assertEquals(bearer, portal.link.bearerToken(requireNotNull(sync.account)))
         sync.download(); looper.idle()
         assertEquals(id, sync.preview?.server?.id)
         sync.cancelPreview()
         sync.disconnect(); looper.idle()
         assertNull(sync.account)
         assertNull(portal.link.importId)
+    }
+
+    @Test fun legacyApprovedIdentifiersRequireBearerProvisioningWithoutReenrollment() {
+        connect()
+        val secret = requireNotNull(portal.token)
+        val id = requireNotNull(sync.importId)
+        val requests = portal.syncRequests
+        val prefs = application.getSharedPreferences("test_portal", 0)
+        assertTrue(prefs.edit().remove("bearerCredential").putBoolean("granted", true).commit())
+        start(); tick()
+        assertFalse(sync.approved)
+        assertEquals(requests, portal.syncRequests)
+        request(); tick()
+        assertFalse(sync.approved)
+        assertTrue(sync.message.orEmpty().contains("generate a bearer token"))
+        assertEquals(secret, portal.link.fingerprintToken(requireNotNull(sync.account)))
+        assertEquals(id, sync.importId)
+        assertEquals(requests, portal.syncRequests)
+        portal.approve()
+        sync.check(); looper.idle(); tick()
+        assertTrue(sync.approved)
+        assertEquals(id, sync.importId)
+        assertEquals(secret, portal.token)
+    }
+
+    @Test fun rotatedBearerRecoversRejectedAccessAndKeepsDuplicateReceiptsAndAdministratorEdits() {
+        connect()
+        val secret = requireNotNull(portal.token)
+        val bearer = requireNotNull(portal.bearerToken)
+        val id = requireNotNull(sync.importId)
+        portal.approve()
+        sync.sync(); looper.idle()
+        assertFalse(sync.approved)
+        assertFalse(portal.link.granted)
+        sync.check(); looper.idle()
+        assertTrue(sync.approved)
+        assertNotEquals(bearer, portal.link.bearerToken(requireNotNull(sync.account)))
+        assertEquals(secret, portal.token)
+        portal.edit(id, prize)
+        sync.upload(); looper.idle()
+        assertEquals(id, sync.importId)
+        assertEquals(prize, sync.preview?.server?.data)
+        assertFalse(sync.preview!!.allowUpload)
+        assertEquals(CollectionBackup.from(PracticeSnapshot()), CollectionBackup.from(HistoryStore(file).loadSnapshot()))
+    }
+
+    @Test fun malformedOrUnapprovedBearerResponsesCannotEnableSync() {
+        request()
+        portal.approve()
+        val device = """"fingerprint":"${sync.fingerprint}""""
+        for (response in listOf(
+            """{"device":{"status":"approved",$device},"bearerToken":"${"a".repeat(63)}"}""",
+            """{"device":{"status":"approved",$device},"bearerToken":"${"g".repeat(64)}"}""",
+            """{"device":{"status":"approved",$device},"bearerToken":123}""",
+            """{"device":{"status":"pending",$device},"bearerToken":"${portal.bearerToken}"}"""
+        )) {
+            portal.approvalBody = response
+            sync.check(); looper.idle(); tick()
+            assertFalse(sync.approved)
+            assertFalse(portal.link.granted)
+            assertNotNull(sync.message)
+            assertEquals(0, portal.syncRequests)
+        }
+        portal.approvalBody = null
+        sync.check(); looper.idle()
+        assertTrue(sync.approved)
+    }
+
+    @Test fun failedOneTimeCredentialSaveRequiresFreshDeliveryBeforeSyncCanResume() {
+        request()
+        portal.approve()
+        portal.failSave = true
+        sync.check(); looper.idle(); tick()
+        assertFalse(sync.approved)
+        assertFalse(portal.link.granted)
+        assertNull(portal.pendingBearerToken)
+        assertTrue(sync.message.orEmpty().contains("generate a bearer token"))
+        assertEquals(0, portal.syncRequests)
+        portal.failSave = false
+        sync.check(); looper.idle(); tick()
+        assertFalse(sync.approved)
+        assertTrue(sync.message.orEmpty().contains("generate a bearer token"))
+        assertEquals(0, portal.syncRequests)
+        portal.approve()
+        sync.check(); looper.idle()
+        assertTrue(sync.approved)
+        sync.upload(); looper.idle()
+        assertEquals(1, portal.uploads.size)
     }
 
     @Test fun savedRewardChangesCoalesceAndReloadsAndFailedSavesDoNotUpload() {

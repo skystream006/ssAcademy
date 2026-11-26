@@ -78,6 +78,11 @@ class CollectionTransferTest {
         compose.onNodeWithText("Sync now").assertExists()
         compose.onNodeWithText("Upload collections").assertExists()
         compose.onNodeWithText("Download collections").assertIsNotEnabled()
+        val bearer = portal.bearerToken
+        portal.approve()
+        compose.onNodeWithText("Check approval").performScrollTo().performClick()
+        compose.onNodeWithText("Sync now").assertExists()
+        assertNotEquals(bearer, portal.link.bearerToken(requireNotNull(portal.link.account)))
         val id = portal.insert(CollectionBackup.from(PracticeSnapshot(pokemons = setOf(Celebration.PIKACHU))))
         compose.onNodeWithTag("portal-import-id").performScrollTo().performTextInput(id)
         compose.onNodeWithText("Download collections").performScrollTo().performClick()

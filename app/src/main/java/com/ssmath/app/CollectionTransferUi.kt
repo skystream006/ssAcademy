@@ -88,8 +88,9 @@ internal fun CollectionTransferDialog(
                             Text("Upload device snapshot instead")
                         }
                     } else if (sync.approved) {
-                        Text("Reward changes upload snapshots automatically. To restore on another approved device, " +
-                            "copy the linked import ID. Devices cannot list or find newer imports.")
+                        Text("Reward changes upload snapshots automatically. To restore on another approved device " +
+                            "linked to the same portal account, copy the linked import ID. Devices cannot list or find newer imports.")
+                        TextButton(onClick = sync::check, enabled = !busy) { Text("Check approval") }
                         Button(onClick = sync::sync, enabled = !busy) { Text("Sync now") }
                         Button(onClick = sync::upload, enabled = !busy) { Text("Upload collections") }
                         OutlinedTextField(downloadId, { downloadId = it }, label = { Text("Import ID") },
@@ -98,7 +99,7 @@ internal fun CollectionTransferDialog(
                         Button(onClick = { sync.download(downloadId) },
                             enabled = !busy && (sync.importId != null || downloadId.isNotBlank())) { Text("Download collections") }
                     } else {
-                        Text("In ssPortal, open ssAcademy > Upload tokens, compare the fingerprint, " +
+                        Text("In ssPortal, open ssAcademy > Sync Tokens, compare the fingerprint, " +
                             "and approve this device.")
                         Button(onClick = sync::check, enabled = !busy) { Text("Check approval") }
                         TextButton(onClick = { sync.request(account.origin, requireNotNull(student)) }, enabled = !busy) {

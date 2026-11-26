@@ -32,12 +32,19 @@ internal data class PortalAccount(val origin: String, val student: String) {
 }
 
 @Serializable
-internal data class PortalApproval(val status: String, val fingerprint: String) {
+internal data class PortalDevice(val status: String, val fingerprint: String) {
     init {
         require(status in setOf("pending", "approved", "expired", "revoked") &&
             fingerprint.matches(Regex("[0-9a-f]{16}")))
     }
     val canSync get() = status == "approved"
+}
+
+@Serializable
+internal data class PortalApproval(val device: PortalDevice, val bearerToken: String? = null) {
+    init {
+        require(bearerToken == null || (device.canSync && bearerToken.matches(Regex("[0-9a-f]{64}"))))
+    }
 }
 
 internal data class ServerCollection(val id: String, val revision: Long, val data: CollectionBackup)
@@ -61,22 +68,22 @@ internal class PortalApi(callFactory: Call.Factory? = null) {
         .callTimeout(25, TimeUnit.SECONDS).build() }
     private val json = Json { encodeDefaults = true; ignoreUnknownKeys = true }
 
-    fun approval(account: PortalAccount, token: String, register: Boolean): PortalApproval {
+    fun approval(account: PortalAccount, fingerprintToken: String, register: Boolean): PortalApproval {
         val result = request(account, if (register) "devices/register" else "devices/status",
             body = buildJsonObject {
                 put("student", account.student)
-                put("fingerprintToken", token)
+                put("fingerprintToken", fingerprintToken)
             })
-        val device = json.decodeFromJsonElement(PortalApproval.serializer(),
-            result["device"] ?: throw IOException("Missing device approval."))
-        if (device.fingerprint != token.sha256().take(16)) throw IOException("Unexpected device fingerprint.")
-        return device
+        val approval = json.decodeFromJsonElement(PortalApproval.serializer(), result)
+        if (approval.device.fingerprint != fingerprintToken.sha256().take(16))
+            throw IOException("Unexpected device fingerprint.")
+        return approval
     }
 
-    fun download(account: PortalAccount, token: String, id: String): ServerCollection {
+    fun download(account: PortalAccount, bearerToken: String, id: String): ServerCollection {
         val expected = requireNotNull(normalizedImportId(id))
         val result = try {
-            request(account, "imports/$expected", token)
+            request(account, "imports/$expected", bearerToken)
         } catch (error: PortalHttpError) {
             if (error.status == 404) throw ImportNotFound() else throw error
         }
@@ -88,9 +95,9 @@ internal class PortalApi(callFactory: Call.Factory? = null) {
         return ServerCollection(expected, detail.revision, backup)
     }
 
-    fun upload(account: PortalAccount, token: String, local: CollectionBackup): String {
-        val result = request(account, "imports", token, buildJsonObject {
-            put("source", "ssAcademy Android ${token.sha256().take(16)}")
+    fun upload(account: PortalAccount, bearerToken: String, local: CollectionBackup, fingerprint: String): String {
+        val result = request(account, "imports", bearerToken, buildJsonObject {
+            put("source", "ssAcademy Android $fingerprint")
             put("data", json.encodeToJsonElement(CollectionBackup.serializer(), local))
         })
         return requireNotNull(normalizedImportId(json.decodeFromJsonElement(ImportReceipt.serializer(), result.importRecord()).id))
@@ -98,10 +105,10 @@ internal class PortalApi(callFactory: Call.Factory? = null) {
 
     private fun JsonObject.importRecord() = requireNotNull(this["import"] as? JsonObject) { "Missing import record." }
 
-    private fun request(account: PortalAccount, path: String, token: String? = null, body: JsonObject? = null): JsonObject {
+    private fun request(account: PortalAccount, path: String, bearerToken: String? = null, body: JsonObject? = null): JsonObject {
         val request = Request.Builder().url("${account.origin}/ssacademy/api/$path")
             .header("Accept", "application/json")
-        if (token != null) request.header("Authorization", "Bearer $token")
+        if (bearerToken != null) request.header("Authorization", "Bearer $bearerToken")
         if (body != null) request.post(body.toString().toRequestBody("application/json".toMediaType()))
         calls.newCall(request.build()).execute().use { response ->
             if (!response.isSuccessful) throw PortalHttpError(response.code)
