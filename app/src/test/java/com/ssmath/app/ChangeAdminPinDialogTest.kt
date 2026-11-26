@@ -92,7 +92,10 @@ class ChangeAdminPinDialogTest {
         } finally {
             release.countDown()
         }
-        compose.waitUntil(10_000) { changed.get() == 1 }
+        compose.waitUntil(10_000) {
+            compose.onAllNodes(hasTestTag("change-pin-current") and isEnabled()).fetchSemanticsNodes().isNotEmpty()
+        }
+        assertEquals(1, changed.get())
         assertEquals(1, commits.get())
         assertEquals(0, dismissed.get())
         assertEquals(AdminPinStore.Result.INCORRECT, AdminPinStore(preferences).verify("4826"))
@@ -107,7 +110,10 @@ class ChangeAdminPinDialogTest {
         compose.setContent {
             CompositionLocalProvider(LocalContext provides context) {
                 MathTheme {
-                    ChangeAdminPinDialog(onChanged = { changed.incrementAndGet() }, onDismiss = { dismissed.incrementAndGet() })
+                    ChangeAdminPinDialog(onChanged = {
+                        assertSame(Looper.getMainLooper(), Looper.myLooper())
+                        changed.incrementAndGet()
+                    }, onDismiss = { dismissed.incrementAndGet() })
                 }
             }
         }
