@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import java.io.IOException
+import java.security.GeneralSecurityException
 import java.security.KeyStore
 import java.security.MessageDigest
 import java.security.SecureRandom
@@ -16,6 +17,8 @@ import javax.crypto.spec.GCMParameterSpec
 internal fun String.sha256(): String = MessageDigest.getInstance("SHA-256")
     .digest(toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
 
+internal class PortalCredentialSaveError(cause: Exception) : IOException("Unable to save the portal sync credential.", cause)
+
 internal class PortalLink(
     private val prefs: SharedPreferences,
     private val key: () -> SecretKey = ::deviceKey
@@ -24,7 +27,7 @@ internal class PortalLink(
         PortalAccount(it, requireNotNull(prefs.getString("student", null) ?: prefs.getString("username", null)))
     }
     val fingerprint: String? get() = prefs.getString("fingerprint", null)
-    val granted get() = prefs.getBoolean("granted", false)
+    val granted get() = prefs.getBoolean("granted", false) && prefs.contains("bearerCredential")
     val importId: String? get() = prefs.getString("importId", null)
     val baseDigest: String? get() = prefs.getString("baseDigest", null)
     val verified get() = prefs.getBoolean("verifiedImport", false)
@@ -34,18 +37,26 @@ internal class PortalLink(
         require(account == null) { "Disconnect before changing the portal or student name." }
         val bytes = ByteArray(32).also { SecureRandom().nextBytes(it) }
         val token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
+        prefs.edit().clear().putString("origin", target.origin).putString("student", target.student)
+            .putString("fingerprint", token.sha256().take(16))
+            .putString("credential", encryptedToken(target, token)).persist()
+    }
+
+    fun fingerprintToken(target: PortalAccount) = credential(target, "credential")
+    fun bearerToken(target: PortalAccount) = credential(target, "bearerCredential")
+
+    private fun encryptedToken(target: PortalAccount, token: String): String {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, key())
         cipher.updateAAD(target.binding())
         val sealed = cipher.iv + cipher.doFinal(token.toByteArray(Charsets.UTF_8))
-        prefs.edit().clear().putString("origin", target.origin).putString("student", target.student)
-            .putString("fingerprint", token.sha256().take(16))
-            .putString("credential", Base64.getEncoder().encodeToString(sealed)).persist()
+        return Base64.getEncoder().encodeToString(sealed)
     }
 
-    fun token(target: PortalAccount): String {
+    private fun credential(target: PortalAccount, name: String): String {
         if (account != target) throw IOException("The portal connection changed.")
-        val sealed = Base64.getDecoder().decode(requireNotNull(prefs.getString("credential", null)))
+        val encoded = prefs.getString(name, null) ?: throw IOException("The portal credential is missing. Check approval.")
+        val sealed = Base64.getDecoder().decode(encoded)
         require(sealed.size > 28)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, sealed, 0, 12))
@@ -53,7 +64,28 @@ internal class PortalLink(
         return cipher.doFinal(sealed, 12, sealed.size - 12).toString(Charsets.UTF_8)
     }
 
-    fun grant(value: Boolean) = prefs.edit().putBoolean("granted", value).persist()
+    fun acceptApproval(target: PortalAccount, approval: PortalApproval) {
+        if (account != target) throw IOException("The portal connection changed.")
+        val token = approval.bearerToken
+        if (!approval.device.canSync || token == null) {
+            grant(approval.device.canSync && prefs.contains("bearerCredential"))
+            return
+        }
+        try {
+            prefs.edit().putString("bearerCredential", encryptedToken(target, token))
+                .putBoolean("granted", true).persist()
+        } catch (error: IOException) {
+            throw PortalCredentialSaveError(error)
+        } catch (error: GeneralSecurityException) {
+            throw PortalCredentialSaveError(error)
+        }
+    }
+
+    fun grant(value: Boolean) {
+        val editor = prefs.edit().putBoolean("granted", value)
+        if (!value) editor.remove("bearerCredential")
+        editor.persist()
+    }
     fun rememberImport(id: String, digest: String, verified: Boolean) =
         prefs.edit().putString("importId", id).putString("baseDigest", digest).putBoolean("verifiedImport", verified).persist()
     fun forget() = prefs.edit().clear().persist()
