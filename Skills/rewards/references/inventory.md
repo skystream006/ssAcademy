@@ -88,6 +88,11 @@ Search the named symbols in these exact files before widening scope:
 ## Server sync
 
 Collection sync exchanges only `CollectionBackup` (balances and collected animations).
+Device registration and status send `student` from the activity-scoped
+`ReadingViewModel.data.profile.name`, the saved name used for all games; do not add
+a separate portal username input. Legacy link preferences retain their encrypted
+credential binding. A different saved name requires disconnecting and requesting
+fresh approval, not reassigning an existing credential.
 Use `MathViewModel.applySnapshot` after a durable save to signal collection changes.
 Network I/O runs outside `storeLock`; downloads recheck the local snapshot under that
 lock before calling `HistoryStore.importCollections`. Store the account's upload receipt ID

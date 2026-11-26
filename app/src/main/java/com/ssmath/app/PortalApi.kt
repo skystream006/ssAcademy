@@ -14,17 +14,17 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
-internal data class PortalAccount(val origin: String, val username: String) {
+internal data class PortalAccount(val origin: String, val student: String) {
     companion object {
-        fun from(address: String, username: String): PortalAccount {
+        fun from(address: String, student: String): PortalAccount {
             val url = address.trim().toHttpUrlOrNull()
             require(url != null && url.isHttps && url.username.isEmpty() && url.password.isEmpty() &&
                 url.encodedPath == "/" && url.query == null && url.fragment == null) {
                 "Enter the portal's HTTPS origin, without a path, password, query, or fragment."
             }
-            val name = username.trim()
-            require(name.length in 2..64 && name.none(Char::isISOControl)) {
-                "Enter an existing portal username (2-64 characters)."
+            val name = student.trim()
+            require(name.length in 1..40 && name.none(Char::isISOControl)) {
+                "Save a game name with 1-40 characters in Settings > Change Name."
             }
             return PortalAccount(url.toString().removeSuffix("/"), name)
         }
@@ -64,7 +64,7 @@ internal class PortalApi(callFactory: Call.Factory? = null) {
     fun approval(account: PortalAccount, token: String, register: Boolean): PortalApproval {
         val result = request(account, if (register) "devices/register" else "devices/status",
             body = buildJsonObject {
-                put("username", account.username)
+                put("student", account.student)
                 put("fingerprintToken", token)
             })
         val device = json.decodeFromJsonElement(PortalApproval.serializer(),

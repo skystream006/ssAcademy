@@ -47,9 +47,9 @@ internal class CollectionSync(
     private var pending = false
     private var retryDelay = 0L
 
-    fun request(address: String, username: String) = run {
+    fun request(address: String, student: String) = run {
         val target = try {
-            PortalAccount.from(address, username)
+            PortalAccount.from(address, student)
         } catch (error: IllegalArgumentException) {
             message = error.message
             return@run
@@ -222,7 +222,7 @@ internal class CollectionSync(
                     }
                     409 -> {
                         preview = null
-                        "Portal registration conflict. Check the portal address and username."
+                        "Portal registration conflict. Check the portal address and student name."
                     }
                     429 -> "Portal rate limit reached. Wait before retrying."
                     else -> "Portal request failed (HTTP ${error.status}). Check the server and try again."

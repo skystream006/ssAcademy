@@ -26,13 +26,15 @@ import androidx.compose.ui.window.DialogProperties
 @Composable
 internal fun CollectionTransferDialog(
     sync: CollectionSync,
+    readingModel: ReadingViewModel,
     onDismiss: () -> Unit
 ) {
     val busy = sync.busy
     val preview = sync.preview
     val account = sync.account
+    val student = readingModel.data?.profile?.name
+    val nameReady = student != null && !readingModel.saving && readingModel.storageError == null
     var address by rememberSaveable { mutableStateOf("") }
-    var username by rememberSaveable { mutableStateOf("") }
     var downloadId by rememberSaveable(account) { mutableStateOf("") }
     LaunchedEffect(preview) { if (preview != null) downloadId = "" }
     SettingsDialog(
@@ -40,21 +42,35 @@ internal fun CollectionTransferDialog(
         title = { Text("Sync with server") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Sync whole rewards, fragments, and collected animations with your ssPortal account. " +
+                Text("Sync whole rewards, fragments, and collected animations with ssPortal using your saved game name. " +
                     "History, reading progress, settings, and the Admin PIN stay on this device.")
+                if (readingModel.storageError != null) {
+                    Text(requireNotNull(readingModel.storageError))
+                    TextButton(onClick = readingModel::retry, enabled = !readingModel.saving) { Text("Retry storage") }
+                } else if (student == null) {
+                    Text(if (readingModel.data == null) "Opening your saved game name..."
+                        else "Enter your name at the welcome screen before requesting sync access.")
+                } else {
+                    Text("Student: $student", Modifier.testTag("portal-student"))
+                }
                 if (account == null) {
                     OutlinedTextField(address, { address = it }, label = { Text("Portal HTTPS address") },
                         singleLine = true, enabled = !busy, modifier = Modifier.fillMaxWidth().testTag("portal-address"))
-                    OutlinedTextField(username, { username = it }, label = { Text("Portal username") },
-                        singleLine = true, enabled = !busy, modifier = Modifier.fillMaxWidth().testTag("portal-username"))
-                    Text("Request access only from a portal you trust. Once approved, reward changes sync automatically.")
-                    Button(onClick = { sync.request(address, username) }, enabled = !busy && address.isNotBlank() && username.isNotBlank()) {
+                    Text("Your game name is sent for device registration and approval checks. " +
+                        "Request access only from a portal you trust. Once approved, reward changes sync automatically.")
+                    Button(onClick = { sync.request(address, requireNotNull(student)) },
+                        enabled = !busy && address.isNotBlank() && nameReady) {
                         Text("Request sync access")
                     }
                 } else {
-                    Text("${account.username} at ${account.origin}\nDevice fingerprint: ${sync.fingerprint}")
+                    Text("${account.student} at ${account.origin}\nDevice fingerprint: ${sync.fingerprint}")
                     sync.importId?.let { id -> SelectionContainer { Text("Linked import ID: $id") } }
-                    if (preview != null) {
+                    if (student != null && account.student != student) {
+                        Text("This device is linked to a different student name. " +
+                            "Disconnect and request access again to sync as $student.")
+                    } else if (!nameReady) {
+                        Text("Sync controls will be available once your game name is saved and readable.")
+                    } else if (preview != null) {
                         val data = preview.server.data
                         Text("Import ${preview.server.id}, revision ${preview.server.revision}: " +
                             "${data.rewards.values.sumOf { it.whole.toLong() }} whole rewards, " +
@@ -85,11 +101,13 @@ internal fun CollectionTransferDialog(
                         Text("In ssPortal, open ssAcademy > Upload tokens, compare the fingerprint, " +
                             "and approve this device.")
                         Button(onClick = sync::check, enabled = !busy) { Text("Check approval") }
-                        TextButton(onClick = { sync.request(account.origin, account.username) }, enabled = !busy) {
+                        TextButton(onClick = { sync.request(account.origin, requireNotNull(student)) }, enabled = !busy) {
                             Text("Retry access request")
                         }
                     }
-                    if (preview == null) TextButton(onClick = sync::disconnect, enabled = !busy) { Text("Disconnect device") }
+                    if (preview == null || account.student != student) {
+                        TextButton(onClick = sync::disconnect, enabled = !busy) { Text("Disconnect device") }
+                    }
                 }
             }
         },
