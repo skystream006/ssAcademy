@@ -196,9 +196,12 @@ Admin Menu contains **Game Settings**, **My Rewards** (add/remove controls), and
 **Available Rewards**; every section starts collapsed. Settings subsections have
 progressively lighter backgrounds in dark mode and darker backgrounds in light mode,
 including nested subject settings.
-**Settings > Admin Menu > Sync with server** connects this installation to an existing
-[ssPortal](https://github.com/skystream006/ssPortal) account. Enter the portal's HTTPS
-origin (no path) and username, then select **Request sync access**. In ssPortal's
+**Settings > Admin Menu > Sync with server** connects this installation to
+[ssPortal](https://github.com/skystream006/ssPortal). Enter the portal's HTTPS
+origin (no path), then select **Request sync access**. The `student` parameter is
+automatically taken from the saved name used for all games (**Settings > Change Name**);
+there is no separate portal username field. This name is sent for device registration
+and approval checks, not added to the collection backup. In ssPortal's
 **ssAcademy > Upload tokens** page, an administrator must compare the displayed
 fingerprint and approve the device. Select **Check approval** on the device. With a portal
 that supports [owned-import downloads](https://github.com/skystream006/ssPortal/commit/e0600a17a4f48551e07518aa271d8d37dc0f83e3),
@@ -219,6 +222,9 @@ explicitly merging twice adds rewards twice. Device tokens cannot list imports o
 discover another device's latest snapshot. To switch to a newer one, use its receipt ID.
 **Disconnect device** stops sync without deleting local or server data. An administrator
 can revoke access in ssPortal.
+If an older connection uses a different username, or you change your game name,
+disconnect and request access again with the saved student name. The new connection
+requires administrator approval; an existing device credential is never reassigned.
 
 History, reading progress, settings, and the Admin PIN never enter the collection payload.
 After replacement, old claimed gifts remain visible but deleting them cannot subtract from

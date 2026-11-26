@@ -37,6 +37,7 @@ internal class TestPortal(application: Application) {
     private val key = KeyGenerator.getInstance("AES").generateKey()
     val link = PortalLink(prefs) { key }
     var token: String? = null
+    var student = "Learner"
     var status = "pending"
     val records = mutableMapOf<String, ServerCollection>()
     private val originals = mutableMapOf<Pair<String, CollectionBackup>, String>()
@@ -66,11 +67,11 @@ internal class TestPortal(application: Application) {
             path in setOf("/ssacademy/api/devices/register", "/ssacademy/api/devices/status") -> {
                 assertNull(req.header("Authorization"))
                 assertEquals("POST", req.method)
-                assertEquals("Learner", input!!.getValue("username").jsonPrimitive.content)
+                assertEquals(student, input!!.getValue("student").jsonPrimitive.content)
                 val secret = input.getValue("fingerprintToken").jsonPrimitive.content
                 assertTrue(secret.matches(Regex("[a-zA-Z0-9_-]{43}")))
                 if (token == null) token = secret else assertEquals(token, secret)
-                assertEquals(setOf("username", "fingerprintToken"), input.keys)
+                assertEquals(setOf("student", "fingerprintToken"), input.keys)
                 if (path.endsWith("register")) code = 202
                 buildJsonObject {
                     put("device", buildJsonObject {
@@ -148,7 +149,7 @@ class CollectionTransferModelTest {
         model.openSettings()
         looper.idle()
     }
-    private fun request() { sync.request("https://portal.example", "Learner"); looper.idle() }
+    private fun request() { sync.request("https://portal.example", portal.student); looper.idle() }
     private fun tick() { looper.idleFor(Duration.ofSeconds(3)) }
     private fun connect() {
         portal.approve(); request(); tick()
@@ -161,6 +162,36 @@ class CollectionTransferModelTest {
         start()
     }
     @After fun cleanup() { models.clear(); file.delete() }
+
+    @Test fun studentNamesUseGameNameLimitsBeforeEnrollment() {
+        for (invalid in listOf("", "   ", "x".repeat(41), "A\nB")) {
+            sync.request("https://portal.example", invalid); looper.idle()
+            assertNull(sync.account)
+            assertNull(portal.token)
+            assertNotNull(sync.message)
+        }
+        portal.student = "A"
+        sync.request("https://portal.example", "  A  "); looper.idle()
+        assertEquals("A", sync.account?.student)
+        sync.check(); looper.idle()
+        assertNotNull(portal.token)
+    }
+
+    @Test fun legacyUsernameLinksKeepTheirEncryptedCredentialAndOwnedImport() {
+        connect()
+        val secret = requireNotNull(portal.token)
+        val id = requireNotNull(sync.importId)
+        val prefs = application.getSharedPreferences("test_portal", 0)
+        assertTrue(prefs.edit().putString("username", "Learner").remove("student").commit())
+        start()
+        assertEquals("Learner", sync.account?.student)
+        assertEquals(secret, portal.link.token(requireNotNull(sync.account)))
+        assertEquals(id, sync.importId)
+        sync.check(); looper.idle()
+        assertTrue(sync.approved)
+        sync.download(); looper.idle()
+        assertEquals(id, sync.preview?.server?.id)
+    }
 
     @Test fun enrollmentRetriesTheSameSecretAndNormalApprovalAllowsUploadAndOwnedDownload() {
         sync.request("http://portal.example", "Learner"); looper.idle()

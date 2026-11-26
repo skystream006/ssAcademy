@@ -117,7 +117,7 @@ internal fun AcademyWelcome(model: ReadingViewModel) {
                     TextButton(onClick = model::retry) { Text("Retry storage") }
                     TextButton(onClick = { deferredForStorageError = true }) { Text("Continue without reading") }
                 } else {
-                    Text("One name for all your games, saved only on this device.")
+                    Text("One name for all your games, saved on this device.")
                     OutlinedTextField(name, { name = it.take(40) }, label = { Text("Your name") },
                         singleLine = true, enabled = !model.saving,
                         modifier = Modifier.fillMaxWidth().testTag("academy-name"))

@@ -21,7 +21,7 @@ internal class PortalLink(
     private val key: () -> SecretKey = ::deviceKey
 ) {
     val account: PortalAccount? get() = prefs.getString("origin", null)?.let {
-        PortalAccount(it, requireNotNull(prefs.getString("username", null)))
+        PortalAccount(it, requireNotNull(prefs.getString("student", null) ?: prefs.getString("username", null)))
     }
     val fingerprint: String? get() = prefs.getString("fingerprint", null)
     val granted get() = prefs.getBoolean("granted", false)
@@ -31,14 +31,14 @@ internal class PortalLink(
 
     fun enroll(target: PortalAccount) {
         if (account == target) return
-        require(account == null) { "Disconnect before changing the portal or username." }
+        require(account == null) { "Disconnect before changing the portal or student name." }
         val bytes = ByteArray(32).also { SecureRandom().nextBytes(it) }
         val token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, key())
         cipher.updateAAD(target.binding())
         val sealed = cipher.iv + cipher.doFinal(token.toByteArray(Charsets.UTF_8))
-        prefs.edit().clear().putString("origin", target.origin).putString("username", target.username)
+        prefs.edit().clear().putString("origin", target.origin).putString("student", target.student)
             .putString("fingerprint", token.sha256().take(16))
             .putString("credential", Base64.getEncoder().encodeToString(sealed)).persist()
     }
@@ -58,7 +58,7 @@ internal class PortalLink(
         prefs.edit().putString("importId", id).putString("baseDigest", digest).putBoolean("verifiedImport", verified).persist()
     fun forget() = prefs.edit().clear().persist()
 
-    private fun PortalAccount.binding() = "$origin\n$username".toByteArray(Charsets.UTF_8)
+    private fun PortalAccount.binding() = "$origin\n$student".toByteArray(Charsets.UTF_8)
     private fun SharedPreferences.Editor.persist() {
         if (!commit()) throw IOException("Unable to save the portal connection on this device.")
     }

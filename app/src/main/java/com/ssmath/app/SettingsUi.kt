@@ -114,7 +114,7 @@ private fun SettingsContent(model: MathViewModel) {
     if (showingAdmin || adminPage || showingTransfer) {
         if (adminUnlocked || !model.adminPinLockEnabled) {
             if (showingTransfer) {
-                CollectionTransferDialog(model.collectionSync,
+                CollectionTransferDialog(model.collectionSync, rememberReadingViewModel(),
                     onDismiss = { model.collectionSync.cancelPreview(); showingTransfer = false })
             } else {
                 AdminDialog(model, onDismiss = dismissAdmin, onTransfer = {
@@ -233,7 +233,7 @@ internal fun ChangeNameDialog(model: ReadingViewModel, onDismiss: () -> Unit) {
         title = { Text("Change Name") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("One name for all your games, saved only on this device. Your progress stays the same.")
+                Text("One name for all your games, saved on this device. Server sync uses this name. Your progress stays the same.")
                 if (model.storageError != null) {
                     Text(requireNotNull(model.storageError))
                     TextButton(onClick = model::retry, enabled = !model.saving) { Text("Retry storage") }
