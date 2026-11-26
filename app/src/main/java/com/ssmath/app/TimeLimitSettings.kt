@@ -14,20 +14,22 @@ internal fun SharedPreferences.readTimeLimitSeconds(): Int {
     return normalizeTimeLimitSeconds(seconds)
 }
 
-internal fun SharedPreferences.readMathGameTimeLimitSeconds(game: MathRewardGame): Int {
+internal fun SharedPreferences.readMathGameTimeLimitSeconds(game: MathRewardGame, migrate: Boolean = true): Int {
     if (game == MathRewardGame.BASIC) return readTimeLimitSeconds()
     val key = "${game.name.lowercase()}_time_limit_seconds"
     if (!contains(key)) {
+        if (!migrate) return readTimeLimitSeconds()
         // Snapshot the shared math limit before any game's setting can change.
         edit().putInt(key, readTimeLimitSeconds()).apply()
     }
     return normalizeTimeLimitSeconds(getInt(key, 0))
 }
 
-internal fun SharedPreferences.readReadingTimeLimitSeconds(): Int {
+internal fun SharedPreferences.readReadingTimeLimitSeconds(migrate: Boolean = true): Int {
     if (!contains("reading_time_limit_seconds")) {
         // Snapshot the formerly shared setting before either subject can change it.
         val legacySeconds = if (getBoolean("show_timer", false)) readTimeLimitSeconds() else 0
+        if (!migrate) return normalizeTimeLimitSeconds(legacySeconds)
         edit().putInt("reading_time_limit_seconds", legacySeconds).apply()
     }
     return normalizeTimeLimitSeconds(getInt("reading_time_limit_seconds", 0))

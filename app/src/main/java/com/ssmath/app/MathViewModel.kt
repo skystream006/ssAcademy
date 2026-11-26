@@ -1,6 +1,7 @@
 package com.ssmath.app
 
 import android.app.Application
+import android.content.SharedPreferences
 import android.os.SystemClock
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -229,7 +230,10 @@ class MathViewModel internal constructor(
     var rewardRemovalError by mutableStateOf<String?>(null)
         private set
     internal val collectionSync = CollectionSync(viewModelScope, ioDispatcher, portalLink, portalApi,
-        readLocal = { storeLock.withLock { withContext(ioDispatcher) { CollectionBackup.from(store.loadSnapshot()) } } },
+        readLocal = { storeLock.withLock {
+            withContext(ioDispatcher) { CollectionBackup.from(store.loadSnapshot()) }
+                .copy(settings = PortalSettings.read(settings))
+        } },
         importLocal = ::applyServerCollection)
     var message by mutableStateOf<String?>(null)
         private set
@@ -361,8 +365,19 @@ class MathViewModel internal constructor(
             }
         }
 
+    private var applyingPortalSettings = false
+    private val portableSettingsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (!applyingPortalSettings && (key == null || PortalSettings.contains(key))) collectionSync.changed()
+    }
+
     init {
+        settings.registerOnSharedPreferenceChangeListener(portableSettingsListener)
         viewModelScope.launch { reloadHistory() }
+    }
+
+    override fun onCleared() {
+        settings.unregisterOnSharedPreferenceChangeListener(portableSettingsListener)
+        super.onCleared()
     }
 
     private fun loadLegacyRewardsDefaults(operation: Operation): RewardsGameDefaults {
@@ -378,7 +393,7 @@ class MathViewModel internal constructor(
         ).takeIf { it.isValid(operation, isLogicMath = true) } ?: fallback
     }
 
-    private fun loadRewardsDefaults(): Map<Operation, RewardsGameDefaults> {
+    private fun loadRewardsDefaults(persist: Boolean = true): Map<Operation, RewardsGameDefaults> {
         val defaults = Operation.entries.associateWith { operation ->
             val legacy = loadLegacyRewardsDefaults(operation)
             if (operation == Operation.MULTIPLICATION) {
@@ -391,11 +406,11 @@ class MathViewModel internal constructor(
             } else legacy
         }
         // Freeze the migration now so future practice edits cannot change unsaved rewards defaults.
-        persistRewardsDefaults(defaults)
+        if (persist) persistRewardsDefaults(defaults)
         return defaults
     }
 
-    private fun loadLogicRewardsDefaults(): Map<Operation, RewardsGameDefaults> {
+    private fun loadLogicRewardsDefaults(persist: Boolean = true): Map<Operation, RewardsGameDefaults> {
         val defaults = Operation.entries.associateWith { operation ->
             val fallback = if (operation == Operation.MULTIPLICATION) loadLegacyRewardsDefaults(operation)
                 else rewardsDefaults.getValue(operation)
@@ -406,7 +421,7 @@ class MathViewModel internal constructor(
             ).takeIf { it.isValid(operation, isLogicMath = true) } ?: fallback
         }
         // Snapshot the formerly shared defaults before either subject can be edited.
-        persistRewardsDefaults(defaults, MathRewardGame.LOGIC)
+        if (persist) persistRewardsDefaults(defaults, MathRewardGame.LOGIC)
         return defaults
     }
 
@@ -1473,11 +1488,25 @@ class MathViewModel internal constructor(
 
     private suspend fun applyServerCollection(expected: CollectionBackup, backup: CollectionBackup, mode: CollectionImportMode) {
         storeLock.withLock {
+            backup.settings?.let(PortalSettings::validate)
+            if (PortalSettings.read(settings) != expected.settings) throw CollectionChanged()
             val snapshot = withContext(ioDispatcher) {
-                if (CollectionBackup.from(store.loadSnapshot()) != expected) throw CollectionChanged()
+                if (CollectionBackup.from(store.loadSnapshot()) != expected.copy(settings = null)) throw CollectionChanged()
                 store.importCollections(backup, mode)
             }
             applySnapshot(snapshot, notifySync = false)
+            if (mode == CollectionImportMode.REPLACE && backup.settings != null) {
+                // No suspension between the final guard and commit: a settings edit made
+                // while collection storage was busy must never be replaced by stale data.
+                if (PortalSettings.read(settings) != expected.settings) throw CollectionChanged()
+                applyingPortalSettings = true
+                try {
+                    PortalSettings.replace(settings, backup.settings)
+                    reloadPortableSettings()
+                } finally {
+                    applyingPortalSettings = false
+                }
+            }
             lastResult = lastResult?.let { result -> snapshot.history.find { it.id == result.id } ?: result }
             historyDetail = historyDetail?.let { result -> snapshot.history.find { it.id == result.id } }
             pendingResult?.takeIf { it.saved }?.let { pending ->
@@ -1487,6 +1516,59 @@ class MathViewModel internal constructor(
                 snapshot.readingResults.find { it.sessionId == pending.result.sessionId }?.let { pending.result = it }
             }
         }
+    }
+
+    private fun reloadPortableSettings() {
+        selectedOperation = Operation.fromPreference(settings.getString("operation", null))
+        minimumText = settings.getInt("minimum", MIN_MAXIMUM).toString()
+        maximumText = settings.getInt("maximum", 10).toString()
+        divisionMaximumFirstText = settings.getInt("division_maximum_first", settings.getInt("maximum", 10)).toString()
+        divisionMaximumSecondText = settings.getInt("division_maximum_second", settings.getInt("maximum", 10)).toString()
+        multiplicationMaximumFirstText = settings.getInt("multiplication_maximum_first", settings.getInt("maximum", 10)).toString()
+        multiplicationMaximumSecondText = settings.getInt("multiplication_maximum_second", settings.getInt("maximum", 10)).toString()
+        questionCountText = settings.getInt("question_count", DEFAULT_QUESTION_COUNT).toString()
+        rewardsDefaults = loadRewardsDefaults(persist = false)
+        logicRewardsDefaults = loadLogicRewardsDefaults(persist = false)
+        rewardsSetupDraft = if (rewardsSetupSubject == MathRewardGame.LOGIC) logicRewardsDefaults else rewardsDefaults
+        logicMathSettings = loadLogicMathSettings()
+        slotMachineFragmentReward = settings.getBoolean("slot_machine_fragment_reward", false)
+        showTimer = settings.getBoolean("show_timer", false)
+        pauseInBackground = settings.getBoolean("math_pause_in_background", true)
+        subjectRewards = Subject.entries.associateWith { settings.getBoolean(it.rewardsPreference, true) }
+        disabledMathGameRewards = MathRewardGame.entries.filter {
+            it.name in settings.getStringSet("disabled_math_game_rewards", emptySet()).orEmpty()
+        }.toSet()
+        disabledReadingGameRewards = ReadingGame.entries.filter {
+            it.name in settings.getStringSet("disabled_reading_game_rewards", emptySet()).orEmpty()
+        }.toSet()
+        mathRewardThresholds = MathRewardGame.entries.associateWith { settings.readRewardThresholds(it) }
+        readingRewardThresholds = ReadingGame.entries.associateWith { settings.readRewardThresholds(it) }
+        tier3RewardChances = settings.readTier3RewardChances()
+        matrixRewardTier = settings.readMatrixRewardTier()
+        disabledRewards = RewardType.entries.filter {
+            it.name in settings.getStringSet("disabled_rewards", emptySet()).orEmpty()
+        }.toSet()
+        disabledReadingGames = ReadingGame.entries.filter {
+            it.name in settings.getStringSet("disabled_reading_games", emptySet()).orEmpty()
+        }.toSet()
+        timeLimitSeconds = settings.readTimeLimitSeconds()
+        matrixTimeLimitSeconds = settings.readMathGameTimeLimitSeconds(MathRewardGame.MATRIX, migrate = false)
+        logicTimeLimitSeconds = settings.readMathGameTimeLimitSeconds(MathRewardGame.LOGIC, migrate = false)
+        readingTimeLimitSeconds = settings.readReadingTimeLimitSeconds(migrate = false)
+        scienceTimeLimitSeconds = normalizeTimeLimitSeconds(settings.getInt("science_time_limit_seconds", 0))
+        advancedTimeLimitSeconds = normalizeTimeLimitSeconds(settings.getInt("advanced_time_limit_seconds", 0))
+        showSubmittedAnswer = settings.getBoolean("show_submitted_answer", true)
+        showCorrectAnswers = settings.getBoolean("show_correct_answers", true)
+        verticalEquations = settings.getBoolean("vertical_equations", true)
+        randomizeMatrixQuestions = settings.getBoolean("randomize_matrix_questions", false)
+        matrixSetupRandomize = randomizeMatrixQuestions
+        textSizePercent = settings.getInt("text_size_percent", DEFAULT_TEXT_SIZE_PERCENT)
+            .coerceIn(MIN_TEXT_SIZE_PERCENT, MAX_TEXT_SIZE_PERCENT)
+        waveAppearance = settings.getBoolean("wave_appearance", true)
+        theme = colorThemeFromPreference(settings.getString("theme", null))
+        mode = settings.getString("mode", null)
+        skinsEnabled = settings.getBoolean("skins_enabled", true)
+        skin = AppSkin.fromPreference(settings.getString("skin", null))
     }
 
     private fun applySnapshot(snapshot: PracticeSnapshot, notifySync: Boolean = true) {

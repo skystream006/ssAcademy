@@ -5,6 +5,7 @@ import java.io.InputStream
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 
 internal enum class CollectionImportMode { REPLACE, MERGE }
 
@@ -13,26 +14,29 @@ internal data class CollectionBackup(
     val format: String,
     val version: Int,
     val rewards: Map<RewardType, RewardBalance>,
-    val pokemons: Set<Celebration>
+    val pokemons: Set<Celebration>,
+    val settings: JsonObject? = null
 ) {
     init {
         require(format == FORMAT) { "This is not an ssAcademy collection file." }
         require(version == VERSION) { "Unsupported collection file version. Update ssAcademy on both devices." }
+        settings?.let(PortalSettings::validate)
     }
 
-    val empty get() = rewards.values.all { it.totalFragments == 0 } && pokemons.isEmpty()
+    val empty get() = settings == null && rewards.values.all { it.totalFragments == 0 } && pokemons.isEmpty()
 
     // The portal normalizes order; an absent balance and an explicit zero are equivalent.
     fun digest(): String = encode(copy(
         rewards = rewards.filterValues { it.totalFragments != 0 }.toSortedMap(),
-        pokemons = pokemons.sortedBy { it.name }.toSet()
+        pokemons = pokemons.sortedBy { it.name }.toSet(),
+        settings = settings?.let(PortalSettings::validate)
     )).sha256()
 
     companion object {
         const val FORMAT = "ssAcademy-collections"
         const val VERSION = 1
         const val MAX_BYTES = 256 * 1024
-        private val json = Json { encodeDefaults = true; prettyPrint = true }
+        private val json = Json { encodeDefaults = true; explicitNulls = false; prettyPrint = true }
 
         fun from(snapshot: PracticeSnapshot) =
             CollectionBackup(FORMAT, VERSION, snapshot.rewards, snapshot.pokemons)

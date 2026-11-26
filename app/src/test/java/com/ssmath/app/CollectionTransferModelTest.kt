@@ -124,6 +124,7 @@ internal class TestPortal(application: Application) {
                     put("import", buildJsonObject {
                         put("id", record.id); put("revision", record.revision)
                         put("format", record.data.format); put("version", record.data.version)
+                        record.data.settings?.let { put("settings", it) }
                         put("ownerId", "owner"); put("edits", buildJsonArray {})
                         put("rewards", buildJsonArray {
                             record.data.rewards.forEach { (type, balance) -> add(buildJsonObject {
@@ -181,6 +182,9 @@ class CollectionTransferModelTest {
     private val looper get() = shadowOf(Looper.getMainLooper())
     private val prize = CollectionBackup.from(PracticeSnapshot(rewards = mapOf(RewardType.TOYS_3 to RewardBalance(1)),
         pokemons = setOf(Celebration.PIKACHU)))
+    private val settings get() = application.getSharedPreferences("settings", 0)
+    private fun localSync() = CollectionBackup.from(HistoryStore(file).loadSnapshot())
+        .copy(settings = PortalSettings.read(settings))
 
     private fun start() {
         model = MathViewModel(application, ioDispatcher = Dispatchers.Unconfined, portalLink = portal.link, portalApi = portal.api)
@@ -196,6 +200,7 @@ class CollectionTransferModelTest {
     }
 
     @Before fun setup() {
+        settings.edit().clear().commit()
         file.delete()
         portal = TestPortal(application)
         start()
@@ -256,11 +261,11 @@ class CollectionTransferModelTest {
         assertEquals(bearer, portal.link.bearerToken(requireNotNull(sync.account)))
         assertNull(portal.pendingBearerToken)
         assertFalse(application.getSharedPreferences("test_portal", 0).all.values.any { "$it".contains(bearer) })
-        assertTrue(portal.uploads.isEmpty())
+        assertEquals(1, portal.uploads.size) // A settings-only device now has a portable snapshot.
         sync.upload(); looper.idle()
-        assertEquals(1, portal.uploads.size)
+        assertEquals(2, portal.uploads.size)
         val id = requireNotNull(sync.importId)
-        assertEquals(portal.records.getValue(id).data, portal.uploads.single())
+        assertEquals(portal.records.getValue(id).data, portal.uploads.last())
         start()
         assertEquals(id, sync.importId)
         sync.check(); looper.idle()
@@ -359,17 +364,45 @@ class CollectionTransferModelTest {
         sync.check(); looper.idle()
         assertTrue(sync.approved)
         sync.upload(); looper.idle()
-        assertEquals(1, portal.uploads.size)
+        assertEquals(2, portal.uploads.size)
     }
 
-    @Test fun savedRewardChangesCoalesceAndReloadsAndFailedSavesDoNotUpload() {
+    @Test fun savedRewardIncreasesDecreasesAndSpendingSyncWithoutWaiting() {
         connect()
         model.addReward(RewardType.LOLLIPOP, true); looper.idle()
+        assertEquals(RewardBalance(0, 1), portal.uploads.last().rewards[RewardType.LOLLIPOP])
         model.addReward(RewardType.LOLLIPOP, false); looper.idle()
-        tick()
+        assertEquals(RewardBalance(1, 1), portal.uploads.last().rewards[RewardType.LOLLIPOP])
+        model.removeReward(RewardType.LOLLIPOP, true); looper.idle()
+        assertEquals(RewardBalance(1), portal.uploads.last().rewards[RewardType.LOLLIPOP])
+        model.openRewards(); looper.idle()
+        model.useReward(RewardType.LOLLIPOP); looper.idle()
         val saved = CollectionBackup.from(HistoryStore(file).loadSnapshot())
-        assertEquals(RewardBalance(1, 1), saved.rewards[RewardType.LOLLIPOP])
-        assertEquals(listOf(CollectionBackup.from(PracticeSnapshot()), saved), portal.uploads)
+        assertEquals(0, saved.rewards.getValue(RewardType.LOLLIPOP).totalFragments)
+        assertEquals(localSync(), portal.uploads.last())
+        assertEquals(5, portal.uploads.size)
+    }
+
+    @Test fun collectionAdditionsAndHistoryDeletionSyncWithoutWaiting() {
+        val store = HistoryStore(file)
+        val result = store.addNewResult(PracticeResult(
+            id = 1, finishedAt = 1, operation = Operation.ADDITION, maximum = 10,
+            durationMs = 1, attempts = emptyList()
+        )).result
+        store.collectPokemon(result.id, Celebration.PIKACHU)
+        start()
+        connect()
+        assertEquals(setOf(Celebration.PIKACHU), portal.uploads.last().pokemons)
+        model.deleteResult(result.id); looper.idle()
+        assertTrue(portal.uploads.last().pokemons.isEmpty())
+        model.collectAllCelebrations(); looper.idle()
+        assertEquals(Celebration.entries.toSet(), portal.uploads.last().pokemons)
+        assertEquals(3, portal.uploads.size)
+        assertEquals(localSync(), portal.uploads.last())
+    }
+
+    @Test fun reloadsAndFailedSavesDoNotUpload() {
+        connect()
         val reads = portal.reads
         model.openRewards(); looper.idle()
         model.openSettings()
@@ -389,10 +422,9 @@ class CollectionTransferModelTest {
         sync.sync(); looper.idle(); tick()
         assertEquals(prize, CollectionBackup.from(HistoryStore(file).loadSnapshot()))
         assertEquals(1, portal.uploads.size)
-        model.addReward(RewardType.LOLLIPOP, true); looper.idle()
         val edited = prize.copy(pokemons = setOf(Celebration.PARTY))
         portal.edit(id, edited)
-        tick()
+        model.addReward(RewardType.LOLLIPOP, true); looper.idle()
         assertEquals(edited, sync.preview?.server?.data)
         assertEquals(setOf(Celebration.PIKACHU), model.pokemons)
         assertEquals(1, portal.uploads.size)
@@ -401,7 +433,7 @@ class CollectionTransferModelTest {
         looper.idle(); tick()
         assertEquals(RewardBalance(2), model.rewardBalances[RewardType.TOYS_3])
         assertEquals(setOf(Celebration.PIKACHU, Celebration.PARTY), model.pokemons)
-        assertEquals(CollectionBackup.from(HistoryStore(file).loadSnapshot()), portal.uploads.last())
+        assertEquals(localSync(), portal.uploads.last())
         assertNotEquals(id, sync.importId)
         assertEquals(edited, portal.records.getValue(id).data)
     }
@@ -426,11 +458,14 @@ class CollectionTransferModelTest {
         sync.confirmDownload(CollectionImportMode.REPLACE); looper.idle()
         assertNull(sync.preview)
         assertEquals(RewardBalance(0, 1), model.rewardBalances[RewardType.LOLLIPOP])
+        val saved = requireNotNull(sync.importId)
+        assertNotEquals(before, saved)
+        assertEquals(localSync(), portal.records.getValue(saved).data)
         sync.download(other); looper.idle()
         portal.edit(other, prize.copy(pokemons = emptySet()))
         sync.confirmDownload(CollectionImportMode.REPLACE); looper.idle()
         assertNull(sync.preview)
-        assertEquals(before, sync.importId)
+        assertEquals(saved, sync.importId)
         sync.download(other); looper.idle()
         sync.confirmDownload(CollectionImportMode.REPLACE); looper.idle()
         assertEquals(other, sync.importId)
@@ -447,7 +482,7 @@ class CollectionTransferModelTest {
         assertEquals(3, portal.uploads.size)
         assertNull(portal.uploads[1].rewards[RewardType.TOYS_1])
         assertEquals(RewardBalance(0, 1), portal.uploads[2].rewards[RewardType.TOYS_1])
-        assertEquals(CollectionBackup.from(HistoryStore(file).loadSnapshot()), portal.records.getValue(sync.importId!!).data)
+        assertEquals(localSync(), portal.records.getValue(sync.importId!!).data)
     }
 
     @Test fun duplicateReceiptSurvivesFailedReadAndCorrectedServerValuesNeverReplaceLocalWithoutReview() {
@@ -515,5 +550,86 @@ class CollectionTransferModelTest {
         start()
         model.addReward(RewardType.TOYS_2, false); looper.idle(); tick()
         assertEquals(reads, portal.reads)
+    }
+
+    @Test fun settingsOnlyEditsUploadAndSecretsDoNotScheduleOrLeaveTheDevice() {
+        connect()
+        assertNotNull(portal.uploads.single().settings)
+        model.chooseTextSize(120); looper.idle()
+        assertEquals(JsonPrimitive(120), portal.uploads.last().settings?.get("text_size_percent"))
+        val count = portal.uploads.size
+        settings.edit().putString("game_name", "Local").putString("admin_pin_hash", "private")
+            .putBoolean("admin_pin_lock_enabled", false).commit()
+        looper.idle()
+        assertEquals(count, portal.uploads.size)
+        assertFalse(portal.uploads.last().settings!!.keys.any { it.startsWith("admin_pin") || it == "game_name" })
+    }
+
+    @Test fun linkedRemoteSettingsChangesApplyAutomaticallyWithoutEcho() {
+        connect()
+        val id = requireNotNull(sync.importId)
+        val remote = localSync().copy(settings = JsonObject(mapOf(
+            "text_size_percent" to JsonPrimitive(130), "show_correct_answers" to JsonPrimitive(false))))
+        portal.edit(id, remote)
+        val uploads = portal.uploads.size
+        sync.sync(); looper.idle()
+        assertEquals(130, model.textSizePercent)
+        assertFalse(model.showCorrectAnswers)
+        assertEquals(remote.settings, PortalSettings.read(settings))
+        assertEquals(remote.digest(), portal.link.baseDigest)
+        assertEquals(uploads, portal.uploads.size)
+        assertNull(sync.preview)
+    }
+
+    @Test fun replacementAppliesSettingsReactivelyAndMergeAndLegacyPreserveLocalSettings() {
+        connect()
+        model.chooseTextSize(150); looper.idle()
+        val remoteSettings = Json.decodeFromString(JsonObject.serializer(), """{"text_size_percent":120,
+            "theme":"pink","show_timer":true,"reading_rewards_enabled":false,
+            "logic_minimum_pictures":2,"logic_maximum_pictures":4,"logic_minimum_length":3,"logic_maximum_length":5}""")
+        val remote = portal.insert(prize.copy(settings = remoteSettings))
+        sync.download(remote); looper.idle()
+        sync.confirmDownload(CollectionImportMode.MERGE); looper.idle()
+        assertEquals(150, model.textSizePercent)
+        assertEquals(localSync(), portal.uploads.last())
+        sync.download(remote); looper.idle()
+        val uploads = portal.uploads.size
+        sync.confirmDownload(CollectionImportMode.REPLACE); looper.idle()
+        assertEquals(120, model.textSizePercent)
+        assertEquals("pink", model.theme)
+        assertTrue(model.showTimer)
+        assertFalse(model.rewardsEnabled(Subject.READING))
+        assertEquals(4, model.logicMathSettings.maximumPictures)
+        assertEquals(remoteSettings, PortalSettings.read(settings))
+        assertEquals(uploads, portal.uploads.size)
+        val legacy = portal.insert(prize)
+        sync.download(legacy); looper.idle()
+        sync.confirmDownload(CollectionImportMode.REPLACE); looper.idle()
+        assertEquals(120, model.textSizePercent)
+        assertEquals(remoteSettings, PortalSettings.read(settings))
+        val defaults = portal.insert(prize.copy(settings = JsonObject(emptyMap())))
+        sync.download(defaults); looper.idle()
+        sync.confirmDownload(CollectionImportMode.REPLACE); looper.idle()
+        assertEquals(100, model.textSizePercent)
+        assertEquals("green", model.theme)
+        assertFalse(model.showTimer)
+        assertTrue(model.rewardsEnabled(Subject.READING))
+        assertEquals(JsonObject(emptyMap()), PortalSettings.read(settings))
+    }
+
+    @Test fun settingsChangedAfterPreviewCannotBeOverwrittenAndChangesDuringUploadAreResent() {
+        connect()
+        val remote = portal.insert(prize.copy(settings = JsonObject(mapOf("text_size_percent" to JsonPrimitive(120)))))
+        sync.download(remote); looper.idle()
+        model.chooseTextSize(170); looper.idle()
+        sync.confirmDownload(CollectionImportMode.REPLACE); looper.idle()
+        assertEquals(170, model.textSizePercent)
+        assertEquals(localSync(), portal.uploads.last())
+        portal.beforeUpload = {
+            portal.beforeUpload = null
+            model.chooseTextSize(180)
+        }
+        model.chooseTextSize(190); looper.idle()
+        assertEquals(JsonPrimitive(180), portal.uploads.last().settings?.get("text_size_percent"))
     }
 }

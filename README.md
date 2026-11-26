@@ -217,7 +217,14 @@ a rotated token without changing the device fingerprint or upload identity. If i
 delivery is lost or cannot be saved, fix device storage and ask the administrator to generate
 another bearer token before checking again.
 
-Saved reward and animation changes upload automatically. Each upload creates a snapshot
+Every saved reward increase, decrease (including spending and history deletion), and
+collected-animation change triggers sync immediately for an approved device. Saved game
+defaults, reward rules, reading/game toggles, timers, and appearance settings also sync,
+including settings-only changes. PINs and PIN lock, credentials, device identity, local
+names, debugging/update preferences, content, and history are excluded. Portable JSON
+file exports remain collection-only. Changes
+during an active request queue a follow-up sync; offline retries retain their backoff,
+and conflicts still require review. Each upload creates a snapshot
 or returns a duplicate's receipt; the device remembers the **Linked import ID**.
 **Sync now** checks that import for edits and reconciles it with this device. If both
 changed, you choose which copy to use. Offline play continues normally; unsent changes
@@ -227,7 +234,10 @@ To transfer to another approved device with the same portal-account ownership, s
 **Upload collections**, copy the linked ID into **Import ID** on the other device,
 then select **Download collections**.
 Leaving the field blank downloads the device's currently linked import. Review the
-preview before replacing or merging. Merge adds balances and combines animations;
+preview before replacing or merging. Replace also applies the downloaded settings
+immediately; older snapshots without settings leave local settings unchanged. An explicit
+empty settings snapshot restores portable defaults without changing excluded preferences.
+Merge keeps local settings while adding balances and combining animations;
 explicitly merging twice adds rewards twice. Device tokens cannot list imports or
 discover another device's latest snapshot. To switch to a newer one, use its receipt ID.
 **Disconnect device** stops sync without deleting local or server data. An administrator

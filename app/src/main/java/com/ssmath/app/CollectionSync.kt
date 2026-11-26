@@ -11,6 +11,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.yield
 
 internal class CollectionChanged : IOException()
 
@@ -99,7 +100,8 @@ internal class CollectionSync(
     private fun schedule() {
         if (!approved || !pending || busy || preview != null || scheduled?.isActive == true) return
         scheduled = scope.launch {
-            delay(maxOf(2_100L, retryDelay))
+            yield()
+            delay(retryDelay)
             scheduled = null
             if (!busy && approved && preview == null && pending) sync()
         }

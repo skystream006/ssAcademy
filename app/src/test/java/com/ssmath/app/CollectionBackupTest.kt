@@ -3,6 +3,7 @@ package com.ssmath.app
 import java.io.File
 import java.io.IOException
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.*
 import org.junit.Rule
@@ -20,6 +21,22 @@ class CollectionBackupTest {
     )
 
     private fun decode(text: String) = text.byteInputStream().use(CollectionBackup::read)
+
+    @Test fun optionalSettingsAreNonemptyAndCanonicalButFileExportsStayCollectionOnly() {
+        val legacy = CollectionBackup.from(PracticeSnapshot())
+        assertTrue(legacy.empty)
+        assertNull(decode(CollectionBackup.encode(legacy)).settings)
+        val defaults = legacy.copy(settings = JsonObject(emptyMap()))
+        assertFalse(defaults.empty)
+        assertEquals(defaults, decode(CollectionBackup.encode(defaults)))
+        assertNotEquals(legacy.digest(), defaults.digest())
+        val first = legacy.copy(settings = Json.decodeFromString(JsonObject.serializer(),
+            """{"theme":"pink","disabled_rewards":["TOYS_3","TOYS_1"]}"""))
+        val second = legacy.copy(settings = Json.decodeFromString(JsonObject.serializer(),
+            """{"disabled_rewards":["TOYS_1","TOYS_3","TOYS_3"],"theme":"pink"}"""))
+        assertEquals(first.digest(), second.digest())
+        assertFalse(CollectionBackup.encode(legacy).contains("\"settings\""))
+    }
 
     private fun seedHistory() {
         store.addNewResult(PracticeResult(10, 10, Operation.ADDITION, 10, 100,

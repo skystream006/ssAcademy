@@ -12,6 +12,8 @@ import androidx.test.core.app.ApplicationProvider
 import java.io.File
 import java.io.IOException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -77,17 +79,24 @@ class CollectionTransferTest {
         compose.onNodeWithText("Check approval").performScrollTo().performClick()
         compose.onNodeWithText("Sync now").assertExists()
         compose.onNodeWithText("Upload collections").assertExists()
-        compose.onNodeWithText("Download collections").assertIsNotEnabled()
+        // Approval uploads the portable settings snapshot, even without collected prizes.
+        compose.onNodeWithText("Download collections").assertIsEnabled()
         val bearer = portal.bearerToken
         portal.approve()
         compose.onNodeWithText("Check approval").performScrollTo().performClick()
         compose.onNodeWithText("Sync now").assertExists()
         assertNotEquals(bearer, portal.link.bearerToken(requireNotNull(portal.link.account)))
-        val id = portal.insert(CollectionBackup.from(PracticeSnapshot(pokemons = setOf(Celebration.PIKACHU))))
+        val linkedId = requireNotNull(portal.link.importId)
+        val id = portal.insert(CollectionBackup.from(PracticeSnapshot(pokemons = setOf(Celebration.PIKACHU)))
+            .copy(settings = JsonObject(mapOf("show_timer" to JsonPrimitive(true),
+                "text_size_percent" to JsonPrimitive(120)))))
         compose.onNodeWithTag("portal-import-id").performScrollTo().performTextInput(id)
         compose.onNodeWithText("Download collections").performScrollTo().performClick()
         compose.onNodeWithTag("collection-import-preview").performScrollTo().assertTextContains(id, substring = true)
-        assertNull(portal.link.importId)
+        compose.onNodeWithTag("collection-settings-preview").performScrollTo()
+            .assertTextContains("2 saved overrides", substring = true)
+            .assertTextContains("Merge keeps local settings", substring = true)
+        assertEquals(linkedId, portal.link.importId)
         restoration.emulateSavedInstanceStateRestore()
         compose.onNodeWithTag("admin-pin-dialog").assertIsDisplayed()
         compose.onNodeWithText("Download collections").assertDoesNotExist()

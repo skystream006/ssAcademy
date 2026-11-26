@@ -1,6 +1,7 @@
 package com.ssmath.app
 
 import android.app.Application
+import android.content.SharedPreferences
 import android.os.SystemClock
 import android.util.AtomicFile
 import androidx.compose.runtime.getValue
@@ -116,8 +117,11 @@ class ReadingViewModel(
         private set
     var sessionElapsedMs by mutableStateOf(0L)
         private set
-    private val sessionTimeLimitMs: Long? get() = data?.activeSession
-        ?.takeIf { settings.readReadingRewardsEnabled(it.game) }?.timeLimitMs
+    private var settingsRevision by mutableStateOf(0)
+    private val sessionTimeLimitMs: Long? get() {
+        settingsRevision
+        return data?.activeSession?.takeIf { settings.readReadingRewardsEnabled(it.game) }?.timeLimitMs
+    }
     val sessionRemainingMs: Long? get() = sessionTimeLimitMs?.let {
         (it - sessionElapsedMs).coerceAtLeast(0)
     }
@@ -129,6 +133,12 @@ class ReadingViewModel(
     private var pendingStart: Command.Edit? = null
     private val settings = application.getSharedPreferences("settings", 0).also {
         it.readReadingTimeLimitSeconds()
+    }
+    private val portableSettingsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == null || PortalSettings.contains(key)) {
+            settingsRevision++
+            refreshSessionClock()
+        }
     }
     private val commands = Channel<Command>(Channel.UNLIMITED)
     private val deferred = ArrayDeque<Command.Edit>()
@@ -148,6 +158,7 @@ class ReadingViewModel(
     }
 
     init {
+        settings.registerOnSharedPreferenceChangeListener(portableSettingsListener)
         viewModelScope.launch {
             load()
             refreshSessionClock()
@@ -168,6 +179,11 @@ class ReadingViewModel(
                 refreshSessionClock()
             }
         }
+    }
+
+    override fun onCleared() {
+        settings.unregisterOnSharedPreferenceChangeListener(portableSettingsListener)
+        super.onCleared()
     }
 
     private suspend fun apply(command: Command.Edit) {
@@ -301,7 +317,10 @@ class ReadingViewModel(
             Command.Start(game, null, true, count, enabled, limit)))
     }
 
-    fun rewardThresholds(game: ReadingGame): RewardThresholds = settings.readRewardThresholds(game)
+    fun rewardThresholds(game: ReadingGame): RewardThresholds {
+        settingsRevision
+        return settings.readRewardThresholds(game)
+    }
 
     private fun isDisabled(game: ReadingGame) =
         game.name in settings.getStringSet("disabled_reading_games", emptySet()).orEmpty()

@@ -2,6 +2,9 @@ package com.ssmath.app
 
 import android.app.Application
 import android.os.Looper
+import androidx.compose.runtime.snapshots.Snapshot
+import androidx.compose.runtime.snapshots.SnapshotStateObserver
+import androidx.lifecycle.ViewModelStore
 import androidx.test.core.app.ApplicationProvider
 import java.io.File
 import java.io.IOException
@@ -92,6 +95,36 @@ class ReadingStoreTest {
     @Before fun clean() {
         listOf(file, File(file.path + ".bak"), File(file.path + ".new")).forEach { it.delete() }
         settings.edit().clear().commit()
+    }
+
+    @Test fun importedSettingsInvalidateReadingRewardAndTimerUiWithoutReloadingContent() {
+        val storage = RecordingStorage(readingSessionFixture(timeLimitMs = 60_000))
+        val model = ReadingViewModel(application, storage)
+        val models = ViewModelStore().apply { put("reading", model) }
+        val observer = SnapshotStateObserver { it() }
+        try {
+            await { model.data != null }
+            assertEquals(60_000L, model.sessionRemainingMs)
+            Snapshot.sendApplyNotifications()
+            var invalidated = false
+            observer.start()
+            observer.observeReads(Unit, { invalidated = true }) {
+                model.sessionRemainingMs
+                model.rewardThresholds(ReadingGame.MISSING)
+            }
+            val data = model.data
+            PortalSettings.replace(settings, Json.decodeFromString(JsonObject.serializer(),
+                """{"reading_rewards_enabled":false,"reading_missing_reward_tier_1_minimum":10,
+                    "reading_missing_reward_tier_2_minimum":20,"reading_missing_reward_tier_3_minimum":30}"""))
+            Snapshot.sendApplyNotifications()
+            assertTrue(invalidated)
+            assertNull(model.sessionRemainingMs)
+            assertEquals(RewardThresholds(10, 20, 30), model.rewardThresholds(ReadingGame.MISSING))
+            assertEquals(data, model.data)
+        } finally {
+            observer.stop()
+            models.clear()
+        }
     }
 
     @Test fun configuredAndLegacySessionCountsSurviveJsonReload() {

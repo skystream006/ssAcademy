@@ -87,7 +87,15 @@ Search the named symbols in these exact files before widening scope:
 
 ## Server sync
 
-Collection sync exchanges only `CollectionBackup` (balances and collected animations).
+Collection sync exchanges `CollectionBackup` (balances, collected animations, and an
+optional `settings` snapshot). `PortalSettings` validates and normalizes the portable
+preference allowlist; never transfer names, PIN/PIN-lock, credentials, identity, debug
+or update preferences, activity content, or history. File exports remain collection-only.
+Settings changes use a retained SharedPreferences listener to signal sync, including
+settings-only snapshots. REPLACE restores settings and refreshes Math/Reading UI;
+MERGE and legacy snapshots without settings keep local settings. An empty settings
+object resets portable overrides. Suppress upload callbacks while applying server
+settings, and recheck both settings and collections before replacement.
 Device registration and status send `student` from the activity-scoped
 `ReadingViewModel.data.profile.name`, the saved name used for all games; do not add
 a separate portal username input. Legacy link preferences retain their encrypted
@@ -100,6 +108,9 @@ Legacy approval flags without a bearer cannot enable sync. Request fresh adminis
 token generation after lost delivery or a failed credential save. Bearer rotation must
 not change the installation fingerprint, upload source label, or owned import receipt.
 Use `MathViewModel.applySnapshot` after a durable save to signal collection changes.
+`CollectionSync.changed` schedules sync without a debounce for balance increases,
+decreases, and animation additions/removals; changes during a request queue a follow-up.
+Keep offline retry backoff and preview/conflict gates; server replacements do not echo.
 Network I/O runs outside `storeLock`; downloads recheck the local snapshot under that
 lock before calling `HistoryStore.importCollections`. Store the account's upload receipt ID
 and comparison digest separately from practice history. Read owned imports by ID, not by
