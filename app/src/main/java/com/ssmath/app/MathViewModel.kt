@@ -938,7 +938,10 @@ class MathViewModel internal constructor(
         if (overlay != Overlay.REWARDS && overlay != Overlay.POKEMONS) collectionReturnOverlay = overlay
         overlay = Overlay.REWARDS
         updateTimer()
-        viewModelScope.launch { reloadHistory() }
+        viewModelScope.launch {
+            reloadHistory()
+            collectionSync.changed()
+        }
     }
 
     fun openPokemons() {

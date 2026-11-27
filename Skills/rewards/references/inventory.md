@@ -108,6 +108,8 @@ Legacy approval flags without a bearer cannot enable sync. Request fresh adminis
 token generation after lost delivery or a failed credential save. Bearer rotation must
 not change the installation fingerprint, upload source label, or owned import receipt.
 Use `MathViewModel.applySnapshot` after a durable save to signal collection changes.
+Opening My Rewards also queues a sync after reloading local inventory, even when
+the local collection is unchanged, so server edits can refresh available rewards.
 `CollectionSync.changed` schedules sync without a debounce for balance increases,
 decreases, and animation additions/removals; changes during a request queue a follow-up.
 Keep offline retry backoff and preview/conflict gates; server replacements do not echo.

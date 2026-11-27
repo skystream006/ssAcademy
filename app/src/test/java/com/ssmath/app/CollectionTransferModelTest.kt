@@ -401,10 +401,31 @@ class CollectionTransferModelTest {
         assertEquals(localSync(), portal.uploads.last())
     }
 
-    @Test fun reloadsAndFailedSavesDoNotUpload() {
+    @Test fun openingRewardsRefreshesServerBalancesWithoutUploading() {
         connect()
+        val id = requireNotNull(sync.importId)
+        portal.edit(id, prize)
         val reads = portal.reads
         model.openRewards(); looper.idle()
+        assertTrue(portal.reads > reads)
+        assertEquals(prize.rewards, model.rewardBalances)
+        assertEquals(prize.pokemons, model.pokemons)
+        assertEquals(prize, CollectionBackup.from(HistoryStore(file).loadSnapshot()))
+        assertEquals(1, portal.uploads.size)
+        assertNull(sync.preview)
+    }
+
+    @Test fun openingRewardsWhileDisconnectedKeepsLocalInventoryWithoutRequests() {
+        model.addReward(RewardType.LOLLIPOP, false); looper.idle()
+        model.openRewards(); looper.idle()
+        assertEquals(RewardBalance(1), model.rewardBalances[RewardType.LOLLIPOP])
+        assertEquals(0, portal.syncRequests)
+    }
+
+    @Test fun failedSavesDoNotUploadAfterRewardsRefresh() {
+        connect()
+        model.openRewards(); looper.idle()
+        val reads = portal.reads
         model.openSettings()
         val blocked = File(file.parentFile, "${file.name}.tmp")
         assertTrue(blocked.mkdir())
